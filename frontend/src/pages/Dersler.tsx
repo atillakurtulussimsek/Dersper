@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Pencil, Plus, Trash2, Wand2 } from "lucide-react";
 
 import {
   Alan, BosDurum, Buton, Girdi, Kart, Kutu, Tablo, Uyari, Yukleniyor,
 } from "../components/ui";
 import { hataMetni, useKaynak, useListe } from "../lib/hooks";
+import { kisaltmaOner } from "../lib/kisaltma";
 import type { Ders } from "../lib/types";
 
 const RENKLER = [
@@ -20,9 +21,17 @@ export default function Dersler() {
   const [acik, setAcik] = useState(false);
   const [duzenlenen, setDuzenlenen] = useState<Ders | null>(null);
   const [form, setForm] = useState(BOS);
+  // Kullanıcı kısa kodu elle değiştirdiyse ad yazdıkça üzerine yazmayız.
+  const [kodElle, setKodElle] = useState(false);
+
+  /** Ders adı değişince kısa kodu da önerilenle günceller. */
+  function adiDegistir(ad: string) {
+    setForm((f) => ({ ...f, name: ad, short_code: kodElle ? f.short_code : kisaltmaOner(ad) }));
+  }
 
   function ac(ders?: Ders) {
     setDuzenlenen(ders ?? null);
+    setKodElle(Boolean(ders?.short_code));
     setForm(
       ders
         ? {
@@ -118,17 +127,41 @@ export default function Dersler() {
               required
               autoFocus
               value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              onChange={(e) => adiDegistir(e.target.value)}
               placeholder="Matematik"
             />
           </Alan>
-          <Alan etiket="Kısa kod" ipucu="Izgarada dar alanlarda kullanılır. İsteğe bağlı.">
-            <Girdi
-              maxLength={20}
-              value={form.short_code}
-              onChange={(e) => setForm({ ...form, short_code: e.target.value })}
-              placeholder="MAT"
-            />
+          <Alan
+            etiket="Kısa kod"
+            ipucu={
+              kodElle
+                ? "Izgarada dar alanlarda kullanılır. Sihirbaz düğmesi önerilen kodu geri getirir."
+                : "Ders adından otomatik türetiliyor. Yazarak değiştirebilirsiniz."
+            }
+          >
+            <div className="flex gap-2">
+              <Girdi
+                maxLength={20}
+                value={form.short_code}
+                onChange={(e) => {
+                  setKodElle(true);
+                  setForm({ ...form, short_code: e.target.value });
+                }}
+                placeholder="MAT"
+              />
+              <Buton
+                tur="ikincil"
+                type="button"
+                title="Ders adından yeniden türet"
+                disabled={!form.name.trim()}
+                onClick={() => {
+                  setKodElle(false);
+                  setForm((f) => ({ ...f, short_code: kisaltmaOner(f.name) }));
+                }}
+              >
+                <Wand2 className="h-4 w-4" />
+              </Buton>
+            </div>
           </Alan>
           <Alan etiket="Renk">
             <div className="flex flex-wrap gap-2">
