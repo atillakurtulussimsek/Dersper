@@ -1,0 +1,31 @@
+# --- AI / assistant workspace: NEVER publish ---
+CLAUDE.md
+CLAUDE.local.md
+memory-bank/
+.claude/
+.cursor/
+.aider*
+.windsurf/
+AGENTS.md
+.mcp.json
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# --- Secrets ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# --- Deps / build (filled in once stack is chosen) ---
+node_modules/
+dist/
+build/
+coverage/
+*.log
