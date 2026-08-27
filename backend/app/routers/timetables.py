@@ -86,7 +86,7 @@ def program_olustur(payload: TimetableIn, db: Session = Depends(get_db)) -> Time
 
 
 @router.delete("/{timetable_id}", status_code=status.HTTP_204_NO_CONTENT)
-def program_sil(timetable_id: int, db: Session = Depends(get_db)) -> None:
+def program_sil(timetable_id: int, db: Session = Depends(get_db)):
     db.delete(_programi_getir(db, timetable_id))
     db.commit()
 

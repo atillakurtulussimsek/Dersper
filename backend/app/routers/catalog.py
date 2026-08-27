@@ -54,7 +54,7 @@ def ogretmen_guncelle(
 
 
 @router.delete("/teachers/{teacher_id}", status_code=status.HTTP_204_NO_CONTENT)
-def ogretmen_sil(teacher_id: int, db: Session = Depends(get_db)) -> None:
+def ogretmen_sil(teacher_id: int, db: Session = Depends(get_db)):
     t = _getir(db, Teacher, teacher_id, "Öğretmen")
     db.delete(t)
     try:
@@ -129,7 +129,7 @@ def ders_guncelle(
 
 
 @router.delete("/subjects/{subject_id}", status_code=status.HTTP_204_NO_CONTENT)
-def ders_sil(subject_id: int, db: Session = Depends(get_db)) -> None:
+def ders_sil(subject_id: int, db: Session = Depends(get_db)):
     db.delete(_getir(db, Subject, subject_id, "Ders"))
     db.commit()
 
@@ -165,7 +165,7 @@ def sube_guncelle(
 
 
 @router.delete("/sections/{section_id}", status_code=status.HTTP_204_NO_CONTENT)
-def sube_sil(section_id: int, db: Session = Depends(get_db)) -> None:
+def sube_sil(section_id: int, db: Session = Depends(get_db)):
     db.delete(_getir(db, Section, section_id, "Şube"))
     db.commit()
 
@@ -221,6 +221,6 @@ def mufredat_guncelle(
 
 
 @router.delete("/curriculum/{entry_id}", status_code=status.HTTP_204_NO_CONTENT)
-def mufredat_sil(entry_id: int, db: Session = Depends(get_db)) -> None:
+def mufredat_sil(entry_id: int, db: Session = Depends(get_db)):
     db.delete(_getir(db, CurriculumEntry, entry_id, "Müfredat satırı"))
     db.commit()
