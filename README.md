@@ -35,6 +35,23 @@ Gereksinimler: Python 3.12+, Node.js 20+, erişilebilir bir MySQL 8 veritabanı.
 git clone https://github.com/atillakurtulussimsek/Dersper.git
 cd Dersper
 cp .env.example .env      # veritabanı bilgilerinizi girin
+```
+
+Backend bağımlılıkları:
+
+```bash
+cd backend && python3.12 -m venv .venv && .venv/bin/pip install -r requirements.txt
+```
+
+Frontend bağımlılıkları:
+
+```bash
+cd frontend && npm install
+```
+
+Sonra kök dizinden:
+
+```bash
 ./run.sh
 ```
 
