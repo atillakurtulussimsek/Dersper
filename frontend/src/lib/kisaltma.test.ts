@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buyut, kisaltmaOner } from "./kisaltma";
+import { buyut, kisaltmaOner, ogretmenKoduOner } from "./kisaltma";
 
 describe("buyut", () => {
   it("Türkçe i ve ı harflerini doğru büyütür", () => {
@@ -48,5 +48,37 @@ describe("kisaltmaOner", () => {
     expect(kisaltmaOner("")).toBe("");
     expect(kisaltmaOner("   ")).toBe("");
     expect(kisaltmaOner("123")).toBe("");
+  });
+});
+
+describe("ogretmenKoduOner", () => {
+  it("ad ve soyadın baş harflerini alır", () => {
+    expect(ogretmenKoduOner("Beyhan Karagöz")).toBe("BK");
+    expect(ogretmenKoduOner("Atilla ŞİMŞEK")).toBe("AŞ");
+    expect(ogretmenKoduOner("Saadet POYRAZ SOYDAN")).toBe("SPS");
+  });
+
+  it("küçük harf ve fazla boşluğa takılmaz", () => {
+    expect(ogretmenKoduOner("  ayşe   yılmaz ")).toBe("AY");
+    expect(ogretmenKoduOner("ismail ışık")).toBe("İI");
+  });
+
+  it("unvanları atlar", () => {
+    expect(ogretmenKoduOner("Dr. Mehmet Kaya")).toBe("MK");
+  });
+
+  it("en fazla dört harf alır", () => {
+    expect(ogretmenKoduOner("Ali Veli Ahmet Mehmet Hasan")).toBe("AVAM");
+  });
+
+  it("çakışan kodu sayıyla benzersizleştirir", () => {
+    expect(ogretmenKoduOner("Ayşe Kaya", ["AK"])).toBe("AK2");
+    expect(ogretmenKoduOner("Ayşe Kaya", ["AK", "AK2"])).toBe("AK3");
+    expect(ogretmenKoduOner("Ayşe Kaya", ["ZZ"])).toBe("AK");
+  });
+
+  it("boş girdide boş döner", () => {
+    expect(ogretmenKoduOner("")).toBe("");
+    expect(ogretmenKoduOner("  ")).toBe("");
   });
 });

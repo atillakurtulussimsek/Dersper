@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { CalendarCheck, Pencil, Plus, Trash2 } from "lucide-react";
+import { CalendarCheck, Pencil, Plus, Trash2, Wand2 } from "lucide-react";
 
 import MusaitlikMatrisi from "../components/MusaitlikMatrisi";
 import {
@@ -8,6 +8,7 @@ import {
 } from "../components/ui";
 import { get } from "../lib/api";
 import { hataMetni, useKaynak, useListe } from "../lib/hooks";
+import { ogretmenKoduOner } from "../lib/kisaltma";
 import type { Gun, Ogretmen } from "../lib/types";
 
 const BOS = {
@@ -28,9 +29,32 @@ export default function Ogretmenler() {
   const [duzenlenen, setDuzenlenen] = useState<Ogretmen | null>(null);
   const [form, setForm] = useState(BOS);
   const [musaitlikIcin, setMusaitlikIcin] = useState<Ogretmen | null>(null);
+  // Kullanıcı kısa kodu elle değiştirdiyse ad yazdıkça üzerine yazmayız.
+  const [kodElle, setKodElle] = useState(false);
+
+  /** Düzenlenen öğretmen dışındaki kayıtlı kodlar — çakışmayı önlemek için. */
+  function baskaKodlar(): string[] {
+    return (liste.data ?? [])
+      .filter((o) => o.id !== duzenlenen?.id && o.short_code)
+      .map((o) => o.short_code!);
+  }
+
+  function onerilenKod(ad: string): string {
+    return ogretmenKoduOner(ad, baskaKodlar());
+  }
+
+  /** Ad soyad değişince kısa kodu da önerilenle günceller. */
+  function adiDegistir(ad: string) {
+    setForm((f) => ({
+      ...f,
+      full_name: ad,
+      short_code: kodElle ? f.short_code : onerilenKod(ad),
+    }));
+  }
 
   function ac(o?: Ogretmen) {
     setDuzenlenen(o ?? null);
+    setKodElle(Boolean(o?.short_code));
     setForm(
       o
         ? {
@@ -142,7 +166,7 @@ export default function Ogretmenler() {
               required
               autoFocus
               value={form.full_name}
-              onChange={(e) => setForm({ ...form, full_name: e.target.value })}
+              onChange={(e) => adiDegistir(e.target.value)}
               placeholder="Ayşe Yılmaz"
             />
           </Alan>
@@ -154,13 +178,33 @@ export default function Ogretmenler() {
                 placeholder="Matematik"
               />
             </Alan>
-            <Alan etiket="Kısa kod">
-              <Girdi
-                maxLength={20}
-                value={form.short_code}
-                onChange={(e) => setForm({ ...form, short_code: e.target.value })}
-                placeholder="AY"
-              />
+            <Alan
+              etiket="Kısa kod"
+              ipucu={kodElle ? undefined : "Ad soyaddan otomatik türetiliyor."}
+            >
+              <div className="flex gap-2">
+                <Girdi
+                  maxLength={20}
+                  value={form.short_code}
+                  onChange={(e) => {
+                    setKodElle(true);
+                    setForm({ ...form, short_code: e.target.value });
+                  }}
+                  placeholder="AY"
+                />
+                <Buton
+                  tur="ikincil"
+                  type="button"
+                  title="Ad soyaddan yeniden türet"
+                  disabled={!form.full_name.trim()}
+                  onClick={() => {
+                    setKodElle(false);
+                    setForm((f) => ({ ...f, short_code: onerilenKod(f.full_name) }));
+                  }}
+                >
+                  <Wand2 className="h-4 w-4" />
+                </Buton>
+              </div>
             </Alan>
           </div>
           <Alan

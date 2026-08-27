@@ -110,3 +110,28 @@ export function kisaltmaOner(ad: string): string {
 
   return govde + ek;
 }
+
+/** Öğretmen adından kısa kod türetir: ad ve soyadların baş harfleri.
+ *
+ *  "Beyhan Karagöz" → BK, "Saadet Poyraz Soydan" → SPS.
+ *  `kullanilan` verilirse çakışan kod sonuna sayı eklenerek benzersizleştirilir.
+ */
+export function ogretmenKoduOner(adSoyad: string, kullanilan: string[] = []): string {
+  const parcalar = buyut(adSoyad)
+    .split(/\s+/)
+    .filter((p) => !p.endsWith("."))            // "Dr.", "Öğr." gibi unvanları atla
+    .map((p) => p.replace(/[^A-ZÇĞİÖŞÜ]/g, ""))
+    .filter(Boolean);
+
+  if (!parcalar.length) return "";
+
+  const govde = parcalar.slice(0, 4).map((p) => p[0]).join("");
+
+  const dolu = new Set(kullanilan.map((k) => buyut(k)));
+  if (!dolu.has(govde)) return govde;
+
+  for (let n = 2; n < 100; n++) {
+    if (!dolu.has(govde + n)) return govde + n;
+  }
+  return govde;
+}
