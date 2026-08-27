@@ -145,3 +145,67 @@ def test_yapay_zeka_anahtari_geri_okunmaz(yonetici: TestClient):
     assert ayar["has_api_key"] is True
     assert ayar["api_key_masked"] == "sk-gi…1234"
     assert "api_key" not in ayar          # ham anahtar hiçbir zaman dönmez
+
+
+def test_sube_musaitligi_kaydedilir(yonetici: TestClient):
+    sube = yonetici.post("/api/sections", json={"name": "6-A"}).json()
+    gunler = [g for g in yonetici.get("/api/timegrid").json() if g["is_active"]]
+    sabah = [p for g in gunler for p in g["periods"] if p["index"] < 4]
+
+    yonetici.put(f"/api/sections/{sube['id']}/availability", json={
+        "cells": [{"period_id": p["id"], "state": "uygun_degil"} for p in sabah]
+    })
+    kayitli = yonetici.get(f"/api/sections/{sube['id']}/availability").json()
+    assert len(kayitli) == len(sabah)
+    assert all(h["state"] == "uygun_degil" for h in kayitli)
+
+
+def test_aksamci_sube_sabaha_ders_almaz(yonetici: TestClient):
+    """Sabah saatleri kapatılan şubenin dersleri yalnızca öğleden sonraya yerleşir."""
+    d = yonetici.post("/api/subjects", json={"name": "Matematik"}).json()["id"]
+    o = yonetici.post("/api/teachers", json={"full_name": "Akşam Öğretmeni"}).json()["id"]
+    s = yonetici.post("/api/sections", json={"name": "9-Akşam"}).json()["id"]
+
+    gunler = [g for g in yonetici.get("/api/timegrid").json() if g["is_active"]]
+    sabah = {p["id"] for g in gunler for p in g["periods"] if p["index"] < 4}
+    yonetici.put(f"/api/sections/{s}/availability", json={
+        "cells": [{"period_id": pid, "state": "uygun_degil"} for pid in sabah]
+    })
+
+    yonetici.post("/api/curriculum", json={
+        "section_id": s, "subject_id": d, "teacher_id": o,
+        "weekly_hours": 10, "block_size": 1, "max_per_day": 2,
+    })
+    pid = yonetici.post("/api/timetables", json={"name": "Akşam"}).json()["id"]
+    deneme = yonetici.post(f"/api/timetables/{pid}/solve?time_limit_seconds=30").json()
+    assert deneme["status"] == "basarili", deneme["report"]
+
+    hucreler = yonetici.get(f"/api/timetables/{pid}/grid").json()["cells"]
+    assert len(hucreler) == 10
+    assert all(h["period_index"] >= 4 for h in hucreler)
+
+
+def test_asiri_kapali_sube_tani_raporunda_gorunur(yonetici: TestClient):
+    d = yonetici.post("/api/subjects", json={"name": "Türkçe"}).json()["id"]
+    o = yonetici.post("/api/teachers", json={"full_name": "Bir Öğretmen"}).json()["id"]
+    s = yonetici.post("/api/sections", json={"name": "10-Dar"}).json()["id"]
+
+    gunler = [g for g in yonetici.get("/api/timegrid").json() if g["is_active"]]
+    # Şubeye haftada yalnızca 5 saat bırak.
+    acik = {g["periods"][0]["id"] for g in gunler}
+    kapali = [p["id"] for g in gunler for p in g["periods"] if p["id"] not in acik]
+    yonetici.put(f"/api/sections/{s}/availability", json={
+        "cells": [{"period_id": pid, "state": "uygun_degil"} for pid in kapali]
+    })
+
+    yonetici.post("/api/curriculum", json={
+        "section_id": s, "subject_id": d, "teacher_id": o,
+        "weekly_hours": 12, "block_size": 1, "max_per_day": 3,
+    })
+    pid = yonetici.post("/api/timetables", json={"name": "Dar"}).json()["id"]
+    deneme = yonetici.post(f"/api/timetables/{pid}/solve?time_limit_seconds=20").json()
+
+    assert deneme["status"] == "cozumsuz"
+    bulgu = next(b for b in deneme["report"]["bulgular"] if b["kod"] == "sube_kapasite")
+    assert bulgu["mevcut"] == 5
+    assert bulgu["gereken"] == 12

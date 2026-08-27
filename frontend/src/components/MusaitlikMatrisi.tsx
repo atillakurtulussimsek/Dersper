@@ -1,11 +1,13 @@
-/** Öğretmen müsaitlik matrisi. Hücreye tıklayarak ya da sürükleyerek işaretlenir. */
+/** Müsaitlik matrisi. Hem öğretmenler hem şubeler için kullanılır:
+ *  hangi ders saatlerinin kapalı, hangilerinin tercih edildiği işaretlenir.
+ *  Hücreye tıklanarak ya da basılı tutup sürüklenerek boyanır. */
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
 
 import { Buton, Kutu, Uyari, Yukleniyor } from "./ui";
 import { get, put } from "../lib/api";
-import type { Gun, Musaitlik, Ogretmen } from "../lib/types";
+import type { Gun, Musaitlik } from "../lib/types";
 
 type Hucreler = Record<number, Musaitlik>;
 
@@ -24,11 +26,17 @@ const ISARET: Record<Musaitlik, string> = {
 };
 
 export default function MusaitlikMatrisi({
-  ogretmen,
+  baslik,
+  yol,
+  aciklama,
   gunler,
   kapat,
 }: {
-  ogretmen: Ogretmen;
+  /** Kutunun başlığı, örn. "Ayşe Yılmaz · müsaitlik" */
+  baslik: string;
+  /** Müsaitlik ucu, örn. "/teachers/3" ya da "/sections/7" */
+  yol: string;
+  aciklama: string;
   gunler: Gun[];
   kapat: () => void;
 }) {
@@ -37,10 +45,8 @@ export default function MusaitlikMatrisi({
   const [suruklu, setSuruklu] = useState<Musaitlik | null>(null);
 
   const kayitli = useQuery({
-    queryKey: ["musaitlik", ogretmen.id],
-    queryFn: () => get<{ period_id: number; state: Musaitlik }[]>(
-      `/teachers/${ogretmen.id}/availability`,
-    ),
+    queryKey: ["musaitlik", yol],
+    queryFn: () => get<{ period_id: number; state: Musaitlik }[]>(`${yol}/availability`),
   });
 
   useEffect(() => {
@@ -52,14 +58,14 @@ export default function MusaitlikMatrisi({
 
   const kaydet = useMutation({
     mutationFn: () =>
-      put(`/teachers/${ogretmen.id}/availability`, {
+      put(`${yol}/availability`, {
         cells: Object.entries(hucreler).map(([period_id, state]) => ({
           period_id: Number(period_id),
           state,
         })),
       }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["musaitlik", ogretmen.id] });
+      qc.invalidateQueries({ queryKey: ["musaitlik", yol] });
       kapat();
     },
   });
@@ -86,11 +92,12 @@ export default function MusaitlikMatrisi({
   }
 
   return (
-    <Kutu acik kapat={kapat} baslik={`${ogretmen.full_name} · müsaitlik`}>
+    <Kutu acik kapat={kapat} baslik={baslik}>
       <div className="space-y-4" onMouseUp={() => setSuruklu(null)} onMouseLeave={() => setSuruklu(null)}>
         <Uyari>
-          Hücreye tıklayarak durumu değiştirin: boş = uygun, <b>✕</b> = uygun değil,{" "}
-          <b>★</b> = tercih edilen saat. Basılı tutup sürükleyerek toplu işaretleyebilirsiniz.
+          {aciklama} Hücreye tıklayarak durumu değiştirin: boş = uygun,{" "}
+          <b>✕</b> = uygun değil, <b>★</b> = tercih edilen saat. Basılı tutup
+          sürükleyerek toplu işaretleyebilirsiniz.
         </Uyari>
 
         {kayitli.isLoading ? (

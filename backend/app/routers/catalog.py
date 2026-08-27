@@ -7,8 +7,8 @@ from sqlalchemy.orm import Session, selectinload
 from app.db import get_db
 from app.deps import current_user
 from app.models import (
-    Availability, CurriculumEntry, Period, Section, Subject, Teacher,
-    TeacherAvailability,
+    Availability, CurriculumEntry, Period, Section, SectionAvailability, Subject,
+    Teacher, TeacherAvailability,
 )
 from app.schemas import (
     AvailabilityCell, AvailabilityUpdate, CurriculumIn, CurriculumOut, SectionIn,
@@ -67,36 +67,41 @@ def ogretmen_sil(teacher_id: int, db: Session = Depends(get_db)):
         )
 
 
-@router.get("/teachers/{teacher_id}/availability", response_model=list[AvailabilityCell])
-def musaitlik(teacher_id: int, db: Session = Depends(get_db)) -> list[AvailabilityCell]:
-    _getir(db, Teacher, teacher_id, "Öğretmen")
-    rows = db.scalars(
-        select(TeacherAvailability).where(TeacherAvailability.teacher_id == teacher_id)
-    )
+def _musaitlik_oku(db: Session, model, alan, nesne_id: int) -> list[AvailabilityCell]:
+    rows = db.scalars(select(model).where(alan == nesne_id))
     return [AvailabilityCell(period_id=r.period_id, state=r.state) for r in rows]
 
 
-@router.put("/teachers/{teacher_id}/availability", response_model=list[AvailabilityCell])
-def musaitlik_kaydet(
-    teacher_id: int, payload: AvailabilityUpdate, db: Session = Depends(get_db)
-) -> list[AvailabilityCell]:
+def _musaitlik_yaz(
+    db: Session, model, alan_adi: str, nesne_id: int, payload: AvailabilityUpdate
+) -> None:
     """Yalnızca 'uygun' dışındaki hücreler saklanır; kayıt yoksa uygun sayılır."""
-    _getir(db, Teacher, teacher_id, "Öğretmen")
     gecerli = set(db.scalars(select(Period.id)))
+    alan = getattr(model, alan_adi)
 
-    for row in db.scalars(
-        select(TeacherAvailability).where(TeacherAvailability.teacher_id == teacher_id)
-    ):
+    for row in db.scalars(select(model).where(alan == nesne_id)):
         db.delete(row)
     db.flush()
 
     for cell in payload.cells:
         if cell.state is Availability.UYGUN or cell.period_id not in gecerli:
             continue
-        db.add(TeacherAvailability(
-            teacher_id=teacher_id, period_id=cell.period_id, state=cell.state
-        ))
+        db.add(model(**{alan_adi: nesne_id}, period_id=cell.period_id, state=cell.state))
     db.commit()
+
+
+@router.get("/teachers/{teacher_id}/availability", response_model=list[AvailabilityCell])
+def musaitlik(teacher_id: int, db: Session = Depends(get_db)) -> list[AvailabilityCell]:
+    _getir(db, Teacher, teacher_id, "Öğretmen")
+    return _musaitlik_oku(db, TeacherAvailability, TeacherAvailability.teacher_id, teacher_id)
+
+
+@router.put("/teachers/{teacher_id}/availability", response_model=list[AvailabilityCell])
+def musaitlik_kaydet(
+    teacher_id: int, payload: AvailabilityUpdate, db: Session = Depends(get_db)
+) -> list[AvailabilityCell]:
+    _getir(db, Teacher, teacher_id, "Öğretmen")
+    _musaitlik_yaz(db, TeacherAvailability, "teacher_id", teacher_id, payload)
     return musaitlik(teacher_id, db)
 
 
@@ -162,6 +167,22 @@ def sube_guncelle(
     db.commit()
     db.refresh(s)
     return s
+
+
+@router.get("/sections/{section_id}/availability", response_model=list[AvailabilityCell])
+def sube_musaitligi(section_id: int, db: Session = Depends(get_db)) -> list[AvailabilityCell]:
+    """Şubenin ders görebileceği saatler. Sabahçı/akşamcı şubeler böyle sınırlanır."""
+    _getir(db, Section, section_id, "Şube")
+    return _musaitlik_oku(db, SectionAvailability, SectionAvailability.section_id, section_id)
+
+
+@router.put("/sections/{section_id}/availability", response_model=list[AvailabilityCell])
+def sube_musaitligi_kaydet(
+    section_id: int, payload: AvailabilityUpdate, db: Session = Depends(get_db)
+) -> list[AvailabilityCell]:
+    _getir(db, Section, section_id, "Şube")
+    _musaitlik_yaz(db, SectionAvailability, "section_id", section_id, payload)
+    return sube_musaitligi(section_id, db)
 
 
 @router.delete("/sections/{section_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -8,7 +8,7 @@ Sert kısıtlar (v1):
   1. Her müfredat satırı haftalık saatinin tamamını alır.
   2. Bir şube aynı anda tek derste olur.
   3. Bir öğretmen aynı anda tek derste olur.
-  4. Öğretmenin uygun olmadığı saatlere ders konmaz.
+  4. Öğretmenin ya da şubenin uygun olmadığı saatlere ders konmaz.
   5. Bloklar gün içinde ardışıktır, günü aşmaz.
   6. Aynı ders bir şubede günde `max_per_day` saatten fazla olmaz.
   7. Teneffüslere ders konmaz.
@@ -52,6 +52,13 @@ class Lesson:
     max_per_day: int
     # Öğretmenin uygun OLMADIĞI period_id kümesi
     blocked_period_ids: frozenset[int]
+    # Şubenin uygun OLMADIĞI period_id kümesi
+    section_blocked_period_ids: frozenset[int] = frozenset()
+
+    @property
+    def engelli_period_ids(self) -> frozenset[int]:
+        """Ne öğretmenin ne de şubenin müsait olduğu saatler."""
+        return self.blocked_period_ids | self.section_blocked_period_ids
 
 
 @dataclass
@@ -124,6 +131,7 @@ def _calistir(data: SolveInput, *, gevsek: bool) -> SolveOutput:
 
     for li, lesson in enumerate(data.lessons):
         bloklar = _bloklara_bol(lesson.weekly_hours, lesson.block_size)
+        engelli = lesson.engelli_period_ids
 
         for bi, boy in enumerate(bloklar):
             secenekler: dict[int, cp_model.IntVar] = {}
@@ -132,9 +140,7 @@ def _calistir(data: SolveInput, *, gevsek: bool) -> SolveOutput:
                     pencere = gun_slotlari[konum:konum + boy]
                     if not _ardisik_mi(slots, pencere):
                         continue
-                    if any(
-                        slots[i].period_id in lesson.blocked_period_ids for i in pencere
-                    ):
+                    if any(slots[i].period_id in engelli for i in pencere):
                         continue
                     v = model.NewBoolVar(f"b_{li}_{bi}_{pencere[0]}")
                     secenekler[pencere[0]] = v

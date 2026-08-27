@@ -22,7 +22,7 @@ class InstitutionType(str, enum.Enum):
 
 
 class Availability(str, enum.Enum):
-    """Öğretmenin bir ders saatindeki durumu."""
+    """Bir öğretmenin ya da şubenin bir ders saatindeki durumu."""
     UYGUN = "uygun"
     UYGUN_DEGIL = "uygun_degil"
     TERCIH = "tercih"          # yerleşebilir, tercih edilir
@@ -128,6 +128,27 @@ class TeacherAvailability(Base):
     teacher: Mapped[Teacher] = relationship(back_populates="availability")
 
 
+class SectionAvailability(Base):
+    """Şube müsaitlik matrisi. Kayıt yoksa 'uygun' sayılır.
+
+    Bazı şubeler yalnızca sabah, bazıları yalnızca akşam ders görür; kapalı
+    saatlere o şubenin hiçbir dersi yerleştirilmez.
+    """
+    __tablename__ = "section_availability"
+    __table_args__ = (
+        UniqueConstraint("section_id", "period_id", name="uq_section_availability"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    section_id: Mapped[int] = mapped_column(ForeignKey("sections.id", ondelete="CASCADE"))
+    period_id: Mapped[int] = mapped_column(ForeignKey("periods.id", ondelete="CASCADE"))
+    state: Mapped[Availability] = mapped_column(
+        Enum(Availability), default=Availability.UYGUN
+    )
+
+    section: Mapped["Section"] = relationship(back_populates="availability")
+
+
 class Subject(Base):
     __tablename__ = "subjects"
 
@@ -149,6 +170,9 @@ class Section(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     curriculum: Mapped[list[CurriculumEntry]] = relationship(
+        back_populates="section", cascade="all, delete-orphan"
+    )
+    availability: Mapped[list[SectionAvailability]] = relationship(
         back_populates="section", cascade="all, delete-orphan"
     )
 

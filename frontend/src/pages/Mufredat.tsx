@@ -32,6 +32,13 @@ export default function Mufredat() {
     queryFn: () => get<MufredatSatiri[]>(`/curriculum?section_id=${secili}`),
     enabled: secili !== null,
   });
+  // Şube kendi saatlerini kısıtlamış olabilir; doluluk buna göre hesaplanır.
+  const subeMusaitlik = useQuery({
+    queryKey: ["sube-musaitlik", secili],
+    queryFn: () =>
+      get<{ period_id: number; state: string }[]>(`/sections/${secili}/availability`),
+    enabled: secili !== null,
+  });
   const kaynak = useKaynak<any, MufredatSatiri>(`mufredat`, "/curriculum");
 
   const [acik, setAcik] = useState(false);
@@ -45,6 +52,10 @@ export default function Mufredat() {
         .reduce((t, g) => t + g.periods.filter((p) => !p.is_break).length, 0),
     [izgara.data],
   );
+  const kapaliSaat = (subeMusaitlik.data ?? []).filter(
+    (h) => h.state === "uygun_degil",
+  ).length;
+  const kullanilabilir = Math.max(0, haftalikSlot - kapaliSaat);
   const toplam = (mufredat.data ?? []).reduce((t, m) => t + m.weekly_hours, 0);
 
   function ac(m?: MufredatSatiri) {
@@ -125,11 +136,16 @@ export default function Mufredat() {
 
           <Kart
             baslik={subeler.data!.find((s) => s.id === secili)?.name}
-            aciklama={`Haftalık toplam ${toplam} saat · ızgarada ${haftalikSlot} ders saati var`}
+            aciklama={
+              kapaliSaat > 0
+                ? `Haftalık toplam ${toplam} saat · şubeye ${kullanilabilir} saat açık ` +
+                  `(${kapaliSaat} saat kapatılmış)`
+                : `Haftalık toplam ${toplam} saat · ızgarada ${haftalikSlot} ders saati var`
+            }
             sag={
-              toplam > haftalikSlot && haftalikSlot > 0 ? (
+              toplam > kullanilabilir && kullanilabilir > 0 ? (
                 <span className="rounded-md bg-red-100 px-2 py-1 text-xs font-medium text-red-800">
-                  {toplam - haftalikSlot} saat fazla
+                  {toplam - kullanilabilir} saat fazla
                 </span>
               ) : null
             }

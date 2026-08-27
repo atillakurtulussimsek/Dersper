@@ -253,7 +253,9 @@ export default function Ogretmenler() {
 
       {musaitlikIcin && (
         <MusaitlikMatrisi
-          ogretmen={musaitlikIcin}
+          baslik={`${musaitlikIcin.full_name} · müsaitlik`}
+          yol={`/teachers/${musaitlikIcin.id}`}
+          aciklama="Öğretmenin derse girebileceği saatleri işaretleyin."
           gunler={izgara.data ?? []}
           kapat={() => setMusaitlikIcin(null)}
         />

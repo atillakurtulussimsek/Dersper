@@ -111,3 +111,73 @@ def test_musait_olmayan_saate_ders_konmaz():
 def test_bos_izgara_engel_olarak_bildirilir():
     kodlar = {b["kod"] for b in on_kontrol([], [])}
     assert "zaman_izgarasi_bos" in kodlar
+
+
+def ders_sube_kapali(entry_id, sube, ogretmen, ad, saat, blok=1, gunluk=2,
+                     ogretmen_kapali=(), sube_kapali=()):
+    return Lesson(
+        entry_id=entry_id, section_id=sube, section_name=f"{sube}-A",
+        teacher_id=ogretmen, teacher_name=f"Öğretmen {ogretmen}",
+        subject_name=ad, weekly_hours=saat, block_size=blok, max_per_day=gunluk,
+        blocked_period_ids=frozenset(ogretmen_kapali),
+        section_blocked_period_ids=frozenset(sube_kapali),
+    )
+
+
+def test_sube_kapali_saate_ders_konmaz():
+    """Akşamcı şube: günün ilk yarısı kapalı."""
+    slots = izgara(gun_sayisi=5, ders_sayisi=8)
+    aksam_disi = frozenset(s.period_id for s in slots if s.period_index < 4)
+    dersler = [
+        ders_sube_kapali(1, 1, 10, "Matematik", 8, gunluk=2, sube_kapali=aksam_disi),
+    ]
+    sonuc = solve(SolveInput(slots=slots, lessons=dersler, time_limit_seconds=20))
+    assert sonuc.ok, sonuc.status_name
+    assert not ({pid for _, pid in sonuc.placements} & aksam_disi)
+
+
+def test_sube_ve_ogretmen_kapaliligi_birlesir():
+    slots = izgara(gun_sayisi=1, ders_sayisi=6)
+    sube_kapali = frozenset({slots[0].period_id, slots[1].period_id})
+    ogretmen_kapali = frozenset({slots[5].period_id})
+    dersler = [
+        ders_sube_kapali(1, 1, 10, "Fen", 3, gunluk=3,
+                         ogretmen_kapali=ogretmen_kapali, sube_kapali=sube_kapali),
+    ]
+    sonuc = solve(SolveInput(slots=slots, lessons=dersler, time_limit_seconds=20))
+    assert sonuc.ok
+    # geriye yalnızca 3., 4. ve 5. ders saatleri kalır
+    assert {pid for _, pid in sonuc.placements} == {
+        slots[2].period_id, slots[3].period_id, slots[4].period_id
+    }
+
+
+def test_sube_kapasitesi_kapali_saatler_dusulerek_hesaplanir():
+    slots = izgara(gun_sayisi=5, ders_sayisi=8)          # 40 saat
+    yarim = frozenset(s.period_id for s in slots if s.period_index < 4)  # 20 saat kapalı
+    dersler = [
+        ders_sube_kapali(1, 1, 10, "Matematik", 25, gunluk=5, sube_kapali=yarim),
+    ]
+    bulgu = next(b for b in on_kontrol(slots, dersler) if b["kod"] == "sube_kapasite")
+    assert bulgu["mevcut"] == 20
+    assert bulgu["gereken"] == 25
+    assert "kapatıldığı" in bulgu["detay"]
+
+
+def test_tamamen_kapali_sube_bildirilir():
+    slots = izgara(gun_sayisi=2, ders_sayisi=4)
+    hepsi = frozenset(s.period_id for s in slots)
+    dersler = [ders_sube_kapali(1, 1, 10, "Matematik", 2, sube_kapali=hepsi)]
+    kodlar = {b["kod"] for b in on_kontrol(slots, dersler)}
+    assert "sube_tamamen_kapali" in kodlar
+
+
+def test_blok_kapali_saatlerle_bolununce_bildirilir():
+    """Şube yalnızca tek tek saatler açık bırakırsa çift ders sığmaz."""
+    slots = izgara(gun_sayisi=5, ders_sayisi=8)
+    tek_saatler = frozenset(s.period_id for s in slots if s.period_index % 2 == 1)
+    dersler = [
+        ders_sube_kapali(1, 1, 10, "Fen", 4, blok=2, gunluk=4, sube_kapali=tek_saatler),
+    ]
+    bulgu = next(b for b in on_kontrol(slots, dersler) if b["kod"] == "blok_sigmiyor")
+    assert "1 saat" in bulgu["detay"]

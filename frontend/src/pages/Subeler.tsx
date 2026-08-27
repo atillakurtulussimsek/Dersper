@@ -1,20 +1,25 @@
 import { useState } from "react";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { CalendarCheck, Pencil, Plus, Trash2 } from "lucide-react";
 
 import {
   Alan, BosDurum, Buton, Girdi, Kart, Kutu, Tablo, Uyari, Yukleniyor,
 } from "../components/ui";
+import MusaitlikMatrisi from "../components/MusaitlikMatrisi";
+import { get } from "../lib/api";
 import { hataMetni, useKaynak, useListe } from "../lib/hooks";
-import type { Sube } from "../lib/types";
+import type { Gun, Sube } from "../lib/types";
 
 const BOS = { name: "", grade_level: "" as number | "", student_count: "" as number | "", is_active: true };
 
 export default function Subeler() {
   const liste = useListe<Sube>("subeler", "/sections");
+  const izgara = useQuery({ queryKey: ["timegrid"], queryFn: () => get<Gun[]>("/timegrid") });
   const kaynak = useKaynak<any, Sube>("subeler", "/sections");
   const [acik, setAcik] = useState(false);
   const [duzenlenen, setDuzenlenen] = useState<Sube | null>(null);
   const [form, setForm] = useState(BOS);
+  const [musaitlikIcin, setMusaitlikIcin] = useState<Sube | null>(null);
 
   function ac(s?: Sube) {
     setDuzenlenen(s ?? null);
@@ -52,7 +57,7 @@ export default function Subeler() {
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Şubeler</h1>
           <p className="text-sm text-slate-500">
-            Programı yapılacak sınıf şubeleri. Örn. 5-A, 9-B.
+            Programı yapılacak sınıf şubeleri ve ders görebilecekleri saatler.
           </p>
         </div>
         <Buton onClick={() => ac()}>
@@ -83,6 +88,14 @@ export default function Subeler() {
                 </td>
                 <td className="px-3 py-2.5 text-right">
                   <div className="flex justify-end gap-1">
+                    <Buton
+                      tur="sade"
+                      onClick={() => setMusaitlikIcin(s)}
+                      aria-label="Müsaitlik"
+                      title="Ders saati kısıtları"
+                    >
+                      <CalendarCheck className="h-4 w-4" />
+                    </Buton>
                     <Buton tur="sade" onClick={() => ac(s)} aria-label="Düzenle">
                       <Pencil className="h-4 w-4" />
                     </Buton>
@@ -147,6 +160,10 @@ export default function Subeler() {
             />
             Aktif (pasif şubeler programa dahil edilmez)
           </label>
+          <p className="text-xs text-slate-500">
+            Şubenin yalnızca sabah ya da yalnızca akşam ders görmesi gerekiyorsa,
+            kaydettikten sonra listedeki takvim düğmesinden saatlerini sınırlayın.
+          </p>
           <div className="flex justify-end gap-2 pt-2">
             <Buton tur="ikincil" type="button" onClick={() => setAcik(false)}>
               Vazgeç
@@ -157,6 +174,15 @@ export default function Subeler() {
           </div>
         </form>
       </Kutu>
+      {musaitlikIcin && (
+        <MusaitlikMatrisi
+          baslik={`${musaitlikIcin.name} · ders saatleri`}
+          yol={`/sections/${musaitlikIcin.id}`}
+          aciklama="Şubenin ders görebileceği saatleri işaretleyin. Sabahçı şubelerde öğleden sonrasını, akşamcı şubelerde sabahı kapatın."
+          gunler={izgara.data ?? []}
+          kapat={() => setMusaitlikIcin(null)}
+        />
+      )}
     </div>
   );
 }

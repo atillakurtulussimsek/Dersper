@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models import (
-    Availability, CurriculumEntry, Day, Period, TeacherAvailability,
+    Availability, CurriculumEntry, Day, SectionAvailability, TeacherAvailability,
 )
 from app.solver.engine import Lesson, Slot
 
@@ -36,13 +36,21 @@ def slotlari_yukle(db: Session) -> list[Slot]:
 
 
 def dersleri_yukle(db: Session) -> list[Lesson]:
-    kapali: dict[int, set[int]] = defaultdict(set)
+    ogretmen_kapali: dict[int, set[int]] = defaultdict(set)
     for row in db.scalars(
         select(TeacherAvailability).where(
             TeacherAvailability.state == Availability.UYGUN_DEGIL
         )
     ):
-        kapali[row.teacher_id].add(row.period_id)
+        ogretmen_kapali[row.teacher_id].add(row.period_id)
+
+    sube_kapali: dict[int, set[int]] = defaultdict(set)
+    for row in db.scalars(
+        select(SectionAvailability).where(
+            SectionAvailability.state == Availability.UYGUN_DEGIL
+        )
+    ):
+        sube_kapali[row.section_id].add(row.period_id)
 
     entries = db.scalars(
         select(CurriculumEntry).options(
@@ -65,6 +73,7 @@ def dersleri_yukle(db: Session) -> list[Lesson]:
             weekly_hours=e.weekly_hours,
             block_size=e.block_size,
             max_per_day=e.max_per_day,
-            blocked_period_ids=frozenset(kapali.get(e.teacher_id, set())),
+            blocked_period_ids=frozenset(ogretmen_kapali.get(e.teacher_id, set())),
+            section_blocked_period_ids=frozenset(sube_kapali.get(e.section_id, set())),
         ))
     return dersler
