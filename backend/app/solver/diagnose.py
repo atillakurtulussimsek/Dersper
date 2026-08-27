@@ -118,7 +118,7 @@ def on_kontrol(slots: list[Slot], lessons: list[Lesson]) -> list[dict]:
 
     # --- Blok ders gün içine sığıyor mu (dersin kendi kapalı saatlerine göre) ---
     for l in lessons:
-        boy = min(l.block_size, l.weekly_hours)
+        boy = max(l.blocks, default=1)
         if boy < 2:
             continue
         en_uzun = _en_uzun_ardisik(slots, gunler, l.engelli_period_ids)

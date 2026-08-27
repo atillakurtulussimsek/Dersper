@@ -12,7 +12,7 @@ aSc TimeTables, ProgMatik, Bilsa ve Yabil gibi ücretli programlara özgür bir 
 - Öğretmen müsaitlik matrisi
 - Şube ders saati kısıtları (sabahçı / akşamcı şubeler)
 - Kısıt tabanlı otomatik program üretimi (Google OR-Tools CP-SAT)
-- Blok (çift) ders, günlük ders tekrar sınırı, çakışma önleme
+- Serbest ders dağılımı (5 saatlik ders 2+2+1, 1+1+2+1 ya da 3+2 olarak), günlük ders tekrar sınırı, çakışma önleme
 - Program yerleşmediğinde **yapay zeka destekli, sade Türkçe açıklama**: neyin tıkadığı, hangi kısıtın gevşetilmesi gerektiği
 - Sınıf / öğretmen bazında PDF ve Excel çıktısı, halka açık salt-okunur görünüm
 

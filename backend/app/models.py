@@ -189,7 +189,8 @@ class CurriculumEntry(Base):
     subject_id: Mapped[int] = mapped_column(ForeignKey("subjects.id", ondelete="CASCADE"))
     teacher_id: Mapped[int] = mapped_column(ForeignKey("teachers.id", ondelete="RESTRICT"))
     weekly_hours: Mapped[int] = mapped_column(Integer)
-    block_size: Mapped[int] = mapped_column(Integer, default=1)   # 2 = çift ders
+    # Haftalık saatin gün içindeki parçalanışı, örn. "2+2+1". Toplamı weekly_hours eder.
+    block_pattern: Mapped[str] = mapped_column(String(60), default="")
     max_per_day: Mapped[int] = mapped_column(Integer, default=2)
 
     section: Mapped[Section] = relationship(back_populates="curriculum")

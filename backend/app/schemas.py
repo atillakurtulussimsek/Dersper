@@ -3,8 +3,9 @@ from __future__ import annotations
 
 from datetime import datetime, time
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
+from app import bloklar
 from app.models import Availability, InstitutionType, SolveStatus, TimetableStatus
 
 
@@ -158,8 +159,18 @@ class CurriculumIn(BaseModel):
     subject_id: int
     teacher_id: int
     weekly_hours: int = Field(ge=1, le=40)
-    block_size: int = Field(default=1, ge=1, le=4)
+    # Haftalık saatin gün içindeki parçalanışı, örn. "2+2+1".
+    # Boş bırakılırsa saatler tek tek dağıtılır.
+    block_pattern: str = Field(default="", max_length=60)
     max_per_day: int = Field(default=2, ge=1, le=10)
+
+    @model_validator(mode="after")
+    def _deseni_dogrula(self) -> "CurriculumIn":
+        try:
+            self.block_pattern = bloklar.duzenle(self.block_pattern, self.weekly_hours)
+        except bloklar.DesenHatasi as e:
+            raise ValueError(str(e)) from e
+        return self
 
 
 class CurriculumOut(ORMModel):
@@ -168,7 +179,7 @@ class CurriculumOut(ORMModel):
     subject_id: int
     teacher_id: int
     weekly_hours: int
-    block_size: int
+    block_pattern: str
     max_per_day: int
     subject: SubjectOut
     teacher: TeacherOut

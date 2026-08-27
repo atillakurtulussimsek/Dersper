@@ -7,6 +7,7 @@ import {
   Alan, BosDurum, Buton, Girdi, Kart, Kutu, Secim, Tablo, Uyari, Yukleniyor,
 } from "../components/ui";
 import { get } from "../lib/api";
+import { desenCoz, desenEtiketi, desenOnerileri } from "../lib/bloklar";
 import { hataMetni, useKaynak, useListe } from "../lib/hooks";
 import type { Ders, Gun, MufredatSatiri, Ogretmen, Sube } from "../lib/types";
 
@@ -14,7 +15,7 @@ const BOS = {
   subject_id: 0,
   teacher_id: 0,
   weekly_hours: 4,
-  block_size: 1,
+  block_pattern: "",
   max_per_day: 2,
 };
 
@@ -58,6 +59,8 @@ export default function Mufredat() {
   const kullanilabilir = Math.max(0, haftalikSlot - kapaliSaat);
   const toplam = (mufredat.data ?? []).reduce((t, m) => t + m.weekly_hours, 0);
 
+  const desen = desenCoz(form.block_pattern, form.weekly_hours);
+
   function ac(m?: MufredatSatiri) {
     setDuzenlenen(m ?? null);
     setForm(
@@ -66,7 +69,7 @@ export default function Mufredat() {
             subject_id: m.subject_id,
             teacher_id: m.teacher_id,
             weekly_hours: m.weekly_hours,
-            block_size: m.block_size,
+            block_pattern: m.block_pattern,
             max_per_day: m.max_per_day,
           }
         : {
@@ -160,7 +163,7 @@ export default function Mufredat() {
               />
             ) : (
               <Tablo
-                basliklar={["Ders", "Öğretmen", "Haftalık", "Blok", "Günde en fazla", ""]}
+                basliklar={["Ders", "Öğretmen", "Haftalık", "Dağılım", "Günde en fazla", ""]}
               >
                 {mufredat.data.map((m) => (
                   <tr key={m.id} className="hover:bg-slate-50">
@@ -175,8 +178,8 @@ export default function Mufredat() {
                     </td>
                     <td className="px-3 py-2.5 text-slate-600">{m.teacher.full_name}</td>
                     <td className="px-3 py-2.5 text-slate-600">{m.weekly_hours} saat</td>
-                    <td className="px-3 py-2.5 text-slate-600">
-                      {m.block_size > 1 ? `${m.block_size}'li` : "tek"}
+                    <td className="px-3 py-2.5 font-mono text-xs text-slate-600">
+                      {desenEtiketi(m.block_pattern, m.weekly_hours)}
                     </td>
                     <td className="px-3 py-2.5 text-slate-600">{m.max_per_day}</td>
                     <td className="px-3 py-2.5 text-right">
@@ -236,7 +239,7 @@ export default function Mufredat() {
               ))}
             </Secim>
           </Alan>
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2">
             <Alan etiket="Haftalık saat">
               <Girdi
                 required
@@ -245,16 +248,6 @@ export default function Mufredat() {
                 max={40}
                 value={form.weekly_hours}
                 onChange={(e) => setForm({ ...form, weekly_hours: Number(e.target.value) })}
-              />
-            </Alan>
-            <Alan etiket="Blok boyu" ipucu="2 = çift ders">
-              <Girdi
-                required
-                type="number"
-                min={1}
-                max={4}
-                value={form.block_size}
-                onChange={(e) => setForm({ ...form, block_size: Number(e.target.value) })}
               />
             </Alan>
             <Alan etiket="Günde en fazla">
@@ -268,15 +261,51 @@ export default function Mufredat() {
               />
             </Alan>
           </div>
+
+          <Alan
+            etiket="Ders dağılımı"
+            ipucu="Haftalık saatin gün içinde nasıl bölüneceği. Boş bırakılırsa saatler tek tek dağıtılır."
+            hata={desen.hata ?? undefined}
+          >
+            <Girdi
+              value={form.block_pattern}
+              onChange={(e) => setForm({ ...form, block_pattern: e.target.value })}
+              placeholder={`örn. ${desenOnerileri(form.weekly_hours)[1] ?? "2+2+1"}`}
+              className="font-mono"
+            />
+          </Alan>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {desenOnerileri(form.weekly_hours).map((o) => (
+              <button
+                key={o}
+                type="button"
+                onClick={() => setForm({ ...form, block_pattern: o })}
+                className={
+                  form.block_pattern.replace(/[,\s]+/g, "+") === o
+                    ? "rounded-lg bg-slate-900 px-2.5 py-1 font-mono text-xs text-white"
+                    : "rounded-lg border border-slate-300 bg-white px-2.5 py-1 font-mono text-xs text-slate-700 hover:bg-slate-50"
+                }
+              >
+                {o}
+              </button>
+            ))}
+          </div>
+
           <p className="text-xs text-slate-500">
-            Blok boyu haftalık saatten büyük olamaz. Günlük sınır × gün sayısı, haftalık
-            saati karşılamalıdır; aksi halde program yerleşmez.
+            <b>2+2+1</b>: iki gün çift ders, bir gün tek saat. <b>1+1+1+1+1</b>: beş ayrı
+            saat. Blokların toplamı haftalık saate eşit olmalı; günlük sınır da bu
+            dağılımı karşılamalıdır.
           </p>
           <div className="flex justify-end gap-2 pt-2">
             <Buton tur="ikincil" type="button" onClick={() => setAcik(false)}>
               Vazgeç
             </Buton>
-            <Buton type="submit" yukleniyor={kaynak.ekle.isPending || kaynak.guncelle.isPending}>
+            <Buton
+              type="submit"
+              disabled={!desen.gecerli}
+              yukleniyor={kaynak.ekle.isPending || kaynak.guncelle.isPending}
+            >
               Kaydet
             </Buton>
           </div>

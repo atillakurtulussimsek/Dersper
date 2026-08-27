@@ -211,11 +211,6 @@ def mufredat_ekle(payload: CurriculumIn, db: Session = Depends(get_db)) -> Curri
     _getir(db, Section, payload.section_id, "Şube")
     _getir(db, Subject, payload.subject_id, "Ders")
     _getir(db, Teacher, payload.teacher_id, "Öğretmen")
-    if payload.block_size > payload.weekly_hours:
-        raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
-            "Blok boyu haftalık ders saatinden büyük olamaz.",
-        )
     e = CurriculumEntry(**payload.model_dump())
     db.add(e)
     try:

@@ -6,6 +6,7 @@ from collections import defaultdict
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
+from app import bloklar
 from app.models import (
     Availability, CurriculumEntry, Day, SectionAvailability, TeacherAvailability,
 )
@@ -71,7 +72,7 @@ def dersleri_yukle(db: Session) -> list[Lesson]:
             teacher_name=e.teacher.full_name,
             subject_name=e.subject.name,
             weekly_hours=e.weekly_hours,
-            block_size=e.block_size,
+            blocks=tuple(bloklar.coz(e.block_pattern, e.weekly_hours)),
             max_per_day=e.max_per_day,
             blocked_period_ids=frozenset(ogretmen_kapali.get(e.teacher_id, set())),
             section_blocked_period_ids=frozenset(sube_kapali.get(e.section_id, set())),

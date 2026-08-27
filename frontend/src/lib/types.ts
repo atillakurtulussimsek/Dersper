@@ -74,7 +74,8 @@ export interface MufredatSatiri {
   subject_id: number;
   teacher_id: number;
   weekly_hours: number;
-  block_size: number;
+  /** Haftalık saatin gün içindeki parçalanışı, örn. "2+2+1". */
+  block_pattern: string;
   max_per_day: number;
   subject: Ders;
   teacher: Ogretmen;

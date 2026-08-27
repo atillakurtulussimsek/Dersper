@@ -1,6 +1,7 @@
 """Çözücü ve tanı katmanı testleri. Veritabanı gerektirmez."""
+from app.bloklar import coz
 from app.solver.diagnose import on_kontrol, rapor_olustur
-from app.solver.engine import Lesson, Slot, SolveInput, _bloklara_bol, solve
+from app.solver.engine import Lesson, Slot, SolveInput, solve
 
 GUNLER = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma"]
 
@@ -14,20 +15,35 @@ def izgara(gun_sayisi: int = 5, ders_sayisi: int = 8) -> list[Slot]:
     return slots
 
 
-def ders(entry_id, sube, ogretmen, ad, saat, blok=1, gunluk=2, kapali=()):
+def _dizi_uzunluklari(slots, placements) -> list[int]:
+    """Yerleşimlerdeki kesintisiz blok uzunlukları, örn. [2, 2, 1]."""
+    konum = {s.period_id: (s.day_index, s.period_index) for s in slots}
+    gunluk: dict[int, list[int]] = {}
+    for _, pid in placements:
+        gun, saat = konum[pid]
+        gunluk.setdefault(gun, []).append(saat)
+
+    uzunluklar: list[int] = []
+    for saatler in gunluk.values():
+        saatler.sort()
+        uzunluk = 1
+        for a, b in zip(saatler, saatler[1:]):
+            if b - a == 1:
+                uzunluk += 1
+            else:
+                uzunluklar.append(uzunluk)
+                uzunluk = 1
+        uzunluklar.append(uzunluk)
+    return uzunluklar
+
+
+def ders(entry_id, sube, ogretmen, ad, saat, desen="", gunluk=2, kapali=()):
     return Lesson(
         entry_id=entry_id, section_id=sube, section_name=f"{sube}-A",
         teacher_id=ogretmen, teacher_name=f"Öğretmen {ogretmen}",
-        subject_name=ad, weekly_hours=saat, block_size=blok, max_per_day=gunluk,
-        blocked_period_ids=frozenset(kapali),
+        subject_name=ad, weekly_hours=saat, blocks=tuple(coz(desen, saat)),
+        max_per_day=gunluk, blocked_period_ids=frozenset(kapali),
     )
-
-
-def test_bloklara_bol():
-    assert _bloklara_bol(5, 2) == [2, 2, 1]
-    assert _bloklara_bol(4, 2) == [2, 2]
-    assert _bloklara_bol(3, 1) == [1, 1, 1]
-    assert _bloklara_bol(2, 5) == [2]      # blok, haftalık saati aşamaz
 
 
 def test_kucuk_okul_cozulur():
@@ -35,7 +51,7 @@ def test_kucuk_okul_cozulur():
     dersler = [
         ders(1, 1, 10, "Matematik", 5),
         ders(2, 1, 11, "Türkçe", 5),
-        ders(3, 1, 12, "Fen", 4, blok=2),
+        ders(3, 1, 12, "Fen", 4, desen="2+2"),
         ders(4, 2, 10, "Matematik", 5),
         ders(5, 2, 11, "Türkçe", 5),
     ]
@@ -57,7 +73,7 @@ def test_sube_ve_ogretmen_cakismaz():
 
 def test_bloklar_ardisik_yerlesir():
     slots = izgara(gun_sayisi=1, ders_sayisi=6)
-    dersler = [ders(1, 1, 10, "Fen", 4, blok=2, gunluk=4)]
+    dersler = [ders(1, 1, 10, "Fen", 4, desen="2+2", gunluk=4)]
     sonuc = solve(SolveInput(slots=slots, lessons=dersler, time_limit_seconds=20))
     assert sonuc.ok
     yerler = sorted(pid for _, pid in sonuc.placements)
@@ -113,12 +129,13 @@ def test_bos_izgara_engel_olarak_bildirilir():
     assert "zaman_izgarasi_bos" in kodlar
 
 
-def ders_sube_kapali(entry_id, sube, ogretmen, ad, saat, blok=1, gunluk=2,
+def ders_sube_kapali(entry_id, sube, ogretmen, ad, saat, desen="", gunluk=2,
                      ogretmen_kapali=(), sube_kapali=()):
     return Lesson(
         entry_id=entry_id, section_id=sube, section_name=f"{sube}-A",
         teacher_id=ogretmen, teacher_name=f"Öğretmen {ogretmen}",
-        subject_name=ad, weekly_hours=saat, block_size=blok, max_per_day=gunluk,
+        subject_name=ad, weekly_hours=saat, blocks=tuple(coz(desen, saat)),
+        max_per_day=gunluk,
         blocked_period_ids=frozenset(ogretmen_kapali),
         section_blocked_period_ids=frozenset(sube_kapali),
     )
@@ -177,7 +194,44 @@ def test_blok_kapali_saatlerle_bolununce_bildirilir():
     slots = izgara(gun_sayisi=5, ders_sayisi=8)
     tek_saatler = frozenset(s.period_id for s in slots if s.period_index % 2 == 1)
     dersler = [
-        ders_sube_kapali(1, 1, 10, "Fen", 4, blok=2, gunluk=4, sube_kapali=tek_saatler),
+        ders_sube_kapali(1, 1, 10, "Fen", 4, desen="2+2", gunluk=4, sube_kapali=tek_saatler),
     ]
     bulgu = next(b for b in on_kontrol(slots, dersler) if b["kod"] == "blok_sigmiyor")
     assert "1 saat" in bulgu["detay"]
+
+
+def test_serbest_blok_deseni_uygulanir():
+    """5 saatlik ders 2+2+1 olarak istenirse tam olarak öyle yerleşir."""
+    slots = izgara(gun_sayisi=5, ders_sayisi=8)
+    dersler = [ders(1, 1, 10, "Matematik", 5, desen="2+2+1", gunluk=2)]
+    sonuc = solve(SolveInput(slots=slots, lessons=dersler, time_limit_seconds=20))
+    assert sonuc.ok
+
+    assert sorted(_dizi_uzunluklari(slots, sonuc.placements), reverse=True) == [2, 2, 1]
+
+
+def test_desen_tek_saatlere_bolunebilir():
+    slots = izgara(gun_sayisi=5, ders_sayisi=8)
+    dersler = [ders(1, 1, 10, "Türkçe", 5, desen="1+1+1+1+1", gunluk=1)]
+    sonuc = solve(SolveInput(slots=slots, lessons=dersler, time_limit_seconds=20))
+    assert sonuc.ok
+    konum = {s.period_id: s.day_index for s in slots}
+    gunler = [konum[pid] for _, pid in sonuc.placements]
+    assert len(set(gunler)) == 5          # günde bir saat kuralı gereği beş ayrı gün
+
+
+def test_uc_saatlik_blok_yerlesir():
+    slots = izgara(gun_sayisi=5, ders_sayisi=8)
+    dersler = [ders(1, 1, 10, "Atölye", 6, desen="3+3", gunluk=3)]
+    sonuc = solve(SolveInput(slots=slots, lessons=dersler, time_limit_seconds=20))
+    assert sonuc.ok
+    konum = {s.period_id: (s.day_index, s.period_index) for s in slots}
+    gunluk: dict[int, list[int]] = {}
+    for _, pid in sonuc.placements:
+        gun, saat = konum[pid]
+        gunluk.setdefault(gun, []).append(saat)
+    assert len(gunluk) == 2               # iki ayrı gün, günde 3 saat
+    for saatler in gunluk.values():
+        saatler.sort()
+        assert len(saatler) == 3
+        assert saatler[2] - saatler[0] == 2   # kesintisiz

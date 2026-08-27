@@ -22,7 +22,7 @@ def _tanimlar(c: TestClient, ek: str = "") -> dict:
             c.post("/api/curriculum", json={
                 "section_id": sube, "subject_id": ders, "teacher_id": ogretmenler[i],
                 "weekly_hours": 5 if i < 2 else 4,
-                "block_size": 2 if i == 2 else 1, "max_per_day": 2,
+                "block_pattern": "2+2" if i == 2 else "", "max_per_day": 2,
             })
     return {"gunler": gunler, "dersler": dersler, "ogretmenler": ogretmenler,
             "subeler": subeler}
@@ -121,7 +121,7 @@ def test_cozumsuz_program_tani_raporu_uretir(yonetici: TestClient):
         s = yonetici.post("/api/sections", json={"name": ad}).json()["id"]
         r = yonetici.post("/api/curriculum", json={
             "section_id": s, "subject_id": d, "teacher_id": o,
-            "weekly_hours": 25, "block_size": 1, "max_per_day": 8,
+            "weekly_hours": 25, "max_per_day": 8,
         })
         assert r.status_code == 201, r.text
     pid = yonetici.post("/api/timetables", json={"name": "Çözümsüz"}).json()["id"]
@@ -174,7 +174,7 @@ def test_aksamci_sube_sabaha_ders_almaz(yonetici: TestClient):
 
     yonetici.post("/api/curriculum", json={
         "section_id": s, "subject_id": d, "teacher_id": o,
-        "weekly_hours": 10, "block_size": 1, "max_per_day": 2,
+        "weekly_hours": 10, "max_per_day": 2,
     })
     pid = yonetici.post("/api/timetables", json={"name": "Akşam"}).json()["id"]
     deneme = yonetici.post(f"/api/timetables/{pid}/solve?time_limit_seconds=30").json()
@@ -200,7 +200,7 @@ def test_asiri_kapali_sube_tani_raporunda_gorunur(yonetici: TestClient):
 
     yonetici.post("/api/curriculum", json={
         "section_id": s, "subject_id": d, "teacher_id": o,
-        "weekly_hours": 12, "block_size": 1, "max_per_day": 3,
+        "weekly_hours": 12, "max_per_day": 3,
     })
     pid = yonetici.post("/api/timetables", json={"name": "Dar"}).json()["id"]
     deneme = yonetici.post(f"/api/timetables/{pid}/solve?time_limit_seconds=20").json()
@@ -209,3 +209,50 @@ def test_asiri_kapali_sube_tani_raporunda_gorunur(yonetici: TestClient):
     bulgu = next(b for b in deneme["report"]["bulgular"] if b["kod"] == "sube_kapasite")
     assert bulgu["mevcut"] == 5
     assert bulgu["gereken"] == 12
+
+
+def test_blok_deseni_kaydedilir_ve_dogrulanir(yonetici: TestClient):
+    d = yonetici.post("/api/subjects", json={"name": "Matematik"}).json()["id"]
+    o = yonetici.post("/api/teachers", json={"full_name": "Desen Öğretmeni"}).json()["id"]
+    s = yonetici.post("/api/sections", json={"name": "7-D"}).json()["id"]
+    temel = {"section_id": s, "subject_id": d, "teacher_id": o, "weekly_hours": 5}
+
+    # Toplamı tutmayan desen reddedilir.
+    hatali = yonetici.post("/api/curriculum", json={**temel, "block_pattern": "2+2"})
+    assert hatali.status_code == 422
+    assert "eşit olmalı" in hatali.text
+
+    # Geçerli desen tek biçime getirilerek saklanır.
+    ok = yonetici.post("/api/curriculum", json={**temel, "block_pattern": "2, 2 ,1"})
+    assert ok.status_code == 201
+    assert ok.json()["block_pattern"] == "2+2+1"
+
+
+def test_desen_bos_birakilirsa_tek_saatlere_acilir(yonetici: TestClient):
+    d = yonetici.post("/api/subjects", json={"name": "Müzik"}).json()["id"]
+    o = yonetici.post("/api/teachers", json={"full_name": "Müzik Öğretmeni"}).json()["id"]
+    s = yonetici.post("/api/sections", json={"name": "7-E"}).json()["id"]
+    r = yonetici.post("/api/curriculum", json={
+        "section_id": s, "subject_id": d, "teacher_id": o, "weekly_hours": 3,
+    })
+    assert r.json()["block_pattern"] == "1+1+1"
+
+
+def test_istenen_desen_programa_yansir(yonetici: TestClient):
+    """3+2 istenen 5 saatlik ders, bir gün 3 diğer gün 2 saat olarak yerleşir."""
+    d = yonetici.post("/api/subjects", json={"name": "Atölye"}).json()["id"]
+    o = yonetici.post("/api/teachers", json={"full_name": "Atölye Öğretmeni"}).json()["id"]
+    s = yonetici.post("/api/sections", json={"name": "11-A"}).json()["id"]
+    yonetici.post("/api/curriculum", json={
+        "section_id": s, "subject_id": d, "teacher_id": o,
+        "weekly_hours": 5, "block_pattern": "3+2", "max_per_day": 3,
+    })
+    pid = yonetici.post("/api/timetables", json={"name": "Desen"}).json()["id"]
+    deneme = yonetici.post(f"/api/timetables/{pid}/solve?time_limit_seconds=30").json()
+    assert deneme["status"] == "basarili", deneme["report"]
+
+    hucreler = yonetici.get(f"/api/timetables/{pid}/grid").json()["cells"]
+    gunluk: dict[int, int] = {}
+    for h in hucreler:
+        gunluk[h["day_index"]] = gunluk.get(h["day_index"], 0) + 1
+    assert sorted(gunluk.values(), reverse=True) == [3, 2]

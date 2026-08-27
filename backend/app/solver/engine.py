@@ -9,7 +9,8 @@ Sert kısıtlar (v1):
   2. Bir şube aynı anda tek derste olur.
   3. Bir öğretmen aynı anda tek derste olur.
   4. Öğretmenin ya da şubenin uygun olmadığı saatlere ders konmaz.
-  5. Bloklar gün içinde ardışıktır, günü aşmaz.
+  5. Her blok gün içinde ardışık saatlere oturur, günü aşmaz. Blok uzunluklarını
+     kullanıcı belirler (örn. 5 saatlik ders "2+2+1").
   6. Aynı ders bir şubede günde `max_per_day` saatten fazla olmaz.
   7. Teneffüslere ders konmaz.
   8. Kilitli yerleşimler yerinde kalır.
@@ -48,7 +49,8 @@ class Lesson:
     teacher_name: str
     subject_name: str
     weekly_hours: int
-    block_size: int
+    # Blok uzunlukları, örn. (2, 2, 1). Toplamı weekly_hours eder.
+    blocks: tuple[int, ...]
     max_per_day: int
     # Öğretmenin uygun OLMADIĞI period_id kümesi
     blocked_period_ids: frozenset[int]
@@ -79,16 +81,6 @@ class SolveOutput:
     # Yerleşemeyen saatler: entry_id -> saat sayısı (sadece gevşetilmiş çözümde)
     unplaced: dict[int, int]
     status_name: str
-
-
-def _bloklara_bol(weekly_hours: int, block_size: int) -> list[int]:
-    """5 saat, blok 2 → [2, 2, 1]"""
-    size = max(1, min(block_size, weekly_hours))
-    tam, kalan = divmod(weekly_hours, size)
-    bloklar = [size] * tam
-    if kalan:
-        bloklar.append(kalan)
-    return bloklar
 
 
 def _gune_gore(slots: list[Slot]) -> dict[int, list[int]]:
@@ -130,7 +122,7 @@ def _calistir(data: SolveInput, *, gevsek: bool) -> SolveOutput:
     yerlesmeyen: dict[int, cp_model.IntVar] = {}
 
     for li, lesson in enumerate(data.lessons):
-        bloklar = _bloklara_bol(lesson.weekly_hours, lesson.block_size)
+        bloklar = list(lesson.blocks)
         engelli = lesson.engelli_period_ids
 
         for bi, boy in enumerate(bloklar):
