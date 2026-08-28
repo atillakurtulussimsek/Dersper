@@ -328,3 +328,15 @@ class AiSettingsOut(BaseModel):
 class AiTestResult(BaseModel):
     ok: bool
     message: str
+
+
+class AiModelsIn(BaseModel):
+    """Model listesi sorgusu. Alanlar boşsa kayıtlı ayarlar kullanılır."""
+    base_url: str | None = None
+    api_key: str | None = None
+
+
+class AiModelsOut(BaseModel):
+    models: list[str]
+    # Listenin çekildiği adres — kullanıcıya nereye bağlanıldığını göstermek için.
+    source: str

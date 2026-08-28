@@ -1,11 +1,11 @@
 /** Kurum bilgileri ve yapay zeka sağlayıcı ayarları. */
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { KeyRound, Sparkles } from "lucide-react";
+import { KeyRound, ListRestart, Pencil, Sparkles } from "lucide-react";
 
 import { Alan, Buton, Girdi, Kart, Secim, Uyari, Yukleniyor } from "../components/ui";
-import { del, get, put } from "../lib/api";
-import type { Kurum, KurumTipi, YapayZekaAyarlari } from "../lib/types";
+import { del, get, post, put } from "../lib/api";
+import type { Kurum, KurumTipi, ModelListesi, YapayZekaAyarlari } from "../lib/types";
 
 const HAZIR_UCLAR = [
   { ad: "OpenAI", url: "", model: "gpt-4o-mini" },
@@ -29,6 +29,9 @@ export default function Ayarlar() {
     model: "gpt-4o-mini",
     api_key: "",
   });
+  // Sağlayıcıdan çekilen model listesi; boşsa model alanı elle yazılır.
+  const [modeller, setModeller] = useState<string[]>([]);
+  const [elleModel, setElleModel] = useState(false);
 
   useEffect(() => {
     if (kurum.data)
@@ -68,6 +71,23 @@ export default function Ayarlar() {
 
   const yzTest = useMutation({
     mutationFn: () => get<{ ok: boolean; message: string }>("/ai/test"),
+  });
+
+  /** Modelleri çeker; başarılı olması adres ve anahtarın doğru olduğunu gösterir. */
+  const modelleriGetir = useMutation({
+    mutationFn: () =>
+      post<ModelListesi>("/ai/models", {
+        base_url: yzForm.base_url || null,
+        api_key: yzForm.api_key || null,
+      }),
+    onSuccess: (veri) => {
+      setModeller(veri.models);
+      setElleModel(false);
+      // Kayıtlı model listede yoksa ilkine geç.
+      if (!veri.models.includes(yzForm.model)) {
+        setYzForm((f) => ({ ...f, model: veri.models[0] }));
+      }
+    },
   });
 
   const anahtarSil = useMutation({
@@ -156,7 +176,11 @@ export default function Ayarlar() {
                 <button
                   key={u.ad}
                   type="button"
-                  onClick={() => setYzForm({ ...yzForm, base_url: u.url, model: u.model })}
+                  onClick={() => {
+                    setModeller([]);
+                    setElleModel(false);
+                    setYzForm({ ...yzForm, base_url: u.url, model: u.model });
+                  }}
                   className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
                 >
                   {u.ad}
@@ -171,18 +195,74 @@ export default function Ayarlar() {
           >
             <Girdi
               value={yzForm.base_url}
-              onChange={(e) => setYzForm({ ...yzForm, base_url: e.target.value })}
+              onChange={(e) => {
+                setModeller([]);
+                setYzForm({ ...yzForm, base_url: e.target.value });
+              }}
               placeholder="https://api.openai.com/v1"
             />
           </Alan>
 
-          <Alan etiket="Model">
-            <Girdi
-              required
-              value={yzForm.model}
-              onChange={(e) => setYzForm({ ...yzForm, model: e.target.value })}
-            />
+          <Alan
+            etiket="Model"
+            ipucu={
+              modeller.length
+                ? `${modeller.length} model listelendi (${modelleriGetir.data?.source}).`
+                : "Anahtarı girip “Modelleri getir”e basın; liste sağlayıcıdan çekilir."
+            }
+          >
+            <div className="flex gap-2">
+              {modeller.length && !elleModel ? (
+                <Secim
+                  required
+                  value={yzForm.model}
+                  onChange={(e) => setYzForm({ ...yzForm, model: e.target.value })}
+                >
+                  {modeller.map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                </Secim>
+              ) : (
+                <Girdi
+                  required
+                  value={yzForm.model}
+                  onChange={(e) => setYzForm({ ...yzForm, model: e.target.value })}
+                  placeholder="gpt-4o-mini"
+                />
+              )}
+              <Buton
+                tur="ikincil"
+                type="button"
+                onClick={() => modelleriGetir.mutate()}
+                yukleniyor={modelleriGetir.isPending}
+                title="Sağlayıcıdaki modelleri listele"
+              >
+                <ListRestart className="h-4 w-4" />
+                <span className="hidden sm:inline">Modelleri getir</span>
+              </Buton>
+              {modeller.length > 0 && (
+                <Buton
+                  tur="sade"
+                  type="button"
+                  onClick={() => setElleModel((e) => !e)}
+                  title={elleModel ? "Listeden seç" : "Model adını elle gir"}
+                >
+                  <Pencil className="h-4 w-4" />
+                </Buton>
+              )}
+            </div>
           </Alan>
+
+          {modelleriGetir.error && (
+            <Uyari tur="hata">{(modelleriGetir.error as Error).message}</Uyari>
+          )}
+          {modelleriGetir.isSuccess && modeller.length > 0 && (
+            <Uyari tur="basari">
+              Bağlantı doğrulandı: {modeller.length} model listelendi.
+            </Uyari>
+          )}
 
           <Alan
             etiket="API anahtarı"
@@ -195,7 +275,10 @@ export default function Ayarlar() {
             <Girdi
               type="password"
               value={yzForm.api_key}
-              onChange={(e) => setYzForm({ ...yzForm, api_key: e.target.value })}
+              onChange={(e) => {
+                setModeller([]);
+                setYzForm({ ...yzForm, api_key: e.target.value });
+              }}
               placeholder="sk-…"
               autoComplete="off"
             />
@@ -217,7 +300,7 @@ export default function Ayarlar() {
               onClick={() => yzTest.mutate()}
               yukleniyor={yzTest.isPending}
             >
-              <KeyRound className="h-4 w-4" /> Bağlantıyı test et
+              <KeyRound className="h-4 w-4" /> Seçili modeli dene
             </Buton>
             {yz.data?.has_api_key && (
               <Buton

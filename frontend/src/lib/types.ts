@@ -182,6 +182,11 @@ export interface Deneme {
   stop_requested: boolean;
 }
 
+export interface ModelListesi {
+  models: string[];
+  source: string;
+}
+
 export interface YapayZekaAyarlari {
   enabled: boolean;
   base_url: string | null;

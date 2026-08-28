@@ -31,7 +31,7 @@ Yapay zeka isteğe bağlıdır. Kendi API anahtarınızı Ayarlar'dan girersiniz
 | Çözücü | Google OR-Tools (CP-SAT) |
 | Frontend | React · TypeScript · Vite · Tailwind CSS |
 | Veritabanı | MySQL 8 |
-| Yapay zeka | OpenAI SDK (özel `base_url` desteğiyle: OpenAI, Ollama, OpenRouter, uyumlu her servis) |
+| Yapay zeka | OpenAI SDK (özel `base_url` desteğiyle: OpenAI, Ollama, OpenRouter, uyumlu her servis). Model listesi sağlayıcıdan çekilir. |
 
 ## Kurulum
 

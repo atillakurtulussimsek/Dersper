@@ -636,3 +636,95 @@ def test_renk_gecmis_donemden_aktarilirken_korunur(yonetici: TestClient):
     yonetici.post("/api/terms", json={"name": "Yeni Dönem"})
     yonetici.post("/api/teachers/import", json={"term_id": eski, "ids": [kaynak]})
     assert yonetici.get("/api/teachers").json()[0]["color"] == "#8b5cf6"
+
+
+def test_model_listesi_anahtar_yoksa_reddedilir(yonetici: TestClient):
+    r = yonetici.post("/api/ai/models", json={})
+    assert r.status_code == 400
+    assert "API anahtarınızı girin" in r.text
+
+
+def test_model_listesi_saglayiciyi_sorar(yonetici: TestClient, monkeypatch):
+    """Kaydedilmemiş anahatla da sorgulanabilir; liste sıralı ve tekilleştirilmiş döner."""
+    from app.ai import client as ai
+
+    cagrilar = {}
+
+    class SahteModel:
+        def __init__(self, id): self.id = id
+
+    class SahteListe:
+        data = [SahteModel("gpt-4o-mini"), SahteModel("gpt-4o"), SahteModel("gpt-4o")]
+
+    class SahteIstemci:
+        def __init__(self, api_key, base_url):
+            cagrilar["api_key"] = api_key
+            cagrilar["base_url"] = base_url
+            self.models = self
+
+        def list(self):
+            return SahteListe()
+
+    monkeypatch.setattr(ai, "_istemci", lambda k, u: SahteIstemci(k, u))
+
+    r = yonetici.post("/api/ai/models", json={
+        "base_url": "https://ornek.local/v1", "api_key": "sk-deneme",
+    })
+    assert r.status_code == 200
+    assert r.json()["models"] == ["gpt-4o", "gpt-4o-mini"]
+    assert r.json()["source"] == "https://ornek.local/v1"
+    assert cagrilar == {"api_key": "sk-deneme", "base_url": "https://ornek.local/v1"}
+
+
+def test_model_listesi_kayitli_anahtari_kullanir(yonetici: TestClient, monkeypatch):
+    from app.ai import client as ai
+
+    gorulen = {}
+
+    class Sahte:
+        def __init__(self, api_key, base_url):
+            gorulen["api_key"] = api_key
+            self.models = self
+
+        def list(self):
+            class L: data = [type("M", (), {"id": "yerel-model"})()]
+            return L()
+
+    monkeypatch.setattr(ai, "_istemci", lambda k, u: Sahte(k, u))
+    yonetici.put("/api/ai/settings", json={
+        "enabled": True, "base_url": "http://localhost:11434/v1",
+        "model": "llama3.1", "api_key": "gizli-anahtar",
+    })
+
+    r = yonetici.post("/api/ai/models", json={})
+    assert r.status_code == 200
+    assert r.json()["models"] == ["yerel-model"]
+    assert gorulen["api_key"] == "gizli-anahtar"      # şifreli kayıttan çözüldü
+
+
+def test_model_listesi_saglayici_hatasini_iletir(yonetici: TestClient, monkeypatch):
+    from app.ai import client as ai
+
+    def patla(k, u):
+        raise RuntimeError("401 Unauthorized")
+
+    monkeypatch.setattr(ai, "_istemci", patla)
+    r = yonetici.post("/api/ai/models", json={"api_key": "sk-hatali"})
+    assert r.status_code == 502
+    assert "Adresi ve anahtarı kontrol edin" in r.text
+    assert "401 Unauthorized" in r.text
+
+
+def test_bos_model_listesi_hata_sayilir(yonetici: TestClient, monkeypatch):
+    from app.ai import client as ai
+
+    class Bos:
+        def __init__(self, *a): self.models = self
+        def list(self):
+            class L: data = []
+            return L()
+
+    monkeypatch.setattr(ai, "_istemci", lambda k, u: Bos())
+    r = yonetici.post("/api/ai/models", json={"api_key": "sk-x"})
+    assert r.status_code == 502
+    assert "boş bir model listesi" in r.text

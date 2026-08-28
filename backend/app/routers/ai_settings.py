@@ -1,5 +1,5 @@
 """Yapay zeka ayarları. Anahtar veritabanına şifrelenmiş yazılır, geri okunmaz."""
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -8,7 +8,9 @@ from app.crypto import decrypt, encrypt, mask
 from app.db import get_db
 from app.deps import current_user
 from app.models import AiSettings
-from app.schemas import AiSettingsIn, AiSettingsOut, AiTestResult
+from app.schemas import (
+    AiModelsIn, AiModelsOut, AiSettingsIn, AiSettingsOut, AiTestResult,
+)
 
 router = APIRouter(prefix="/ai", tags=["yapay zeka"],
                    dependencies=[Depends(current_user)])
@@ -61,6 +63,31 @@ def anahtari_sil(db: Session = Depends(get_db)) -> AiSettingsOut:
     db.commit()
     db.refresh(a)
     return _cikti(a)
+
+
+VARSAYILAN_ADRES = "https://api.openai.com/v1"
+
+
+@router.post("/models", response_model=AiModelsOut)
+def modeller(payload: AiModelsIn, db: Session = Depends(get_db)) -> AiModelsOut:
+    """Sağlayıcıdaki modelleri listeler; aynı zamanda adres ve anahtarı doğrular."""
+    ayar = _ayar(db)
+    try:
+        liste = ai.modelleri_getir(ayar, payload.base_url, payload.api_key)
+    except ai.AiKapali as e:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e))
+    except Exception as e:
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            f"Model listesi alınamadı. Adresi ve anahtarı kontrol edin. Ayrıntı: {e}",
+        )
+    if not liste:
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            "Sağlayıcı boş bir model listesi döndürdü.",
+        )
+    adres = payload.base_url if payload.base_url is not None else ayar.base_url
+    return AiModelsOut(models=liste, source=(adres or "").strip() or VARSAYILAN_ADRES)
 
 
 @router.post("/test", response_model=AiTestResult)

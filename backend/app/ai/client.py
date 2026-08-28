@@ -38,6 +38,33 @@ class AiKapali(Exception):
     """Yapay zeka ayarlanmamış ya da kapalı."""
 
 
+def _istemci(api_key: str, base_url: str | None) -> OpenAI:
+    return OpenAI(api_key=api_key, base_url=base_url or None)
+
+
+def modelleri_getir(
+    ayar: AiSettings | None,
+    base_url: str | None = None,
+    api_key: str | None = None,
+) -> list[str]:
+    """Sağlayıcının models ucundan kullanılabilir model adlarını çeker.
+
+    Henüz kaydedilmemiş bilgilerle de çalışır: `api_key` verilmezse kayıtlı
+    anahtar kullanılır. Liste dönüyorsa adres ve anahtar doğrulanmış olur.
+    """
+    anahtar = (api_key or "").strip()
+    if not anahtar:
+        if ayar is None or not ayar.api_key_encrypted:
+            raise AiKapali("Önce API anahtarınızı girin.")
+        anahtar = decrypt(ayar.api_key_encrypted)
+        if not anahtar:
+            raise AiKapali("Kayıtlı API anahtarı okunamadı. Anahtarı yeniden girin.")
+
+    adres = base_url if base_url is not None else (ayar.base_url if ayar else None)
+    yanit = _istemci(anahtar, (adres or "").strip() or None).models.list()
+    return sorted({m.id for m in yanit.data if getattr(m, "id", None)})
+
+
 def istemci_olustur(ayar: AiSettings | None) -> tuple[OpenAI, str]:
     if ayar is None or not ayar.enabled or not ayar.api_key_encrypted:
         raise AiKapali(
@@ -46,7 +73,7 @@ def istemci_olustur(ayar: AiSettings | None) -> tuple[OpenAI, str]:
     api_key = decrypt(ayar.api_key_encrypted)
     if not api_key:
         raise AiKapali("Kayıtlı API anahtarı okunamadı. Anahtarı yeniden girin.")
-    return OpenAI(api_key=api_key, base_url=ayar.base_url or None), ayar.model
+    return _istemci(api_key, ayar.base_url), ayar.model
 
 
 def baglanti_testi(ayar: AiSettings | None) -> tuple[bool, str]:
