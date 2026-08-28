@@ -17,6 +17,7 @@ aSc TimeTables, ProgMatik, Bilsa ve Yabil gibi ücretli programlara özgür bir 
 - Kısıt tabanlı otomatik program üretimi (Google OR-Tools CP-SAT)
 - **Arka planda üretim**: tam yerleşim sağlanana kadar denemeye devam eder; ekranı kapatsanız da sürer. Deneme sayısı, geçen süre ve en iyi yerleşim canlı izlenir, istenildiğinde durdurulur
 - Serbest ders dağılımı (5 saatlik ders 2+2+1, 1+1+2+1 ya da 3+2 olarak), günlük ders tekrar sınırı, çakışma önleme
+- Gerektiğinde günlük sınırın esnetilmesi: aynı ders gün içinde birden çok kez, aralarına başka dersler konarak yerleşir; esnetilen yerler **Uyarılar** bölümünde listelenir ve isteğe bağlı düzeltilir
 - Program yerleşmediğinde **yapay zeka destekli, sade Türkçe açıklama**: neyin tıkadığı, hangi kısıtın gevşetilmesi gerektiği
 - Çıktılar: sınıf/öğretmen bazında ayrı sayfalar ya da tek sayfalık **çarşaf liste**; PDF, Excel ve yazdırma
 - Halka açık salt-okunur görünüm

@@ -123,6 +123,20 @@ export interface Hucre {
   is_locked: boolean;
 }
 
+export interface ProgramUyarisi {
+  key: string;
+  tur: "gunluk_asim" | "bitisik";
+  baslik: string;
+  detay: string;
+  sube: string;
+  ders: string;
+  ogretmen: string;
+  gun: string;
+  konan: number;
+  sinir: number;
+  ignored: boolean;
+}
+
 export interface Izgara {
   timetable: Program;
   cells: Hucre[];

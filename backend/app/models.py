@@ -251,6 +251,8 @@ class Timetable(Base, SoftDelete):
         Enum(TimetableStatus), default=TimetableStatus.TASLAK
     )
     public_token: Mapped[str | None] = mapped_column(String(64), unique=True)
+    # Kullanıcının "görmezden gel" dediği uyarı anahtarları.
+    ignored_warnings: Mapped[list | None] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     assignments: Mapped[list[Assignment]] = relationship(

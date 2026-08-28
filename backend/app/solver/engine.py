@@ -12,10 +12,17 @@ Sert kısıtlar (v1):
   5. Her blok gün içinde ardışık saatlere oturur, günü aşmaz. Blok uzunluklarını
      kullanıcı belirler (örn. 5 saatlik ders "2+2+1").
   6. Aynı ders bir şubede günde `max_per_day` saatten fazla olmaz.
-  7. Teneffüslere ders konmaz.
-  8. Kilitli yerleşimler yerinde kalır.
+  7. Aynı dersin iki bloğu arka arkaya gelmez; aralarında başka bir ders olur.
+     (Yoksa "2+2" deseni gün içinde 4 saatlik tek bloğa dönüşürdü.)
+  8. Teneffüslere ders konmaz.
+  9. Kilitli yerleşimler yerinde kalır.
 
-Program yerleşmezse model gevşetilir: yerleşemeyen saatler açıkça raporlanır.
+Günlük sınır gerektiğinde esnetilebilir (`esnek_gunluk`): bu kipte sınır aşımı
+yasak değil, cezalıdır ve çözücü aşımı en aza indirir. Kural 7 esnek kipte de
+sert kalır, böylece esnetme "aynı ders gün içinde iki kez, arada başka ders"
+biçiminde olur.
+
+Hiçbiri yetmezse model tamamen gevşetilir: yerleşemeyen saatler raporlanır.
 """
 from __future__ import annotations
 
@@ -26,6 +33,8 @@ from ortools.sat.python import cp_model
 
 # Gevşetilmiş modelde yerleşemeyen her ders saatinin bedeli.
 CEZA_YERLESMEYEN = 1000
+# Esnek kipte günlük sınırın her bir saatlik aşımının bedeli.
+CEZA_GUNLUK_ASIM = 10
 VARSAYILAN_SURE_SN = 30.0
 
 
@@ -72,6 +81,8 @@ class SolveInput:
     time_limit_seconds: float = VARSAYILAN_SURE_SN
     # Her denemede farklı bir arama yolu izlemek için.
     seed: int = 0
+    # Günlük ders tekrar sınırı aşılabilsin mi? Aşım cezalandırılır, yasak değildir.
+    esnek_gunluk: bool = False
 
 
 @dataclass
@@ -86,6 +97,8 @@ class SolveOutput:
     # Sert model çözümsüz olduğunu KANITLADI mı? Kanıtlandıysa başka tohum
     # denemek sonuç vermez; yalnızca süre yetmediyse yeniden denemek işe yarar.
     proven_infeasible: bool = False
+    # Günlük sınırın esnetildiği yerler: (entry_id, day_index, konan, sinir)
+    relaxations: list[tuple[int, int, int, int]] = field(default_factory=list)
 
 
 def _gune_gore(slots: list[Slot]) -> dict[int, list[int]]:
@@ -105,16 +118,28 @@ def _ardisik_mi(slots: list[Slot], indices: list[int]) -> bool:
 
 
 def solve(data: SolveInput) -> SolveOutput:
-    """Önce sert modeli dener; çözümsüzse gevşetilmiş modeli çözer."""
+    """Sırayla dener: sert model → (izin verilirse) esnek günlük sınır → gevşek.
+
+    Esnek kip yalnızca `esnek_gunluk` açıkken devreye girer; çağıran taraf bunu
+    ancak sert modelle birkaç deneme başarısız olduktan sonra açar.
+    """
     sert = _calistir(data, gevsek=False)
     if sert.ok:
         return sert
+
+    if data.esnek_gunluk:
+        esnek = _calistir(data, gevsek=False, esnek_gunluk=True)
+        if esnek.ok:
+            return esnek
+
     gevsek = _calistir(data, gevsek=True)
     gevsek.proven_infeasible = sert.status_name == "INFEASIBLE"
     return gevsek
 
 
-def _calistir(data: SolveInput, *, gevsek: bool) -> SolveOutput:
+def _calistir(
+    data: SolveInput, *, gevsek: bool, esnek_gunluk: bool = False
+) -> SolveOutput:
     basla = _time.monotonic()
     slots = data.slots
     gunler = _gune_gore(slots)
@@ -127,6 +152,8 @@ def _calistir(data: SolveInput, *, gevsek: bool) -> SolveOutput:
     # x[(lesson_idx, slot_idx)] -> BoolVar (o saatte ders var mı)
     dolu: dict[tuple[int, int], cp_model.IntVar] = {}
     yerlesmeyen: dict[int, cp_model.IntVar] = {}
+    # (ders_index, gun_index) -> günlük sınırın aşım miktarı (esnek kipte)
+    asimlar: dict[tuple[int, int], cp_model.IntVar] = {}
 
     for li, lesson in enumerate(data.lessons):
         bloklar = list(lesson.blocks)
@@ -182,10 +209,30 @@ def _calistir(data: SolveInput, *, gevsek: bool) -> SolveOutput:
                 dolu[(li, si)] = x
 
         # (6) Aynı ders bir şubede günde en fazla max_per_day saat.
-        for gun_slotlari in gunler.values():
+        for gi, gun_slotlari in gunler.items():
             gunluk = [dolu[(li, si)] for si in gun_slotlari if (li, si) in dolu]
-            if len(gunluk) > lesson.max_per_day:
+            if len(gunluk) <= lesson.max_per_day:
+                continue
+            if esnek_gunluk:
+                asim = model.NewIntVar(0, len(gunluk), f"asim_{li}_{gi}")
+                model.Add(asim >= sum(gunluk) - lesson.max_per_day)
+                asimlar[(li, gi)] = asim
+            else:
                 model.Add(sum(gunluk) <= lesson.max_per_day)
+
+        # (7) Aynı dersin blokları arka arkaya gelmesin: gün içinde kesintisiz
+        # dizi, en uzun bloğu aşamaz. Yalnızca raporlama için çalıştırılan
+        # gevşek modelde uygulanmaz; orada amaç en çok saati yerleştirmektir.
+        en_uzun_blok = max(bloklar) if bloklar else 1
+        for gun_slotlari in ([] if gevsek else gunler.values()):
+            pencere = en_uzun_blok + 1
+            for konum in range(len(gun_slotlari) - pencere + 1):
+                dilim = gun_slotlari[konum:konum + pencere]
+                if not _ardisik_mi(slots, dilim):
+                    continue
+                hucreler = [dolu[(li, si)] for si in dilim if (li, si) in dolu]
+                if len(hucreler) > en_uzun_blok:
+                    model.Add(sum(hucreler) <= en_uzun_blok)
 
     # (2) Şube çakışması
     _tekil_kaynak(model, data.lessons, dolu, len(slots), lambda l: l.section_id)
@@ -201,6 +248,8 @@ def _calistir(data: SolveInput, *, gevsek: bool) -> SolveOutput:
 
     if gevsek:
         model.Minimize(sum(CEZA_YERLESMEYEN * v for v in yerlesmeyen.values()))
+    elif asimlar:
+        model.Minimize(sum(CEZA_GUNLUK_ASIM * v for v in asimlar.values()))
 
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = data.time_limit_seconds
@@ -214,6 +263,18 @@ def _calistir(data: SolveInput, *, gevsek: bool) -> SolveOutput:
             ok=False, placements=[], seconds=gecen, unplaced={},
             status_name=solver.StatusName(status),
         )
+
+    esnetmeler: list[tuple[int, int, int, int]] = []
+    for (li, gi), var in asimlar.items():
+        asim = int(solver.Value(var))
+        if asim <= 0:
+            continue
+        lesson = data.lessons[li]
+        konan = sum(
+            1 for si in gunler[gi]
+            if (li, si) in dolu and solver.Value(dolu[(li, si)])
+        )
+        esnetmeler.append((lesson.entry_id, gi, konan, lesson.max_per_day))
 
     yerlesim = [
         (data.lessons[li].entry_id, slots[si].period_id)
@@ -231,6 +292,7 @@ def _calistir(data: SolveInput, *, gevsek: bool) -> SolveOutput:
         seconds=gecen,
         unplaced=eksikler,
         status_name=solver.StatusName(status),
+        relaxations=sorted(esnetmeler),
     )
 
 

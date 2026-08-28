@@ -37,6 +37,11 @@ SURE_CARPANI = 1.25
 ARA_SN = 0.5
 EN_UZUN_ARA_SN = 30.0
 
+# Günlük ders tekrar sınırı ancak bu kadar deneme başarısız olduktan sonra
+# esnetilir. Amaç: önce kuralına uyan bir program aramak, esnetmeye mecbur
+# kalınca başvurmak.
+KATI_DENEME_SAYISI = 3
+
 # Çalışan işlerin durdurma bayrakları: run_id -> Event
 _calisanlar: dict[int, threading.Event] = {}
 _kilit = threading.Lock()
@@ -103,14 +108,21 @@ def _dongu(run_id: int, term_id: int, dur: threading.Event) -> None:
             sure = ILK_SURE_SN
             ara = ARA_SN
             deneme = 0
+            esnek = False
             baslangic = _simdi()
 
             while not dur.is_set():
                 deneme += 1
+                # Önce kurala uyan bir program ara; ancak birkaç deneme sonuç
+                # vermezse ya da kısıtların çeliştiği kanıtlanırsa esnet.
+                if deneme > KATI_DENEME_SAYISI:
+                    esnek = True
                 sonuc = solve(SolveInput(
                     slots=slots, lessons=lessons, locked=kilitli,
-                    time_limit_seconds=sure, seed=deneme,
+                    time_limit_seconds=sure, seed=deneme, esnek_gunluk=esnek,
                 ))
+                if sonuc.proven_infeasible:
+                    esnek = True
                 yerlesen = len(sonuc.placements)
                 if yerlesen > en_iyi_yerlesen:
                     en_iyi_yerlesen = yerlesen
@@ -235,16 +247,26 @@ def yarim_kalanlari_isaretle() -> None:
 
     İşler uygulama sürecinin içinde çalıştığı için yeniden başlatma onları
     öldürür; veritabanında 'çalışıyor' görünmeye devam etmemeliler.
+
+    Şema henüz kurulmamışsa (ilk kurulum, erişilemeyen veritabanı) uygulama
+    yine de açılır: bu temizlik zorunlu değildir.
     """
-    with SessionLocal() as db:
-        yarim = list(db.scalars(
-            select(SolveRun).where(
-                SolveRun.status.in_([SolveStatus.CALISIYOR, SolveStatus.BEKLIYOR])
-            )
-        ))
-        for run in yarim:
-            run.status = SolveStatus.DURDURULDU
-            run.finished_at = _simdi()
-        if yarim:
-            db.commit()
-            log.info("Yeniden başlatma nedeniyle %d çalıştırma durduruldu.", len(yarim))
+    try:
+        with SessionLocal() as db:
+            yarim = list(db.scalars(
+                select(SolveRun).where(
+                    SolveRun.status.in_([SolveStatus.CALISIYOR, SolveStatus.BEKLIYOR])
+                )
+            ))
+            for run in yarim:
+                run.status = SolveStatus.DURDURULDU
+                run.finished_at = _simdi()
+            if yarim:
+                db.commit()
+                log.info("Yeniden başlatma nedeniyle %d çalıştırma durduruldu.",
+                         len(yarim))
+    except Exception as e:
+        log.warning(
+            "Yarım kalan çalıştırmalar denetlenemedi (%s). Veritabanı şeması "
+            "güncel mi? Uygulama yine de açılıyor.", e,
+        )

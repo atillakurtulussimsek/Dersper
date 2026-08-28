@@ -7,6 +7,7 @@ import { Copy, Globe, Play } from "lucide-react";
 import GecmisCalistirmalar from "../components/GecmisCalistirmalar";
 import ProgramAracCubugu, { type Duzen } from "../components/ProgramAracCubugu";
 import ProgramIzgarasi, { type Bakis } from "../components/ProgramIzgarasi";
+import ProgramUyarilari from "../components/ProgramUyarilari";
 import TaniRaporu from "../components/TaniRaporu";
 import UretimIzleme from "../components/UretimIzleme";
 import { Buton, Kart, Rozet, Uyari, Yukleniyor } from "../components/ui";
@@ -88,6 +89,7 @@ export default function ProgramDetay() {
     onSuccess: (veri) => {
       setHata(null);
       qc.setQueryData(["izgara", id], veri);
+      qc.invalidateQueries({ queryKey: ["uyarilar", id] });
     },
     onError: (e: Error) => setHata(e.message),
   });
@@ -112,6 +114,7 @@ export default function ProgramDetay() {
     setOncekiCalisan(null);
     qc.invalidateQueries({ queryKey: ["izgara", id] });
     qc.invalidateQueries({ queryKey: ["denemeler", id] });
+    qc.invalidateQueries({ queryKey: ["uyarilar", id] });
   }
 
   const hucreler = izgaraSorgu.data?.cells ?? [];
@@ -287,6 +290,8 @@ export default function ProgramDetay() {
           </p>
         </Kart>
       )}
+
+      {hucreler.length > 0 && id && <ProgramUyarilari timetableId={id} />}
 
       <GecmisCalistirmalar denemeler={denemeler.data ?? []} />
 

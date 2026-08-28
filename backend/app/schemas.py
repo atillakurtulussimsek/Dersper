@@ -290,6 +290,24 @@ class TimetableGrid(BaseModel):
     cells: list[GridCell]
 
 
+class WarningOut(BaseModel):
+    key: str
+    tur: str
+    baslik: str
+    detay: str
+    sube: str
+    ders: str
+    ogretmen: str
+    gun: str
+    konan: int
+    sinir: int
+    ignored: bool
+
+
+class WarningIgnoreIn(BaseModel):
+    key: str
+
+
 class SolveRunOut(ORMModel):
     id: int
     timetable_id: int

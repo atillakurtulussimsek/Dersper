@@ -116,7 +116,7 @@ def test_cozumsuz_durumda_yerlesmeyenler_raporlanir():
 
 
 def test_musait_olmayan_saate_ders_konmaz():
-    slots = izgara(gun_sayisi=1, ders_sayisi=5)
+    slots = izgara(gun_sayisi=1, ders_sayisi=7)
     kapali = {slots[0].period_id, slots[1].period_id}
     dersler = [ders(1, 1, 10, "Matematik", 3, kapali=kapali, gunluk=3)]
     sonuc = solve(SolveInput(slots=slots, lessons=dersler, time_limit_seconds=20))
@@ -158,12 +158,12 @@ def test_sube_ve_ogretmen_kapaliligi_birlesir():
     sube_kapali = frozenset({slots[0].period_id, slots[1].period_id})
     ogretmen_kapali = frozenset({slots[5].period_id})
     dersler = [
-        ders_sube_kapali(1, 1, 10, "Fen", 3, gunluk=3,
+        ders_sube_kapali(1, 1, 10, "Fen", 3, desen="3", gunluk=3,
                          ogretmen_kapali=ogretmen_kapali, sube_kapali=sube_kapali),
     ]
     sonuc = solve(SolveInput(slots=slots, lessons=dersler, time_limit_seconds=20))
     assert sonuc.ok
-    # geriye yalnızca 3., 4. ve 5. ders saatleri kalır
+    # geriye yalnızca 3., 4. ve 5. ders saatleri kalır; 3 saatlik tek blok oraya oturur
     assert {pid for _, pid in sonuc.placements} == {
         slots[2].period_id, slots[3].period_id, slots[4].period_id
     }
@@ -235,3 +235,65 @@ def test_uc_saatlik_blok_yerlesir():
         saatler.sort()
         assert len(saatler) == 3
         assert saatler[2] - saatler[0] == 2   # kesintisiz
+
+
+def test_ayni_dersin_bloklari_arka_arkaya_gelmez():
+    """"2+2" deseni gün içinde 4 saatlik tek bloğa dönüşmemeli."""
+    slots = izgara(gun_sayisi=1, ders_sayisi=8)
+    dersler = [ders(1, 1, 10, "Fen", 4, desen="2+2", gunluk=4)]
+    sonuc = solve(SolveInput(slots=slots, lessons=dersler, time_limit_seconds=20))
+    assert sonuc.ok
+    assert sorted(_dizi_uzunluklari(slots, sonuc.placements)) == [2, 2]
+
+
+def test_tek_saatler_ayni_gunde_bitisik_olmaz():
+    slots = izgara(gun_sayisi=1, ders_sayisi=8)
+    dersler = [ders(1, 1, 10, "Türkçe", 3, desen="1+1+1", gunluk=3)]
+    sonuc = solve(SolveInput(slots=slots, lessons=dersler, time_limit_seconds=20))
+    assert sonuc.ok
+    assert _dizi_uzunluklari(slots, sonuc.placements) == [1, 1, 1]
+
+
+def test_esnek_kip_kapaliyken_gunluk_sinir_asilmaz():
+    """Bir günde 6 saat gerekiyor ama sınır 2: sert modelde yerleşemez."""
+    slots = izgara(gun_sayisi=1, ders_sayisi=8)
+    dersler = [ders(1, 1, 10, "Matematik", 6, gunluk=2)]
+    sonuc = solve(SolveInput(slots=slots, lessons=dersler, time_limit_seconds=20))
+    assert not sonuc.ok
+    assert sonuc.relaxations == []
+
+
+def test_esnek_kip_gunluk_siniri_asarak_yerlestirir():
+    slots = izgara(gun_sayisi=1, ders_sayisi=8)
+    dersler = [ders(1, 1, 10, "Matematik", 4, gunluk=2)]
+    sonuc = solve(SolveInput(
+        slots=slots, lessons=dersler, time_limit_seconds=20, esnek_gunluk=True,
+    ))
+    assert sonuc.ok
+    assert len(sonuc.placements) == 4
+    # Esnetme raporlanır: 1 numaralı satır, 0. gün, 4 saat kondu, sınır 2 idi.
+    assert sonuc.relaxations == [(1, 0, 4, 2)]
+    # Araya başka ders girsin diye saatler bitişik olmaz.
+    assert _dizi_uzunluklari(slots, sonuc.placements) == [1, 1, 1, 1]
+
+
+def test_esnek_kip_gereksizse_devreye_girmez():
+    slots = izgara(gun_sayisi=5, ders_sayisi=8)
+    dersler = [ders(1, 1, 10, "Matematik", 4, gunluk=2)]
+    sonuc = solve(SolveInput(
+        slots=slots, lessons=dersler, time_limit_seconds=20, esnek_gunluk=True,
+    ))
+    assert sonuc.ok
+    assert sonuc.relaxations == []      # sert model zaten çözdü
+
+
+def test_esnek_kip_asimi_en_aza_indirir():
+    """8 saat, günlük sınır 2, iki gün var: aşım mümkün olduğunca küçük olmalı."""
+    slots = izgara(gun_sayisi=2, ders_sayisi=8)
+    dersler = [ders(1, 1, 10, "Matematik", 6, gunluk=2)]
+    sonuc = solve(SolveInput(
+        slots=slots, lessons=dersler, time_limit_seconds=20, esnek_gunluk=True,
+    ))
+    assert sonuc.ok
+    toplam_asim = sum(konan - sinir for _, _, konan, sinir in sonuc.relaxations)
+    assert toplam_asim == 2      # 6 saat, 2 günde 4 saat sınır → en az 2 aşım

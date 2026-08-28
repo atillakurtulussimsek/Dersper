@@ -16,7 +16,9 @@ from app.models import (
 )
 from app.schemas import (
     AssignmentMove, GridCell, SolveRunOut, TimetableGrid, TimetableIn, TimetableOut,
+    WarningIgnoreIn, WarningOut,
 )
+from app.uyarilar import uyarilari_hesapla
 from app.solver import arkaplan
 
 router = APIRouter(prefix="/timetables", tags=["ders programı"],
@@ -264,6 +266,46 @@ def kilidi_degistir(
     db.commit()
     return TimetableGrid(timetable=TimetableOut.model_validate(t),
                          cells=izgara_hucreleri(db, t.id))
+
+
+@router.get("/{timetable_id}/warnings", response_model=list[WarningOut])
+def uyarilar(
+    timetable_id: int, db: Session = Depends(get_db), donem: Term = Depends(aktif_donem)
+) -> list[dict]:
+    """Yerleşimdeki uyarılar. Her istekte o anki programdan hesaplanır."""
+    t = _programi_getir(db, timetable_id, donem)
+    return uyarilari_hesapla(db, t)
+
+
+@router.post("/{timetable_id}/warnings/ignore", response_model=list[WarningOut])
+def uyariyi_gizle(
+    timetable_id: int,
+    payload: WarningIgnoreIn,
+    db: Session = Depends(get_db),
+    donem: Term = Depends(aktif_donem),
+) -> list[dict]:
+    """Uyarıyı bu program için kalıcı olarak gizler."""
+    t = _programi_getir(db, timetable_id, donem)
+    gizlenen = list(t.ignored_warnings or [])
+    if payload.key not in gizlenen:
+        gizlenen.append(payload.key)
+        t.ignored_warnings = gizlenen
+        db.commit()
+    return uyarilari_hesapla(db, t)
+
+
+@router.delete("/{timetable_id}/warnings/ignore/{key}", response_model=list[WarningOut])
+def uyariyi_geri_getir(
+    timetable_id: int,
+    key: str,
+    db: Session = Depends(get_db),
+    donem: Term = Depends(aktif_donem),
+) -> list[dict]:
+    t = _programi_getir(db, timetable_id, donem)
+    gizlenen = [k for k in (t.ignored_warnings or []) if k != key]
+    t.ignored_warnings = gizlenen
+    db.commit()
+    return uyarilari_hesapla(db, t)
 
 
 @router.post("/{timetable_id}/publish", response_model=TimetableOut)
