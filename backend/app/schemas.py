@@ -1,7 +1,7 @@
 """İstek/yanıt şemaları."""
 from __future__ import annotations
 
-from datetime import datetime, time
+from datetime import date, datetime, time
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
@@ -13,11 +13,42 @@ class ORMModel(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+# --- Dönem ---
+
+class TermIn(BaseModel):
+    name: str = Field(min_length=1, max_length=150)
+    starts_on: date | None = None
+    ends_on: date | None = None
+
+
+class TermOut(ORMModel):
+    id: int
+    name: str
+    starts_on: date | None
+    ends_on: date | None
+    created_at: datetime
+    is_active: bool = False
+    # Dönemde tanımlı kayıt sayıları — listede özet göstermek için.
+    counts: dict[str, int] = {}
+
+
+class ImportIn(BaseModel):
+    """Geçmiş dönemden seçili kayıtları aktif döneme aktarır."""
+    term_id: int
+    ids: list[int] = Field(min_length=1)
+
+
+class ImportOut(BaseModel):
+    imported: int
+    skipped: list[str]
+
+
 # --- Kurulum & oturum ---
 
 class SetupRequest(BaseModel):
     institution_name: str = Field(min_length=2, max_length=200)
     institution_type: InstitutionType = InstitutionType.K12
+    term_name: str = Field(default="2026-2027 Güz Dönemi", min_length=1, max_length=150)
     full_name: str = Field(min_length=2, max_length=200)
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)

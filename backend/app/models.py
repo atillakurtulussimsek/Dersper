@@ -1,15 +1,23 @@
 """Veri modeli.
 
 Tek kurumlu kurulum: `Institution` tablosunda tek satır bulunur.
+
+Tüm tanımlar bir **döneme** (`Term`) aittir: zaman ızgarası, öğretmenler,
+dersler, şubeler, müfredat ve programlar. Yeni dönem boş başlar; geçmiş
+dönemden kayıt aktarmak isteğe bağlıdır. Hangi dönemde çalışıldığı sunucuda,
+`Institution.active_term_id` alanında tutulur.
+
+Silme her yerde **yumuşaktır**: kayıt `deleted_at` ile işaretlenir, veritabanından
+hiçbir zaman kaldırılmaz.
 """
 from __future__ import annotations
 
 import enum
-from datetime import datetime, time
+from datetime import date, datetime, time
 
 from sqlalchemy import (
-    Boolean, DateTime, Enum, ForeignKey, Integer, JSON, String, Text, Time,
-    UniqueConstraint, func,
+    Boolean, Date, DateTime, Enum, ForeignKey, Index, Integer, JSON, String, Text,
+    Time, UniqueConstraint, func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -42,6 +50,16 @@ class SolveStatus(str, enum.Enum):
     HATA = "hata"
 
 
+class SoftDelete:
+    """Yumuşak silme. `deleted_at` doluysa kayıt listelerde görünmez."""
+
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, default=None)
+
+    @property
+    def is_deleted(self) -> bool:
+        return self.deleted_at is not None
+
+
 class Institution(Base):
     __tablename__ = "institutions"
 
@@ -51,6 +69,22 @@ class Institution(Base):
         Enum(InstitutionType), default=InstitutionType.K12
     )
     address: Mapped[str | None] = mapped_column(String(500))
+    # Üzerinde çalışılan dönem. Tüm uçlar bu döneme göre süzer.
+    active_term_id: Mapped[int | None] = mapped_column(
+        ForeignKey("terms.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class Term(Base, SoftDelete):
+    """Öğretim dönemi. Tüm tanımlar bir döneme bağlıdır."""
+
+    __tablename__ = "terms"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(150))
+    starts_on: Mapped[date | None] = mapped_column(Date)
+    ends_on: Mapped[date | None] = mapped_column(Date)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 
@@ -70,7 +104,8 @@ class Day(Base):
     __tablename__ = "days"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    index: Mapped[int] = mapped_column(Integer, unique=True)   # 0 = Pazartesi
+    term_id: Mapped[int] = mapped_column(ForeignKey("terms.id", ondelete="CASCADE"))
+    index: Mapped[int] = mapped_column(Integer)                # 0 = Pazartesi
     name: Mapped[str] = mapped_column(String(20))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
@@ -95,10 +130,11 @@ class Period(Base):
     day: Mapped[Day] = relationship(back_populates="periods")
 
 
-class Teacher(Base):
+class Teacher(Base, SoftDelete):
     __tablename__ = "teachers"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    term_id: Mapped[int] = mapped_column(ForeignKey("terms.id", ondelete="CASCADE"))
     full_name: Mapped[str] = mapped_column(String(200))
     short_code: Mapped[str | None] = mapped_column(String(20))
     branch: Mapped[str | None] = mapped_column(String(100))
@@ -149,22 +185,24 @@ class SectionAvailability(Base):
     section: Mapped["Section"] = relationship(back_populates="availability")
 
 
-class Subject(Base):
+class Subject(Base, SoftDelete):
     __tablename__ = "subjects"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    term_id: Mapped[int] = mapped_column(ForeignKey("terms.id", ondelete="CASCADE"))
     name: Mapped[str] = mapped_column(String(150))
     short_code: Mapped[str | None] = mapped_column(String(20))
     color: Mapped[str] = mapped_column(String(7), default="#94a3b8")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
-class Section(Base):
+class Section(Base, SoftDelete):
     """Şube — örn. 5-A."""
     __tablename__ = "sections"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(50), unique=True)
+    term_id: Mapped[int] = mapped_column(ForeignKey("terms.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(String(50))
     grade_level: Mapped[int | None] = mapped_column(Integer)
     student_count: Mapped[int | None] = mapped_column(Integer)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -177,12 +215,15 @@ class Section(Base):
     )
 
 
-class CurriculumEntry(Base):
-    """Bir şubede, bir dersin, bir öğretmenle haftalık yükü."""
+class CurriculumEntry(Base, SoftDelete):
+    """Bir şubede, bir dersin, bir öğretmenle haftalık yükü.
+
+    Şube–ders eşsizliği uygulama katmanında, silinmemiş satırlar üzerinde
+    denetlenir; veritabanı kısıtı yumuşak silmeyle bağdaşmaz.
+    """
     __tablename__ = "curriculum_entries"
-    __table_args__ = (
-        UniqueConstraint("section_id", "subject_id", name="uq_curriculum_section_subject"),
-    )
+    # Kaldırılan benzersiz kısıtın yerine: section_id yabancı anahtarı indeks ister.
+    __table_args__ = (Index("ix_curriculum_section", "section_id"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     section_id: Mapped[int] = mapped_column(ForeignKey("sections.id", ondelete="CASCADE"))
@@ -198,10 +239,11 @@ class CurriculumEntry(Base):
     teacher: Mapped[Teacher] = relationship()
 
 
-class Timetable(Base):
+class Timetable(Base, SoftDelete):
     __tablename__ = "timetables"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    term_id: Mapped[int] = mapped_column(ForeignKey("terms.id", ondelete="CASCADE"))
     name: Mapped[str] = mapped_column(String(150))
     status: Mapped[TimetableStatus] = mapped_column(
         Enum(TimetableStatus), default=TimetableStatus.TASLAK

@@ -9,8 +9,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.db import get_db
-from app.deps import current_user
-from app.models import Day, Institution, Timetable
+from app.deps import aktif_donem, current_user
+from app.models import Day, Institution, Term, Timetable
 from app.routers.timetables import izgara_hucreleri
 
 router = APIRouter(prefix="/timetables/{timetable_id}/export", tags=["çıktı"],
@@ -20,12 +20,13 @@ BAKIS = {"sube": "Şube", "ogretmen": "Öğretmen"}
 DUZEN = {"ayri": "Ayrı sayfalar", "carsaf": "Çarşaf liste"}
 
 
-def _izgara_yapisi(db: Session) -> tuple[list[Day], list[int]]:
-    """Aktif günler ve haftadaki en geniş ders saati dizini listesi."""
+def _izgara_yapisi(db: Session, donem: Term) -> tuple[list[Day], list[int]]:
+    """Dönemin aktif günleri ve haftadaki en geniş ders saati dizini listesi."""
     gunler = [
         g for g in db.scalars(
             select(Day).options(selectinload(Day.periods))
-            .where(Day.is_active.is_(True)).order_by(Day.index)
+            .where(Day.term_id == donem.id, Day.is_active.is_(True))
+            .order_by(Day.index)
         )
     ]
     en_fazla = max(
@@ -46,15 +47,15 @@ def _tablolar(db: Session, timetable_id: int, bakis: str) -> dict[str, dict]:
 
 def _baslik(db: Session, timetable_id: int) -> tuple[Timetable, str]:
     t = db.get(Timetable, timetable_id)
-    if t is None:
+    if t is None or t.is_deleted:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Ders programı bulunamadı.")
     kurum = db.scalar(select(Institution).limit(1))
     return t, (kurum.name if kurum else "")
 
 
-def _html(db: Session, timetable_id: int, bakis: str) -> str:
+def _html(db: Session, timetable_id: int, bakis: str, donem: Term) -> str:
     t, kurum_adi = _baslik(db, timetable_id)
-    gunler, ders_indexleri = _izgara_yapisi(db)
+    gunler, ders_indexleri = _izgara_yapisi(db, donem)
     gruplar = _tablolar(db, timetable_id, bakis)
 
     parcalar = [
@@ -99,14 +100,14 @@ def _html(db: Session, timetable_id: int, bakis: str) -> str:
     return "".join(parcalar)
 
 
-def _carsaf_html(db: Session, timetable_id: int, bakis: str) -> str:
+def _carsaf_html(db: Session, timetable_id: int, bakis: str, donem: Term) -> str:
     """Tüm şubeleri (ya da öğretmenleri) tek sayfada gösteren toplu liste.
 
     Satırlar şube/öğretmen, sütunlar gün × ders saati. Hücrelerde yer dar
     olduğu için tanımlıysa kısa kodlar kullanılır.
     """
     t, kurum_adi = _baslik(db, timetable_id)
-    gunler, _ = _izgara_yapisi(db)
+    gunler, _ = _izgara_yapisi(db, donem)
     gruplar = _tablolar(db, timetable_id, bakis)
 
     # Her günün kendi ders saati dizini listesi — günler farklı uzunlukta olabilir.
@@ -190,10 +191,10 @@ def _kacis(s: str) -> str:
     return (s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
 
 
-def _icerik(db: Session, timetable_id: int, bakis: str, duzen: str) -> str:
+def _icerik(db: Session, timetable_id: int, bakis: str, duzen: str, donem: Term) -> str:
     if duzen == "carsaf":
-        return _carsaf_html(db, timetable_id, bakis)
-    return _html(db, timetable_id, bakis)
+        return _carsaf_html(db, timetable_id, bakis, donem)
+    return _html(db, timetable_id, bakis, donem)
 
 
 @router.get("/html", response_class=Response)
@@ -202,9 +203,10 @@ def html_cikti(
     bakis: str = Query("sube", pattern="^(sube|ogretmen)$"),
     duzen: str = Query("ayri", pattern="^(ayri|carsaf)$"),
     db: Session = Depends(get_db),
+    donem: Term = Depends(aktif_donem),
 ) -> Response:
     return Response(
-        _icerik(db, timetable_id, bakis, duzen), media_type="text/html; charset=utf-8"
+        _icerik(db, timetable_id, bakis, duzen, donem), media_type="text/html; charset=utf-8"
     )
 
 
@@ -214,6 +216,7 @@ def pdf_cikti(
     bakis: str = Query("sube", pattern="^(sube|ogretmen)$"),
     duzen: str = Query("ayri", pattern="^(ayri|carsaf)$"),
     db: Session = Depends(get_db),
+    donem: Term = Depends(aktif_donem),
 ) -> Response:
     try:
         from weasyprint import HTML
@@ -224,7 +227,7 @@ def pdf_cikti(
             f"(macOS: brew install pango). Ayrıntı: {e}. "
             "Bu arada HTML çıktısını tarayıcıdan yazdırabilirsiniz.",
         )
-    pdf = HTML(string=_icerik(db, timetable_id, bakis, duzen)).write_pdf()
+    pdf = HTML(string=_icerik(db, timetable_id, bakis, duzen, donem)).write_pdf()
     ad = f"ders-programi-{duzen}-{bakis}.pdf"
     return Response(pdf, media_type="application/pdf",
                     headers={"Content-Disposition": f'attachment; filename="{ad}"'})
@@ -236,11 +239,12 @@ def excel_cikti(
     bakis: str = Query("sube", pattern="^(sube|ogretmen)$"),
     duzen: str = Query("ayri", pattern="^(ayri|carsaf)$"),
     db: Session = Depends(get_db),
+    donem: Term = Depends(aktif_donem),
 ) -> Response:
     from openpyxl import Workbook
     from openpyxl.styles import Alignment, Border, Font, Side
 
-    gunler, ders_indexleri = _izgara_yapisi(db)
+    gunler, ders_indexleri = _izgara_yapisi(db, donem)
     gruplar = _tablolar(db, timetable_id, bakis)
 
     wb = Workbook()

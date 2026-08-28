@@ -14,7 +14,7 @@ router = APIRouter(prefix="/public", tags=["herkese açık"])
 @router.get("/timetables/{token}", response_model=TimetableGrid)
 def yayindaki_program(token: str, db: Session = Depends(get_db)) -> TimetableGrid:
     t = db.scalar(select(Timetable).where(Timetable.public_token == token))
-    if t is None or t.status is not TimetableStatus.YAYINDA:
+    if t is None or t.is_deleted or t.status is not TimetableStatus.YAYINDA:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Böyle bir yayın bulunamadı.")
     return TimetableGrid(timetable=TimetableOut.model_validate(t),
                          cells=izgara_hucreleri(db, t.id))

@@ -3,7 +3,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.routers import ai_settings, catalog, exports, public, setup, timegrid, timetables
+from app.routers import (
+    ai_settings, catalog, exports, public, setup, terms, timegrid, timetables,
+)
 
 app = FastAPI(
     title="Dersper",
@@ -20,8 +22,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-for r in (setup.router, timegrid.router, catalog.router, timetables.router,
-          exports.router, ai_settings.router, public.router):
+for r in (setup.router, terms.router, timegrid.router, catalog.router,
+          timetables.router, exports.router, ai_settings.router, public.router):
     app.include_router(r, prefix="/api")
 
 

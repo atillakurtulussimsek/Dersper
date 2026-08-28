@@ -8,17 +8,18 @@ from sqlalchemy.orm import Session, selectinload
 
 from app import bloklar
 from app.models import (
-    Availability, CurriculumEntry, Day, SectionAvailability, TeacherAvailability,
+    Availability, CurriculumEntry, Day, Section, SectionAvailability,
+    TeacherAvailability, Term,
 )
 from app.solver.engine import Lesson, Slot
 
 
-def slotlari_yukle(db: Session) -> list[Slot]:
-    """Aktif günlerdeki, teneffüs olmayan ders saatleri."""
+def slotlari_yukle(db: Session, donem: Term) -> list[Slot]:
+    """Dönemin aktif günlerindeki, teneffüs olmayan ders saatleri."""
     gunler = db.scalars(
         select(Day)
         .options(selectinload(Day.periods))
-        .where(Day.is_active.is_(True))
+        .where(Day.term_id == donem.id, Day.is_active.is_(True))
         .order_by(Day.index)
     )
     slots: list[Slot] = []
@@ -36,7 +37,7 @@ def slotlari_yukle(db: Session) -> list[Slot]:
     return slots
 
 
-def dersleri_yukle(db: Session) -> list[Lesson]:
+def dersleri_yukle(db: Session, donem: Term) -> list[Lesson]:
     ogretmen_kapali: dict[int, set[int]] = defaultdict(set)
     for row in db.scalars(
         select(TeacherAvailability).where(
@@ -54,7 +55,10 @@ def dersleri_yukle(db: Session) -> list[Lesson]:
         sube_kapali[row.section_id].add(row.period_id)
 
     entries = db.scalars(
-        select(CurriculumEntry).options(
+        select(CurriculumEntry)
+        .join(Section, Section.id == CurriculumEntry.section_id)
+        .where(Section.term_id == donem.id, CurriculumEntry.deleted_at.is_(None))
+        .options(
             selectinload(CurriculumEntry.section),
             selectinload(CurriculumEntry.subject),
             selectinload(CurriculumEntry.teacher),
@@ -63,6 +67,8 @@ def dersleri_yukle(db: Session) -> list[Lesson]:
     dersler: list[Lesson] = []
     for e in entries:
         if not e.section.is_active or not e.subject.is_active or not e.teacher.is_active:
+            continue
+        if e.section.is_deleted or e.subject.is_deleted or e.teacher.is_deleted:
             continue
         dersler.append(Lesson(
             entry_id=e.id,

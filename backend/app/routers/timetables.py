@@ -10,10 +10,10 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.ai import client as ai
 from app.db import get_db
-from app.deps import current_user
+from app.deps import aktif_donem, current_user
 from app.models import (
     AiSettings, Assignment, CurriculumEntry, Day, Period, SolveRun, SolveStatus,
-    Timetable, TimetableStatus,
+    Term, Timetable, TimetableStatus,
 )
 from app.schemas import (
     AssignmentMove, GridCell, SolveRunOut, TimetableGrid, TimetableIn, TimetableOut,
@@ -26,9 +26,9 @@ router = APIRouter(prefix="/timetables", tags=["ders programı"],
                    dependencies=[Depends(current_user)])
 
 
-def _programi_getir(db: Session, timetable_id: int) -> Timetable:
+def _programi_getir(db: Session, timetable_id: int, donem: Term) -> Timetable:
     t = db.get(Timetable, timetable_id)
-    if t is None:
+    if t is None or t.is_deleted or t.term_id != donem.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Ders programı bulunamadı.")
     return t
 
@@ -40,6 +40,7 @@ def izgara_hucreleri(db: Session, timetable_id: int) -> list[GridCell]:
         for d in db.scalars(select(Day).options(selectinload(Day.periods)))
         for p in d.periods
     }
+
     atamalar = db.scalars(
         select(Assignment)
         .options(
@@ -74,13 +75,23 @@ def izgara_hucreleri(db: Session, timetable_id: int) -> list[GridCell]:
 
 
 @router.get("", response_model=list[TimetableOut])
-def programlar(db: Session = Depends(get_db)) -> list[Timetable]:
-    return list(db.scalars(select(Timetable).order_by(Timetable.created_at.desc())))
+def programlar(
+    db: Session = Depends(get_db), donem: Term = Depends(aktif_donem)
+) -> list[Timetable]:
+    return list(db.scalars(
+        select(Timetable)
+        .where(Timetable.term_id == donem.id, Timetable.deleted_at.is_(None))
+        .order_by(Timetable.created_at.desc())
+    ))
 
 
 @router.post("", response_model=TimetableOut, status_code=status.HTTP_201_CREATED)
-def program_olustur(payload: TimetableIn, db: Session = Depends(get_db)) -> Timetable:
-    t = Timetable(name=payload.name)
+def program_olustur(
+    payload: TimetableIn,
+    db: Session = Depends(get_db),
+    donem: Term = Depends(aktif_donem),
+) -> Timetable:
+    t = Timetable(term_id=donem.id, name=payload.name)
     db.add(t)
     db.commit()
     db.refresh(t)
@@ -88,14 +99,21 @@ def program_olustur(payload: TimetableIn, db: Session = Depends(get_db)) -> Time
 
 
 @router.delete("/{timetable_id}", status_code=status.HTTP_204_NO_CONTENT)
-def program_sil(timetable_id: int, db: Session = Depends(get_db)):
-    db.delete(_programi_getir(db, timetable_id))
+def program_sil(
+    timetable_id: int, db: Session = Depends(get_db), donem: Term = Depends(aktif_donem)
+):
+    """Yumuşak silme: program gizlenir, yerleşimleri saklı kalır."""
+    t = _programi_getir(db, timetable_id, donem)
+    t.deleted_at = datetime.now(timezone.utc)
+    t.public_token = None
     db.commit()
 
 
 @router.get("/{timetable_id}/grid", response_model=TimetableGrid)
-def izgara(timetable_id: int, db: Session = Depends(get_db)) -> TimetableGrid:
-    t = _programi_getir(db, timetable_id)
+def izgara(
+    timetable_id: int, db: Session = Depends(get_db), donem: Term = Depends(aktif_donem)
+) -> TimetableGrid:
+    t = _programi_getir(db, timetable_id, donem)
     return TimetableGrid(timetable=TimetableOut.model_validate(t),
                          cells=izgara_hucreleri(db, timetable_id))
 
@@ -105,12 +123,13 @@ def uret(
     timetable_id: int,
     time_limit_seconds: float = 30.0,
     db: Session = Depends(get_db),
+    donem: Term = Depends(aktif_donem),
 ) -> SolveRun:
     """Programı üretir. Yerleşmeyen saat kalırsa tanı raporu ve yapay zeka
     açıklaması üretilir; yerleşenler yine de kaydedilir."""
-    t = _programi_getir(db, timetable_id)
-    slots = slotlari_yukle(db)
-    lessons = dersleri_yukle(db)
+    t = _programi_getir(db, timetable_id, donem)
+    slots = slotlari_yukle(db, donem)
+    lessons = dersleri_yukle(db, donem)
 
     run = SolveRun(timetable_id=t.id, status=SolveStatus.CALISIYOR)
     db.add(run)
@@ -168,8 +187,10 @@ def uret(
 
 
 @router.get("/{timetable_id}/runs", response_model=list[SolveRunOut])
-def denemeler(timetable_id: int, db: Session = Depends(get_db)) -> list[SolveRun]:
-    _programi_getir(db, timetable_id)
+def denemeler(
+    timetable_id: int, db: Session = Depends(get_db), donem: Term = Depends(aktif_donem)
+) -> list[SolveRun]:
+    _programi_getir(db, timetable_id, donem)
     return list(db.scalars(
         select(SolveRun)
         .where(SolveRun.timetable_id == timetable_id)
@@ -183,9 +204,10 @@ def dersi_tasi(
     assignment_id: int,
     payload: AssignmentMove,
     db: Session = Depends(get_db),
+    donem: Term = Depends(aktif_donem),
 ) -> TimetableGrid:
     """Elle sürükle-bırak. Çakışma oluşturacak taşımalar reddedilir."""
-    t = _programi_getir(db, timetable_id)
+    t = _programi_getir(db, timetable_id, donem)
     a = db.get(Assignment, assignment_id)
     if a is None or a.timetable_id != t.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Yerleşim bulunamadı.")
@@ -223,9 +245,12 @@ def dersi_tasi(
 @router.post("/{timetable_id}/assignments/{assignment_id}/lock",
              response_model=TimetableGrid)
 def kilidi_degistir(
-    timetable_id: int, assignment_id: int, db: Session = Depends(get_db)
+    timetable_id: int,
+    assignment_id: int,
+    db: Session = Depends(get_db),
+    donem: Term = Depends(aktif_donem),
 ) -> TimetableGrid:
-    t = _programi_getir(db, timetable_id)
+    t = _programi_getir(db, timetable_id, donem)
     a = db.get(Assignment, assignment_id)
     if a is None or a.timetable_id != t.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Yerleşim bulunamadı.")
@@ -236,9 +261,11 @@ def kilidi_degistir(
 
 
 @router.post("/{timetable_id}/publish", response_model=TimetableOut)
-def yayinla(timetable_id: int, db: Session = Depends(get_db)) -> Timetable:
+def yayinla(
+    timetable_id: int, db: Session = Depends(get_db), donem: Term = Depends(aktif_donem)
+) -> Timetable:
     """Herkese açık, girişsiz görüntülenebilen bir bağlantı üretir."""
-    t = _programi_getir(db, timetable_id)
+    t = _programi_getir(db, timetable_id, donem)
     t.public_token = t.public_token or secrets.token_urlsafe(16)
     t.status = TimetableStatus.YAYINDA
     db.commit()
@@ -247,8 +274,10 @@ def yayinla(timetable_id: int, db: Session = Depends(get_db)) -> Timetable:
 
 
 @router.post("/{timetable_id}/unpublish", response_model=TimetableOut)
-def yayindan_kaldir(timetable_id: int, db: Session = Depends(get_db)) -> Timetable:
-    t = _programi_getir(db, timetable_id)
+def yayindan_kaldir(
+    timetable_id: int, db: Session = Depends(get_db), donem: Term = Depends(aktif_donem)
+) -> Timetable:
+    t = _programi_getir(db, timetable_id, donem)
     t.public_token = None
     t.status = TimetableStatus.URETILDI
     db.commit()
