@@ -1,4 +1,9 @@
-/** Şube bazında ders yükü: hangi şubede hangi ders, kaç saat, hangi öğretmenle. */
+/** Ders atamaları: hangi şubede hangi ders, kaç saat, hangi öğretmenle.
+ *
+ *  Bir derse birden fazla öğretmen girebilir — aynı ders, farklı öğretmenle
+ *  ikinci kez atanabilir (örneğin İngilizce'nin 2 saati bir, 2 saati başka
+ *  öğretmende). Engellenen yalnızca birebir aynı şube–ders–öğretmen tekrarıdır.
+ */
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Copy, Download, Pencil, Plus, Trash2 } from "lucide-react";
@@ -21,7 +26,7 @@ const BOS = {
   max_per_day: 2,
 };
 
-export default function Mufredat() {
+export default function DersAtamalari() {
   const subeler = useListe<Sube>("subeler", "/sections");
   const dersler = useListe<Ders>("dersler", "/subjects");
   const ogretmenler = useListe<Ogretmen>("ogretmenler", "/teachers");
@@ -103,9 +108,10 @@ export default function Mufredat() {
     <div className="space-y-5">
       <header className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">Müfredat</h1>
+          <h1 className="text-xl font-semibold tracking-tight">Ders Atamaları</h1>
           <p className="text-sm text-slate-500">
-            Her şubenin haftalık ders yükü. Program bu tabloya göre üretilir.
+            Hangi şubede hangi dersi kimin, kaç saat okutacağı. Program bu tabloya
+            göre üretilir.
           </p>
         </div>
         <div className="flex gap-2">
@@ -114,7 +120,7 @@ export default function Mufredat() {
           </Buton>
           {hazir ? (
             <Buton onClick={() => ac()}>
-              <Plus className="h-4 w-4" /> Ders ekle
+              <Plus className="h-4 w-4" /> Ders ata
             </Buton>
           ) : null}
         </div>
@@ -126,7 +132,7 @@ export default function Mufredat() {
         <Kart>
           <BosDurum
             baslik="Önce tanımları tamamlayın"
-            aciklama="Müfredat girebilmek için en az bir şube, bir ders ve bir öğretmen tanımlı olmalı."
+            aciklama="Ders ataması yapabilmek için en az bir şube, bir ders ve bir öğretmen tanımlı olmalı."
           />
         </Kart>
       ) : (
@@ -166,9 +172,9 @@ export default function Mufredat() {
                   <Buton
                     tur="ikincil"
                     onClick={() => setKopyalanacak(mufredat.data!)}
-                    title="Bu şubenin tüm müfredatını başka şubelere kopyala"
+                    title="Bu şubenin tüm atamalarını başka şubelere kopyala"
                   >
-                    <Copy className="h-4 w-4" /> Müfredatı kopyala
+                    <Copy className="h-4 w-4" /> Atamaları kopyala
                   </Buton>
                 )}
               </div>
@@ -178,9 +184,9 @@ export default function Mufredat() {
               <Yukleniyor />
             ) : !mufredat.data?.length ? (
               <BosDurum
-                baslik="Bu şubede ders yok"
+                baslik="Bu şubede ders ataması yok"
                 aciklama="Şubeye okutulacak dersleri ve öğretmenlerini ekleyin."
-                eylem={<Buton onClick={() => ac()}>Ders ekle</Buton>}
+                eylem={<Buton onClick={() => ac()}>Ders ata</Buton>}
               />
             ) : (
               <Tablo
@@ -227,7 +233,12 @@ export default function Mufredat() {
                         <Buton
                           tur="sade"
                           onClick={async () => {
-                            if (!confirm(`"${m.subject.name}" satırı silinsin mi?`)) return;
+                            if (
+                              !confirm(
+                                `"${m.subject.name} · ${m.teacher.full_name}" ataması silinsin mi?`,
+                              )
+                            )
+                              return;
                             await kaynak.sil.mutateAsync(m.id);
                             mufredat.refetch();
                           }}
@@ -248,7 +259,7 @@ export default function Mufredat() {
       {aktarimAcik && (
         <GecmisDonemdenAktar<MufredatSatiri>
           tur="curriculum"
-          baslik="Geçmiş dönemden müfredat aktar"
+          baslik="Geçmiş dönemden ders ataması aktar"
           satirYazisi={(m) => ({
             ana: `${m.section.name} · ${m.subject.name}`,
             alt: `${m.weekly_hours} saat · ${m.teacher.full_name}`,
@@ -275,7 +286,7 @@ export default function Mufredat() {
       <Kutu
         acik={acik}
         kapat={() => setAcik(false)}
-        baslik={duzenlenen ? "Müfredat satırını düzenle" : "Şubeye ders ekle"}
+        baslik={duzenlenen ? "Ders atamasını düzenle" : "Şubeye ders ata"}
       >
         <form onSubmit={kaydet} className="space-y-4">
           <Alan etiket="Ders">
@@ -290,6 +301,11 @@ export default function Mufredat() {
               ))}
             </Secim>
           </Alan>
+          <p className="-mt-2 text-xs text-slate-500">
+            Aynı dersi farklı öğretmenlerle birden çok kez atayabilirsiniz; saatler
+            öğretmenler arasında bölünür.
+          </p>
+
           <Alan etiket="Öğretmen">
             <Secim
               value={form.teacher_id}

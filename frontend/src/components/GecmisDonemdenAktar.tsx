@@ -1,5 +1,5 @@
 /** Geçmiş bir dönemdeki kayıtları listeler, seçilenleri aktif döneme aktarır.
- *  Öğretmen, ders, şube ve müfredat ekranlarında aynı bileşen kullanılır. */
+ *  Öğretmen, ders, şube ve ders ataması ekranlarında aynı bileşen kullanılır. */
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download } from "lucide-react";

@@ -16,7 +16,7 @@ const MENU = [
   { yol: "/ogretmenler", ad: "Öğretmenler", ikon: Users },
   { yol: "/dersler", ad: "Dersler", ikon: BookOpen },
   { yol: "/subeler", ad: "Şubeler", ikon: GraduationCap },
-  { yol: "/mufredat", ad: "Müfredat", ikon: Table2 },
+  { yol: "/ders-atamalari", ad: "Ders Atamaları", ikon: Table2 },
   { yol: "/zaman-izgarasi", ad: "Zaman Izgarası", ikon: CalendarClock },
   { yol: "/programlar", ad: "Ders Programları", ikon: LayoutGrid },
   { yol: "/donemler", ad: "Dönemler", ikon: CalendarRange },

@@ -9,7 +9,7 @@ import Dersler from "./pages/Dersler";
 import Donemler from "./pages/Donemler";
 import Giris from "./pages/Giris";
 import Kurulum from "./pages/Kurulum";
-import Mufredat from "./pages/Mufredat";
+import DersAtamalari from "./pages/DersAtamalari";
 import Ogretmenler from "./pages/Ogretmenler";
 import Ozet from "./pages/Ozet";
 import ProgramDetay from "./pages/ProgramDetay";
@@ -50,7 +50,9 @@ export default function App() {
           <Route path="/ogretmenler" element={<Ogretmenler />} />
           <Route path="/dersler" element={<Dersler />} />
           <Route path="/subeler" element={<Subeler />} />
-          <Route path="/mufredat" element={<Mufredat />} />
+          <Route path="/ders-atamalari" element={<DersAtamalari />} />
+          {/* Eski adres, yer imleri bozulmasın diye yönlendirilir. */}
+          <Route path="/mufredat" element={<Navigate to="/ders-atamalari" replace />} />
           <Route path="/zaman-izgarasi" element={<ZamanIzgarasi />} />
           <Route path="/programlar" element={<Programlar />} />
           <Route path="/programlar/:id" element={<ProgramDetay />} />

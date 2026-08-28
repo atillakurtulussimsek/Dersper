@@ -52,8 +52,9 @@ def on_kontrol(slots: list[Slot], lessons: list[Lesson]) -> list[dict]:
     if not lessons:
         return [{
             "kod": "mufredat_bos",
-            "baslik": "Müfredat boş",
-            "detay": "Hiç ders tanımlanmamış. Şubelere ders ve öğretmen atayın.",
+            "baslik": "Hiç ders ataması yok",
+            "detay": "Şubelere henüz ders atanmamış. Ders Atamaları bölümünden "
+                     "her şubeye dersleri ve öğretmenlerini ekleyin.",
             "onem": "engel",
         }]
 
@@ -235,7 +236,7 @@ def rapor_olustur(
         "ozet": {
             "ders_saati_sayisi": len(slots),
             "gun_sayisi": len({s.day_index for s in slots}),
-            "mufredat_satiri": len(lessons),
+            "ders_atamasi": len(lessons),
             "toplam_ders_saati": sum(l.weekly_hours for l in lessons),
             "sube_sayisi": len({l.section_id for l in lessons}),
             "ogretmen_sayisi": len({l.teacher_id for l in lessons}),

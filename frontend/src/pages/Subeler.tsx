@@ -109,7 +109,7 @@ export default function Subeler() {
                     <Buton
                       tur="sade"
                       onClick={() => {
-                        if (confirm(`"${s.name}" şubesi ve müfredatı silinsin mi?`))
+                        if (confirm(`"${s.name}" şubesi ve ders atamaları silinsin mi?`))
                           kaynak.sil.mutate(s.id);
                       }}
                       aria-label="Sil"

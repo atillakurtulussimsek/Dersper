@@ -1,4 +1,4 @@
-"""Öğretmen, ders, şube ve müfredat yönetimi.
+"""Öğretmen, ders, şube ve ders ataması yönetimi.
 
 Her kayıt aktif döneme aittir; listeler yalnızca o dönemin silinmemiş
 kayıtlarını döndürür. Silme yumuşaktır: satır `deleted_at` ile işaretlenir,
@@ -491,14 +491,24 @@ def mufredat(
     sorgu = _mufredat_sorgusu(donem)
     if section_id is not None:
         sorgu = sorgu.where(CurriculumEntry.section_id == section_id)
-    return list(db.scalars(sorgu.order_by(CurriculumEntry.section_id)))
+    return list(db.scalars(
+        sorgu.join(Subject, Subject.id == CurriculumEntry.subject_id)
+        .order_by(CurriculumEntry.section_id, Subject.name, CurriculumEntry.id)
+    ))
 
 
-def _mufredatta_var_mi(db: Session, section_id: int, subject_id: int,
-                       haric: int | None = None) -> bool:
+def _atama_var_mi(db: Session, section_id: int, subject_id: int, teacher_id: int,
+                  haric: int | None = None) -> bool:
+    """Aynı şube–ders–öğretmen üçlüsü zaten var mı?
+
+    Bir derse birden fazla öğretmen girebilir (örneğin İngilizce'nin 2 saati bir,
+    2 saati başka öğretmende); bu yüzden şube–ders çifti tek başına engel değildir.
+    Engellenen, birebir aynı üçlünün tekrarıdır.
+    """
     sorgu = select(CurriculumEntry.id).where(
         CurriculumEntry.section_id == section_id,
         CurriculumEntry.subject_id == subject_id,
+        CurriculumEntry.teacher_id == teacher_id,
         CurriculumEntry.deleted_at.is_(None),
     )
     if haric is not None:
@@ -516,8 +526,12 @@ def mufredat_ekle(
     _getir(db, Section, payload.section_id, "Şube", donem)
     _getir(db, Subject, payload.subject_id, "Ders", donem)
     _getir(db, Teacher, payload.teacher_id, "Öğretmen", donem)
-    if _mufredatta_var_mi(db, payload.section_id, payload.subject_id):
-        raise HTTPException(status.HTTP_409_CONFLICT, "Bu şubede bu ders zaten tanımlı.")
+    if _atama_var_mi(db, payload.section_id, payload.subject_id, payload.teacher_id):
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Bu şubede bu ders bu öğretmenle zaten tanımlı. "
+            "Aynı dersi başka bir öğretmenle ekleyebilirsiniz.",
+        )
 
     e = CurriculumEntry(**payload.model_dump())
     db.add(e)
@@ -550,7 +564,8 @@ def mufredat_kopyala(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Hedef şube bulunamadı.")
 
     mevcut = {
-        (e.section_id, e.subject_id) for e in db.scalars(_mufredat_sorgusu(donem))
+        (e.section_id, e.subject_id, e.teacher_id)
+        for e in db.scalars(_mufredat_sorgusu(donem))
     }
     yeniler: list[CurriculumEntry] = []
     atlananlar: list[str] = []
@@ -562,9 +577,10 @@ def mufredat_kopyala(
                     f"{hedef.name} · {kaynak.subject.name}: kaynak şubenin kendisi."
                 )
                 continue
-            if (hedef.id, kaynak.subject_id) in mevcut:
+            if (hedef.id, kaynak.subject_id, kaynak.teacher_id) in mevcut:
                 atlananlar.append(
-                    f"{hedef.name} · {kaynak.subject.name}: bu şubede zaten tanımlı."
+                    f"{hedef.name} · {kaynak.subject.name}: bu şubede "
+                    f"{kaynak.teacher.full_name} ile zaten tanımlı."
                 )
                 continue
             kopya = CurriculumEntry(
@@ -577,7 +593,7 @@ def mufredat_kopyala(
             )
             db.add(kopya)
             yeniler.append(kopya)
-            mevcut.add((hedef.id, kaynak.subject_id))
+            mevcut.add((hedef.id, kaynak.subject_id, kaynak.teacher_id))
 
     db.commit()
     for k in yeniler:
@@ -616,7 +632,10 @@ def mufredat_aktar(
     subeler_ = ad_haritasi(Section)
     dersler_ = ad_haritasi(Subject)
     ogretmenler_ = ad_haritasi(Teacher)
-    mevcut = {(e.section_id, e.subject_id) for e in db.scalars(_mufredat_sorgusu(donem))}
+    mevcut = {
+        (e.section_id, e.subject_id, e.teacher_id)
+        for e in db.scalars(_mufredat_sorgusu(donem))
+    }
 
     sayi, atlanan = 0, []
     for k in db.scalars(
@@ -637,8 +656,10 @@ def mufredat_aktar(
         if eksik:
             atlanan.append(f"{etiket}: bu dönemde {', '.join(eksik)} tanımlı değil.")
             continue
-        if (sube_id, ders_id) in mevcut:
-            atlanan.append(f"{etiket}: bu şubede zaten tanımlı.")
+        if (sube_id, ders_id, ogretmen_id) in mevcut:
+            atlanan.append(
+                f"{etiket}: bu şubede {k.teacher.full_name} ile zaten tanımlı."
+            )
             continue
 
         db.add(CurriculumEntry(
@@ -646,7 +667,7 @@ def mufredat_aktar(
             weekly_hours=k.weekly_hours, block_pattern=k.block_pattern,
             max_per_day=k.max_per_day,
         ))
-        mevcut.add((sube_id, ders_id))
+        mevcut.add((sube_id, ders_id, ogretmen_id))
         sayi += 1
     db.commit()
     return ImportOut(imported=sayi, skipped=atlanan)
@@ -663,8 +684,12 @@ def mufredat_guncelle(
     _getir(db, Section, payload.section_id, "Şube", donem)
     _getir(db, Subject, payload.subject_id, "Ders", donem)
     _getir(db, Teacher, payload.teacher_id, "Öğretmen", donem)
-    if _mufredatta_var_mi(db, payload.section_id, payload.subject_id, haric=e.id):
-        raise HTTPException(status.HTTP_409_CONFLICT, "Bu şubede bu ders zaten tanımlı.")
+    if _atama_var_mi(db, payload.section_id, payload.subject_id, payload.teacher_id,
+                     haric=e.id):
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Bu şubede bu ders bu öğretmenle zaten tanımlı.",
+        )
     for alan, deger in payload.model_dump().items():
         setattr(e, alan, deger)
     db.commit()

@@ -1,4 +1,4 @@
-/** Seçili müfredat satırlarını başka şubelere kopyalar.
+/** Seçili ders atamalarını başka şubelere kopyalar.
  *  Yalnızca şube değişir; öğretmen, saat, dağılım ve günlük sınır aynı kalır. */
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -18,7 +18,7 @@ export default function MufredatKopyala({
   hedefAdaylari,
   kapat,
 }: {
-  /** Kopyalanacak satırlar. Tek ders ya da şubenin tüm müfredatı olabilir. */
+  /** Kopyalanacak atamalar. Tek ders ya da şubenin tümü olabilir. */
   satirlar: MufredatSatiri[];
   /** Kaynak şube dışındaki şubeler. */
   hedefAdaylari: Sube[];
@@ -54,7 +54,7 @@ export default function MufredatKopyala({
       baslik={
         satirlar.length === 1
           ? `"${satirlar[0].subject.name}" dersini kopyala`
-          : `${satirlar.length} satırlık müfredatı kopyala`
+          : `${satirlar.length} ders atamasını kopyala`
       }
     >
       <div className="space-y-4">
@@ -62,14 +62,14 @@ export default function MufredatKopyala({
           <>
             {sonuc.created.length > 0 && (
               <Uyari tur="basari">
-                {sonuc.created.length} satır kopyalandı. Kopyalar bağımsızdır; hedef
+                {sonuc.created.length} atama kopyalandı. Kopyalar bağımsızdır; hedef
                 şubelerde ayrı ayrı düzenleyebilirsiniz.
               </Uyari>
             )}
             {sonuc.skipped.length > 0 && (
               <div className="space-y-1.5">
                 <p className="text-sm font-medium text-slate-700">
-                  {sonuc.skipped.length} satır atlandı:
+                  {sonuc.skipped.length} atama atlandı:
                 </p>
                 <ul className="space-y-1 text-sm text-slate-600">
                   {sonuc.skipped.map((s, i) => (
@@ -92,7 +92,8 @@ export default function MufredatKopyala({
           <>
             <Uyari>
               Kopyalanacak: <b>{satirlar.map((s) => s.subject.name).join(", ")}</b>.
-              Hedef şubede aynı ders zaten varsa o satır atlanır.
+              Hedef şubede aynı ders <i>aynı öğretmenle</i> zaten varsa o atama atlanır;
+              başka bir öğretmendeyse kopyalanır.
             </Uyari>
 
             {!hedefAdaylari.length ? (

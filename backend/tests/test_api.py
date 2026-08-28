@@ -69,13 +69,84 @@ def test_musaitlik_kaydedilir(yonetici: TestClient):
     assert all(h["state"] == "uygun_degil" for h in kayitli)
 
 
-def test_ayni_derste_iki_mufredat_satiri_olamaz(yonetici: TestClient):
+def test_ayni_ders_ayni_ogretmenle_iki_kez_atanamaz(yonetici: TestClient):
     d = yonetici.post("/api/subjects", json={"name": "Tekrar Dersi"}).json()["id"]
     o = yonetici.post("/api/teachers", json={"full_name": "Tekrar Öğretmeni"}).json()["id"]
     s = yonetici.post("/api/sections", json={"name": "9-Z"}).json()["id"]
     govde = {"section_id": s, "subject_id": d, "teacher_id": o, "weekly_hours": 2}
     assert yonetici.post("/api/curriculum", json=govde).status_code == 201
-    assert yonetici.post("/api/curriculum", json=govde).status_code == 409
+    r = yonetici.post("/api/curriculum", json=govde)
+    assert r.status_code == 409
+    assert "başka bir öğretmenle" in r.text
+
+
+def test_ayni_ders_farkli_ogretmenle_atanabilir(yonetici: TestClient):
+    """İngilizce'nin 2 saati bir, 2 saati başka öğretmende olabilir."""
+    d = yonetici.post("/api/subjects", json={"name": "İngilizce"}).json()["id"]
+    o1 = yonetici.post("/api/teachers", json={"full_name": "Ayşe Yılmaz"}).json()["id"]
+    o2 = yonetici.post("/api/teachers", json={"full_name": "Mehmet Kaya"}).json()["id"]
+    s = yonetici.post("/api/sections", json={"name": "9-A"}).json()["id"]
+
+    for o in (o1, o2):
+        r = yonetici.post("/api/curriculum", json={
+            "section_id": s, "subject_id": d, "teacher_id": o, "weekly_hours": 2,
+        })
+        assert r.status_code == 201, r.text
+
+    atamalar = yonetici.get(f"/api/curriculum?section_id={s}").json()
+    assert len(atamalar) == 2
+    assert {a["teacher"]["full_name"] for a in atamalar} == {"Ayşe Yılmaz", "Mehmet Kaya"}
+
+
+def test_ayni_dersin_iki_ogretmeni_ayni_saate_yerlesmez(yonetici: TestClient):
+    """İki ayrı atama olsa da şube aynı anda tek derste olur."""
+    d = yonetici.post("/api/subjects", json={"name": "İngilizce"}).json()["id"]
+    o1 = yonetici.post("/api/teachers", json={"full_name": "Ayşe Yılmaz"}).json()["id"]
+    o2 = yonetici.post("/api/teachers", json={"full_name": "Mehmet Kaya"}).json()["id"]
+    s = yonetici.post("/api/sections", json={"name": "9-A"}).json()["id"]
+    for o in (o1, o2):
+        yonetici.post("/api/curriculum", json={
+            "section_id": s, "subject_id": d, "teacher_id": o, "weekly_hours": 3,
+        })
+
+    pid = yonetici.post("/api/timetables", json={"name": "Bölünmüş ders"}).json()["id"]
+    deneme = yonetici.post(f"/api/timetables/{pid}/solve?time_limit_seconds=30").json()
+    assert deneme["status"] == "basarili", deneme["report"]
+
+    hucreler = yonetici.get(f"/api/timetables/{pid}/grid").json()["cells"]
+    assert len(hucreler) == 6
+    saatler = [h["period_id"] for h in hucreler]
+    assert len(saatler) == len(set(saatler))          # çakışma yok
+    assert {h["teacher_name"] for h in hucreler} == {"Ayşe Yılmaz", "Mehmet Kaya"}
+
+
+def test_kopyalama_ayni_dersi_farkli_ogretmenle_getirir(yonetici: TestClient):
+    d = yonetici.post("/api/subjects", json={"name": "İngilizce"}).json()["id"]
+    o1 = yonetici.post("/api/teachers", json={"full_name": "Ayşe Yılmaz"}).json()["id"]
+    o2 = yonetici.post("/api/teachers", json={"full_name": "Mehmet Kaya"}).json()["id"]
+    kaynak = yonetici.post("/api/sections", json={"name": "9-A"}).json()["id"]
+    hedef = yonetici.post("/api/sections", json={"name": "9-B"}).json()["id"]
+
+    e1 = yonetici.post("/api/curriculum", json={
+        "section_id": kaynak, "subject_id": d, "teacher_id": o1, "weekly_hours": 2,
+    }).json()["id"]
+    # Hedefte aynı ders başka öğretmenle zaten var: kopyalama yine de eklenmeli.
+    yonetici.post("/api/curriculum", json={
+        "section_id": hedef, "subject_id": d, "teacher_id": o2, "weekly_hours": 2,
+    })
+
+    r = yonetici.post("/api/curriculum/copy", json={
+        "entry_ids": [e1], "section_ids": [hedef],
+    }).json()
+    assert len(r["created"]) == 1
+    assert len(yonetici.get(f"/api/curriculum?section_id={hedef}").json()) == 2
+
+    # İkinci kez kopyalamak artık aynı üçlü olduğu için atlanır.
+    tekrar = yonetici.post("/api/curriculum/copy", json={
+        "entry_ids": [e1], "section_ids": [hedef],
+    }).json()
+    assert tekrar["created"] == []
+    assert "Ayşe Yılmaz ile zaten tanımlı" in tekrar["skipped"][0]
 
 
 def test_program_uretilir_ve_yayinlanir(yonetici: TestClient):

@@ -35,7 +35,7 @@ export default function Ozet() {
     { ad: "Dersleri girin", yol: "/dersler", tamam: (dersler.data?.length ?? 0) > 0, not: `${dersler.data?.length ?? 0} ders` },
     { ad: "Öğretmenleri girin", yol: "/ogretmenler", tamam: (ogretmenler.data?.length ?? 0) > 0, not: `${ogretmenler.data?.length ?? 0} öğretmen` },
     { ad: "Şubeleri girin", yol: "/subeler", tamam: (subeler.data?.length ?? 0) > 0, not: `${subeler.data?.length ?? 0} şube` },
-    { ad: "Müfredatı doldurun", yol: "/mufredat", tamam: (mufredat.data?.length ?? 0) > 0, not: `${toplamYuk} saat yük` },
+    { ad: "Ders atamalarını yapın", yol: "/ders-atamalari", tamam: (mufredat.data?.length ?? 0) > 0, not: `${toplamYuk} saat yük` },
     { ad: "Programı üretin", yol: "/programlar", tamam: (programlar.data?.length ?? 0) > 0, not: `${programlar.data?.length ?? 0} program` },
   ];
 

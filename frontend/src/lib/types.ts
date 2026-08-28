@@ -145,7 +145,7 @@ export interface Rapor {
   ozet: {
     ders_saati_sayisi: number;
     gun_sayisi: number;
-    mufredat_satiri: number;
+    ders_atamasi: number;
     toplam_ders_saati: number;
     sube_sayisi: number;
     ogretmen_sayisi: number;
