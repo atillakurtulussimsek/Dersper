@@ -7,6 +7,7 @@ aSc TimeTables, ProgMatik, Bilsa ve Yabil gibi ücretli programlara özgür bir 
 
 ## Neler yapar
 
+- **Dönemler**: her dönem kendi zaman ızgarası, kadrosu, dersleri, şubeleri ve programlarıyla bağımsız; geçmiş dönemden seçerek kayıt aktarma
 - Öğretmen, ders, şube ve müfredat tanımları
 - Müfredatı başka şubelere kopyalama (tek ders ya da şubenin tamamı)
 - Güne göre değişken ders saati / zil düzeni
@@ -61,6 +62,8 @@ Sonra kök dizinden:
 `run.sh` backend'i ve frontend'i birlikte başlatır. Arayüz: http://localhost:5173
 
 İlk açılışta kurum bilgilerinizi ve yönetici hesabınızı oluşturan bir kurulum sihirbazı karşılar.
+
+Silme her yerde yumuşaktır: kayıtlar gizlenir, veritabanından kaldırılmaz.
 
 ## Lisans
 

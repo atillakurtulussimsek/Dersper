@@ -10,6 +10,21 @@ export type DenemeDurumu =
   | "cozumsuz"
   | "hata";
 
+export interface Donem {
+  id: number;
+  name: string;
+  starts_on: string | null;
+  ends_on: string | null;
+  created_at: string;
+  is_active: boolean;
+  counts: Record<string, number>;
+}
+
+export interface AktarimSonucu {
+  imported: number;
+  skipped: string[];
+}
+
 export interface Kullanici {
   id: number;
   email: string;
@@ -79,6 +94,7 @@ export interface MufredatSatiri {
   max_per_day: number;
   subject: Ders;
   teacher: Ogretmen;
+  section: Sube;
 }
 
 export interface Program {

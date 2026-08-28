@@ -1,11 +1,12 @@
 /** Şube bazında ders yükü: hangi şubede hangi ders, kaç saat, hangi öğretmenle. */
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Copy, Pencil, Plus, Trash2 } from "lucide-react";
+import { Copy, Download, Pencil, Plus, Trash2 } from "lucide-react";
 
 import {
   Alan, BosDurum, Buton, Girdi, Kart, Kutu, Secim, Tablo, Uyari, Yukleniyor,
 } from "../components/ui";
+import GecmisDonemdenAktar from "../components/GecmisDonemdenAktar";
 import MufredatKopyala from "../components/MufredatKopyala";
 import { get } from "../lib/api";
 import { desenCoz, desenEtiketi, desenOnerileri } from "../lib/bloklar";
@@ -48,6 +49,7 @@ export default function Mufredat() {
   const [form, setForm] = useState(BOS);
   // Kopyalama kutusunda gösterilecek satırlar; boşsa kutu kapalı.
   const [kopyalanacak, setKopyalanacak] = useState<MufredatSatiri[] | null>(null);
+  const [aktarimAcik, setAktarimAcik] = useState(false);
 
   const haftalikSlot = useMemo(
     () =>
@@ -106,11 +108,16 @@ export default function Mufredat() {
             Her şubenin haftalık ders yükü. Program bu tabloya göre üretilir.
           </p>
         </div>
-        {hazir ? (
-          <Buton onClick={() => ac()}>
-            <Plus className="h-4 w-4" /> Ders ekle
+        <div className="flex gap-2">
+          <Buton tur="ikincil" onClick={() => setAktarimAcik(true)}>
+            <Download className="h-4 w-4" /> Geçmiş dönemden aktar
           </Buton>
-        ) : null}
+          {hazir ? (
+            <Buton onClick={() => ac()}>
+              <Plus className="h-4 w-4" /> Ders ekle
+            </Buton>
+          ) : null}
+        </div>
       </header>
 
       {hata && <Uyari tur="hata">{hata}</Uyari>}
@@ -228,6 +235,22 @@ export default function Mufredat() {
             )}
           </Kart>
         </>
+      )}
+
+      {aktarimAcik && (
+        <GecmisDonemdenAktar<MufredatSatiri>
+          tur="curriculum"
+          baslik="Geçmiş dönemden müfredat aktar"
+          satirYazisi={(m) => ({
+            ana: `${m.section.name} · ${m.subject.name}`,
+            alt: `${m.weekly_hours} saat · ${m.teacher.full_name}`,
+          })}
+          tazelenecek={["mufredat", "mufredat-hepsi"]}
+          kapat={() => {
+            setAktarimAcik(false);
+            mufredat.refetch();
+          }}
+        />
       )}
 
       {kopyalanacak && (

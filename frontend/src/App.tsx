@@ -6,6 +6,7 @@ import Kabuk from "./components/Kabuk";
 import { get, jetonuAl } from "./lib/api";
 import Ayarlar from "./pages/Ayarlar";
 import Dersler from "./pages/Dersler";
+import Donemler from "./pages/Donemler";
 import Giris from "./pages/Giris";
 import Kurulum from "./pages/Kurulum";
 import Mufredat from "./pages/Mufredat";
@@ -53,6 +54,7 @@ export default function App() {
           <Route path="/zaman-izgarasi" element={<ZamanIzgarasi />} />
           <Route path="/programlar" element={<Programlar />} />
           <Route path="/programlar/:id" element={<ProgramDetay />} />
+          <Route path="/donemler" element={<Donemler />} />
           <Route path="/ayarlar" element={<Ayarlar />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>

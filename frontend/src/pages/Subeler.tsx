@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { CalendarCheck, Pencil, Plus, Trash2 } from "lucide-react";
+import { CalendarCheck, Download, Pencil, Plus, Trash2 } from "lucide-react";
 
 import {
   Alan, BosDurum, Buton, Girdi, Kart, Kutu, Tablo, Uyari, Yukleniyor,
 } from "../components/ui";
+import GecmisDonemdenAktar from "../components/GecmisDonemdenAktar";
 import MusaitlikMatrisi from "../components/MusaitlikMatrisi";
 import { get } from "../lib/api";
 import { hataMetni, useKaynak, useListe } from "../lib/hooks";
@@ -20,6 +21,7 @@ export default function Subeler() {
   const [duzenlenen, setDuzenlenen] = useState<Sube | null>(null);
   const [form, setForm] = useState(BOS);
   const [musaitlikIcin, setMusaitlikIcin] = useState<Sube | null>(null);
+  const [aktarimAcik, setAktarimAcik] = useState(false);
 
   function ac(s?: Sube) {
     setDuzenlenen(s ?? null);
@@ -60,9 +62,14 @@ export default function Subeler() {
             Programı yapılacak sınıf şubeleri ve ders görebilecekleri saatler.
           </p>
         </div>
-        <Buton onClick={() => ac()}>
-          <Plus className="h-4 w-4" /> Şube ekle
-        </Buton>
+        <div className="flex gap-2">
+          <Buton tur="ikincil" onClick={() => setAktarimAcik(true)}>
+            <Download className="h-4 w-4" /> Geçmiş dönemden aktar
+          </Buton>
+          <Buton onClick={() => ac()}>
+            <Plus className="h-4 w-4" /> Şube ekle
+          </Buton>
+        </div>
       </header>
 
       {hata && <Uyari tur="hata">{hata}</Uyari>}
@@ -174,6 +181,19 @@ export default function Subeler() {
           </div>
         </form>
       </Kutu>
+      {aktarimAcik && (
+        <GecmisDonemdenAktar<Sube>
+          tur="sections"
+          baslik="Geçmiş dönemden şube aktar"
+          satirYazisi={(s) => ({
+            ana: s.name,
+            alt: s.grade_level ? `${s.grade_level}. sınıf` : undefined,
+          })}
+          tazelenecek={["subeler"]}
+          kapat={() => setAktarimAcik(false)}
+        />
+      )}
+
       {musaitlikIcin && (
         <MusaitlikMatrisi
           baslik={`${musaitlikIcin.name} · ders saatleri`}

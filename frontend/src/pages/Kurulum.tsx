@@ -8,6 +8,7 @@ import type { KurumTipi } from "../lib/types";
 export default function Kurulum() {
   const [kurumAdi, setKurumAdi] = useState("");
   const [kurumTipi, setKurumTipi] = useState<KurumTipi>("k12");
+  const [donemAdi, setDonemAdi] = useState("2026-2027 Güz Dönemi");
   const [adSoyad, setAdSoyad] = useState("");
   const [eposta, setEposta] = useState("");
   const [parola, setParola] = useState("");
@@ -26,6 +27,7 @@ export default function Kurulum() {
       const { access_token } = await post<{ access_token: string }>("/setup", {
         institution_name: kurumAdi,
         institution_type: kurumTipi,
+        term_name: donemAdi,
         full_name: adSoyad,
         email: eposta,
         password: parola,
@@ -69,6 +71,17 @@ export default function Kurulum() {
             <option value="k12">Okul (ilkokul / ortaokul / lise)</option>
             <option value="kurs">Kurs / dershane / dil okulu</option>
           </Secim>
+        </Alan>
+
+        <Alan
+          etiket="İlk dönem adı"
+          ipucu="Tüm tanımlar bir döneme aittir. Sonradan yeni dönem açabilirsiniz."
+        >
+          <Girdi
+            required
+            value={donemAdi}
+            onChange={(e) => setDonemAdi(e.target.value)}
+          />
         </Alan>
 
         <hr className="border-slate-100" />

@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Pencil, Plus, Trash2, Wand2 } from "lucide-react";
+import { Download, Pencil, Plus, Trash2, Wand2 } from "lucide-react";
 
+import GecmisDonemdenAktar from "../components/GecmisDonemdenAktar";
 import {
   Alan, BosDurum, Buton, Girdi, Kart, Kutu, Tablo, Uyari, Yukleniyor,
 } from "../components/ui";
@@ -21,6 +22,7 @@ export default function Dersler() {
   const [acik, setAcik] = useState(false);
   const [duzenlenen, setDuzenlenen] = useState<Ders | null>(null);
   const [form, setForm] = useState(BOS);
+  const [aktarimAcik, setAktarimAcik] = useState(false);
   // Kullanıcı kısa kodu elle değiştirdiyse ad yazdıkça üzerine yazmayız.
   const [kodElle, setKodElle] = useState(false);
 
@@ -64,9 +66,14 @@ export default function Dersler() {
             Okulda okutulan ders adları. Renkler program ızgarasında kullanılır.
           </p>
         </div>
-        <Buton onClick={() => ac()}>
-          <Plus className="h-4 w-4" /> Ders ekle
-        </Buton>
+        <div className="flex gap-2">
+          <Buton tur="ikincil" onClick={() => setAktarimAcik(true)}>
+            <Download className="h-4 w-4" /> Geçmiş dönemden aktar
+          </Buton>
+          <Buton onClick={() => ac()}>
+            <Plus className="h-4 w-4" /> Ders ekle
+          </Buton>
+        </div>
       </header>
 
       {hata && <Uyari tur="hata">{hata}</Uyari>}
@@ -119,6 +126,16 @@ export default function Dersler() {
           </Tablo>
         )}
       </Kart>
+
+      {aktarimAcik && (
+        <GecmisDonemdenAktar<Ders>
+          tur="subjects"
+          baslik="Geçmiş dönemden ders aktar"
+          satirYazisi={(d) => ({ ana: d.name, alt: d.short_code ?? undefined })}
+          tazelenecek={["dersler"]}
+          kapat={() => setAktarimAcik(false)}
+        />
+      )}
 
       <Kutu acik={acik} kapat={() => setAcik(false)} baslik={duzenlenen ? "Dersi düzenle" : "Ders ekle"}>
         <form onSubmit={kaydet} className="space-y-4">

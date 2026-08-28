@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { CalendarCheck, Pencil, Plus, Trash2, Wand2 } from "lucide-react";
+import { CalendarCheck, Download, Pencil, Plus, Trash2, Wand2 } from "lucide-react";
 
+import GecmisDonemdenAktar from "../components/GecmisDonemdenAktar";
 import MusaitlikMatrisi from "../components/MusaitlikMatrisi";
 import {
   Alan, BosDurum, Buton, CokSatir, Girdi, Kart, Kutu, Tablo, Uyari, Yukleniyor,
@@ -29,6 +30,7 @@ export default function Ogretmenler() {
   const [duzenlenen, setDuzenlenen] = useState<Ogretmen | null>(null);
   const [form, setForm] = useState(BOS);
   const [musaitlikIcin, setMusaitlikIcin] = useState<Ogretmen | null>(null);
+  const [aktarimAcik, setAktarimAcik] = useState(false);
   // Kullanıcı kısa kodu elle değiştirdiyse ad yazdıkça üzerine yazmayız.
   const [kodElle, setKodElle] = useState(false);
 
@@ -96,9 +98,14 @@ export default function Ogretmenler() {
             Öğretmen kadrosu ve her öğretmenin haftalık müsaitlik durumu.
           </p>
         </div>
-        <Buton onClick={() => ac()}>
-          <Plus className="h-4 w-4" /> Öğretmen ekle
-        </Buton>
+        <div className="flex gap-2">
+          <Buton tur="ikincil" onClick={() => setAktarimAcik(true)}>
+            <Download className="h-4 w-4" /> Geçmiş dönemden aktar
+          </Buton>
+          <Buton onClick={() => ac()}>
+            <Plus className="h-4 w-4" /> Öğretmen ekle
+          </Buton>
+        </div>
       </header>
 
       {hata && <Uyari tur="hata">{hata}</Uyari>}
@@ -109,8 +116,15 @@ export default function Ogretmenler() {
         ) : !liste.data?.length ? (
           <BosDurum
             baslik="Henüz öğretmen yok"
-            aciklama="Program üretebilmek için önce öğretmen kadrosunu girin."
-            eylem={<Buton onClick={() => ac()}>Öğretmen ekle</Buton>}
+            aciklama="Program üretebilmek için önce öğretmen kadrosunu girin. Geçmiş bir dönem varsa kadroyu oradan aktarabilirsiniz."
+            eylem={
+              <div className="flex gap-2">
+                <Buton tur="ikincil" onClick={() => setAktarimAcik(true)}>
+                  Geçmiş dönemden aktar
+                </Buton>
+                <Buton onClick={() => ac()}>Öğretmen ekle</Buton>
+              </div>
+            }
           />
         ) : (
           <Tablo basliklar={["Ad soyad", "Branş", "Kısa kod", "Günlük en fazla", "Durum", ""]}>
@@ -250,6 +264,16 @@ export default function Ogretmenler() {
           </div>
         </form>
       </Kutu>
+
+      {aktarimAcik && (
+        <GecmisDonemdenAktar<Ogretmen>
+          tur="teachers"
+          baslik="Geçmiş dönemden öğretmen aktar"
+          satirYazisi={(o) => ({ ana: o.full_name, alt: o.branch ?? undefined })}
+          tazelenecek={["ogretmenler"]}
+          kapat={() => setAktarimAcik(false)}
+        />
+      )}
 
       {musaitlikIcin && (
         <MusaitlikMatrisi

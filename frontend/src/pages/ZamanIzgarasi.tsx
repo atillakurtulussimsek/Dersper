@@ -1,11 +1,11 @@
 /** Günler ve ders saatleri. Ders saati sayısı güne göre değişebilir. */
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Coffee, Minus, Plus } from "lucide-react";
+import { Coffee, Download, Minus, Plus } from "lucide-react";
 
-import { Buton, Girdi, Kart, Uyari, Yukleniyor } from "../components/ui";
-import { get, put } from "../lib/api";
-import type { DersSaati, Gun } from "../lib/types";
+import { Buton, Girdi, Kart, Kutu, Secim, Uyari, Yukleniyor } from "../components/ui";
+import { get, post, put } from "../lib/api";
+import type { DersSaati, Donem, Gun } from "../lib/types";
 
 type TaslakSaat = Omit<DersSaati, "id" | "day_id">;
 type TaslakGun = { index: number; name: string; is_active: boolean; periods: TaslakSaat[] };
@@ -18,6 +18,19 @@ export default function ZamanIzgarasi() {
   const qc = useQueryClient();
   const izgara = useQuery({ queryKey: ["timegrid"], queryFn: () => get<Gun[]>("/timegrid") });
   const [taslak, setTaslak] = useState<TaslakGun[]>([]);
+  const [aktarimAcik, setAktarimAcik] = useState(false);
+  const [kaynakId, setKaynakId] = useState<number | null>(null);
+
+  const donemler = useQuery({ queryKey: ["donemler"], queryFn: () => get<Donem[]>("/terms") });
+  const gecmis = (donemler.data ?? []).filter((d) => !d.is_active);
+
+  const izgarayiAktar = useMutation({
+    mutationFn: () => post<Gun[]>(`/timegrid/import/${kaynakId}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["timegrid"] });
+      setAktarimAcik(false);
+    },
+  });
 
   useEffect(() => {
     if (!izgara.data) return;
@@ -88,9 +101,20 @@ export default function ZamanIzgarasi() {
             ders yerleştirilmez.
           </p>
         </div>
-        <Buton onClick={() => kaydet.mutate()} yukleniyor={kaydet.isPending}>
-          Kaydet
-        </Buton>
+        <div className="flex gap-2">
+          <Buton
+            tur="ikincil"
+            onClick={() => {
+              setKaynakId(gecmis[0]?.id ?? null);
+              setAktarimAcik(true);
+            }}
+          >
+            <Download className="h-4 w-4" /> Geçmiş dönemden aktar
+          </Buton>
+          <Buton onClick={() => kaydet.mutate()} yukleniyor={kaydet.isPending}>
+            Kaydet
+          </Buton>
+        </div>
       </header>
 
       {kaydet.error && <Uyari tur="hata">{(kaydet.error as Error).message}</Uyari>}
@@ -102,6 +126,54 @@ export default function ZamanIzgarasi() {
         Haftada toplam <b>{toplam}</b> ders saati tanımlı. Yerleşmiş bir ders programı
         varken ızgara değiştirilemez; önce programı silmeniz gerekir.
       </Uyari>
+
+      <Kutu
+        acik={aktarimAcik}
+        kapat={() => setAktarimAcik(false)}
+        baslik="Geçmiş dönemden zaman ızgarası aktar"
+      >
+        <div className="space-y-4">
+          <Uyari tur="hata">
+            Bu dönemin mevcut zaman ızgarası <b>tamamen değiştirilir</b>. Yerleşmiş bir
+            ders programı varsa işlem reddedilir.
+          </Uyari>
+          {!gecmis.length ? (
+            <Uyari>Aktarılacak başka dönem yok.</Uyari>
+          ) : (
+            <label className="block">
+              <span className="mb-1 block text-sm font-medium text-slate-700">
+                Kaynak dönem
+              </span>
+              <Secim
+                value={kaynakId ?? ""}
+                onChange={(e) => setKaynakId(Number(e.target.value))}
+              >
+                {gecmis.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name} · {d.counts.ders_saati ?? 0} gün
+                  </option>
+                ))}
+              </Secim>
+            </label>
+          )}
+          {izgarayiAktar.error && (
+            <Uyari tur="hata">{(izgarayiAktar.error as Error).message}</Uyari>
+          )}
+          <div className="flex justify-end gap-2">
+            <Buton tur="ikincil" onClick={() => setAktarimAcik(false)}>
+              Vazgeç
+            </Buton>
+            <Buton
+              tur="tehlike"
+              disabled={!kaynakId}
+              yukleniyor={izgarayiAktar.isPending}
+              onClick={() => izgarayiAktar.mutate()}
+            >
+              Izgarayı değiştir
+            </Buton>
+          </div>
+        </div>
+      </Kutu>
 
       <div className="grid gap-4 lg:grid-cols-2">
         {taslak.map((g) => (

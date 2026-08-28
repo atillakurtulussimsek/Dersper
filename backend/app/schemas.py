@@ -232,6 +232,7 @@ class CurriculumOut(ORMModel):
     max_per_day: int
     subject: SubjectOut
     teacher: TeacherOut
+    section: SectionOut
 
 
 class CurriculumCopyOut(BaseModel):

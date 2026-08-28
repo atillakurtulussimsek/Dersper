@@ -1,12 +1,13 @@
 /** Giriş yapmış kullanıcının gördüğü çerçeve: yan menü + içerik. */
 import { useQuery } from "@tanstack/react-query";
 import {
-  BookOpen, CalendarClock, GraduationCap, LayoutGrid, LogOut, Settings,
-  Table2, Users,
+  BookOpen, CalendarClock, CalendarRange, GraduationCap, LayoutGrid, LogOut,
+  Settings, Table2, Users,
 } from "lucide-react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import clsx from "clsx";
 
+import DonemSecici from "./DonemSecici";
 import { get, jetonuSil } from "../lib/api";
 import type { Kurum } from "../lib/types";
 
@@ -18,6 +19,7 @@ const MENU = [
   { yol: "/mufredat", ad: "Müfredat", ikon: Table2 },
   { yol: "/zaman-izgarasi", ad: "Zaman Izgarası", ikon: CalendarClock },
   { yol: "/programlar", ad: "Ders Programları", ikon: LayoutGrid },
+  { yol: "/donemler", ad: "Dönemler", ikon: CalendarRange },
   { yol: "/ayarlar", ad: "Ayarlar", ikon: Settings },
 ];
 
@@ -38,7 +40,9 @@ export default function Kabuk() {
           <p className="truncate text-xs text-slate-500">{kurum.data?.name ?? "—"}</p>
         </div>
 
-        <nav className="flex-1 space-y-0.5 p-3">
+        <DonemSecici />
+
+        <nav className="flex-1 space-y-0.5 overflow-y-auto p-3">
           {MENU.map(({ yol, ad, ikon: Ikon }) => (
             <NavLink
               key={yol}
