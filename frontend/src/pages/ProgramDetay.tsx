@@ -2,25 +2,58 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "react-router-dom";
-import {
-  Copy, Download, FileSpreadsheet, Globe, Play, Printer,
-} from "lucide-react";
-import clsx from "clsx";
+import { Copy, Globe, Play } from "lucide-react";
 
+import ProgramAracCubugu, { type Duzen } from "../components/ProgramAracCubugu";
 import ProgramIzgarasi, { type Bakis } from "../components/ProgramIzgarasi";
 import TaniRaporu from "../components/TaniRaporu";
-import { Buton, Kart, Rozet, Secim, Uyari, Yukleniyor } from "../components/ui";
+import { Buton, Kart, Rozet, Uyari, Yukleniyor } from "../components/ui";
 import { get, jetonuAl, patch, post } from "../lib/api";
-import type { Deneme, Gun, Izgara, Program } from "../lib/types";
+import type { Deneme, Gun, Hucre, Izgara, Program } from "../lib/types";
+
+const DURUM = {
+  taslak: { etiket: "Taslak", tur: "notr" },
+  uretildi: { etiket: "Üretildi", tur: "iyi" },
+  yayinda: { etiket: "Yayında", tur: "uyari" },
+} as const;
+
+/** Seçili kayda ait haftalık özet: dolu saat, boş saat, en yoğun gün, boşluk. */
+function ozetCikar(hucreler: Hucre[], gunler: Gun[]) {
+  const gunluk = new Map<number, number[]>();
+  for (const h of hucreler) {
+    const liste = gunluk.get(h.day_index) ?? [];
+    liste.push(h.period_index);
+    gunluk.set(h.day_index, liste);
+  }
+
+  let bosluk = 0;
+  let enYogun = { gun: "—", saat: 0 };
+  for (const [gunIndex, saatler] of gunluk) {
+    saatler.sort((a, b) => a - b);
+    // İlk ve son ders arasındaki boş saatler = pencere.
+    bosluk += saatler[saatler.length - 1] - saatler[0] + 1 - saatler.length;
+    if (saatler.length > enYogun.saat) {
+      enYogun = {
+        gun: gunler.find((g) => g.index === gunIndex)?.name ?? "—",
+        saat: saatler.length,
+      };
+    }
+  }
+
+  const toplamSlot = gunler
+    .filter((g) => g.is_active)
+    .reduce((t, g) => t + g.periods.filter((p) => !p.is_break).length, 0);
+
+  return { dolu: hucreler.length, bos: Math.max(0, toplamSlot - hucreler.length), bosluk, enYogun };
+}
 
 export default function ProgramDetay() {
   const { id } = useParams();
   const qc = useQueryClient();
   const [bakis, setBakis] = useState<Bakis>("sube");
-  // Çıktı düzeni: her şubeye ayrı sayfa mı, hepsi tek çarşafta mı.
-  const [duzen, setDuzen] = useState<"ayri" | "carsaf">("ayri");
+  const [duzen, setDuzen] = useState<Duzen>("ayri");
   const [anahtar, setAnahtar] = useState<string | null>(null);
-  const [tasimaHatasi, setTasimaHatasi] = useState<string | null>(null);
+  const [hata, setHata] = useState<string | null>(null);
 
   const izgaraSorgu = useQuery({
     queryKey: ["izgara", id],
@@ -44,10 +77,10 @@ export default function ProgramDetay() {
     mutationFn: ({ atama, saat }: { atama: number; saat: number }) =>
       patch<Izgara>(`/timetables/${id}/assignments/${atama}`, { period_id: saat }),
     onSuccess: (veri) => {
-      setTasimaHatasi(null);
+      setHata(null);
       qc.setQueryData(["izgara", id], veri);
     },
-    onError: (e: Error) => setTasimaHatasi(e.message),
+    onError: (e: Error) => setHata(e.message),
   });
 
   const kilitle = useMutation({
@@ -71,9 +104,20 @@ export default function ProgramDetay() {
   }, [hucreler, bakis]);
 
   const seciliAnahtar = anahtar && anahtarlar.includes(anahtar) ? anahtar : anahtarlar[0];
+  const seciliHucreler = useMemo(
+    () =>
+      hucreler.filter((h) =>
+        bakis === "sube" ? h.section_name === seciliAnahtar : h.teacher_name === seciliAnahtar,
+      ),
+    [hucreler, bakis, seciliAnahtar],
+  );
+  const ozet = useMemo(
+    () => ozetCikar(seciliHucreler, gunler.data ?? []),
+    [seciliHucreler, gunler.data],
+  );
+
   const sonDeneme = denemeler.data?.[0];
-  const gosterRapor =
-    sonDeneme && sonDeneme.status !== "basarili" && sonDeneme.report !== null;
+  const gosterRapor = sonDeneme && sonDeneme.status !== "basarili" && sonDeneme.report !== null;
 
   if (izgaraSorgu.isLoading || gunler.isLoading) return <Yukleniyor />;
   if (izgaraSorgu.error)
@@ -82,18 +126,17 @@ export default function ProgramDetay() {
   const program = izgaraSorgu.data!.timetable;
 
   function ciktiAdresi(bicim: "pdf" | "xlsx" | "html") {
-    // Çıktı uçları jeton ister; yeni sekmede açmak için sorgu dizesiyle taşınamaz,
-    // bu yüzden fetch ile indirilir.
     return `/api/timetables/${id}/export/${bicim}?bakis=${bakis}&duzen=${duzen}`;
   }
 
+  /** Çıktı uçları jeton ister; bu yüzden yeni sekme yerine fetch ile indirilir. */
   async function indir(bicim: "pdf" | "xlsx") {
     const yanit = await fetch(ciktiAdresi(bicim), {
       headers: { Authorization: `Bearer ${jetonuAl() ?? ""}` },
     });
     if (!yanit.ok) {
       const govde = await yanit.json().catch(() => null);
-      setTasimaHatasi(govde?.detail ?? "Çıktı alınamadı.");
+      setHata(govde?.detail ?? "Çıktı alınamadı.");
       return;
     }
     const blob = await yanit.blob();
@@ -119,27 +162,16 @@ export default function ProgramDetay() {
   }
 
   return (
-    <div className="space-y-5">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">{program.name}</h1>
-          <p className="mt-1 flex items-center gap-2 text-sm text-slate-500">
-            <Rozet
-              tur={
-                program.status === "yayinda"
-                  ? "uyari"
-                  : program.status === "uretildi"
-                    ? "iyi"
-                    : "notr"
-              }
-            >
-              {program.status === "yayinda"
-                ? "Yayında"
-                : program.status === "uretildi"
-                  ? "Üretildi"
-                  : "Taslak"}
-            </Rozet>
-            {hucreler.length} ders saati yerleşmiş
+    <div className="space-y-4">
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="truncate text-xl font-semibold tracking-tight">{program.name}</h1>
+          <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-500">
+            <Rozet tur={DURUM[program.status].tur}>{DURUM[program.status].etiket}</Rozet>
+            <span>{hucreler.length} ders saati yerleşmiş</span>
+            {sonDeneme?.seconds != null && (
+              <span className="text-slate-400">· {sonDeneme.seconds.toFixed(1)} sn</span>
+            )}
           </p>
         </div>
         <Buton onClick={() => uret.mutate()} yukleniyor={uret.isPending}>
@@ -150,99 +182,60 @@ export default function ProgramDetay() {
 
       {uret.isPending && (
         <Uyari>
-          Program üretiliyor. Okulun büyüklüğüne göre bu işlem bir dakikaya kadar
-          sürebilir.
+          Program üretiliyor. Okulun büyüklüğüne göre bu işlem bir dakikaya kadar sürebilir.
         </Uyari>
       )}
       {uret.error && <Uyari tur="hata">{(uret.error as Error).message}</Uyari>}
-      {tasimaHatasi && <Uyari tur="hata">{tasimaHatasi}</Uyari>}
-      {sonDeneme?.status === "basarili" && !uret.isPending && (
-        <Uyari tur="basari">
-          Program eksiksiz yerleşti ({sonDeneme.seconds?.toFixed(1)} sn). Hücreleri
-          sürükleyerek elle düzenleyebilir, çift tıklayarak kilitleyebilirsiniz.
-        </Uyari>
-      )}
+      {hata && <Uyari tur="hata">{hata}</Uyari>}
 
       {gosterRapor && <TaniRaporu deneme={sonDeneme!} />}
 
       {hucreler.length > 0 && (
-        <Kart
-          baslik="Haftalık program"
-          sag={
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="flex rounded-lg border border-slate-300 p-0.5">
-                {(["sube", "ogretmen"] as Bakis[]).map((b) => (
-                  <button
-                    key={b}
-                    onClick={() => {
-                      setBakis(b);
-                      setAnahtar(null);
-                    }}
-                    className={clsx(
-                      "rounded-md px-2.5 py-1 text-xs font-medium",
-                      bakis === b ? "bg-slate-900 text-white" : "text-slate-600",
-                    )}
-                  >
-                    {b === "sube" ? "Şube" : "Öğretmen"}
-                  </button>
-                ))}
-              </div>
-              <Secim
-                value={seciliAnahtar ?? ""}
-                onChange={(e) => setAnahtar(e.target.value)}
-                className="w-auto"
-              >
-                {anahtarlar.map((a) => (
-                  <option key={a} value={a}>
-                    {a}
-                  </option>
-                ))}
-              </Secim>
-              <div className="flex rounded-lg border border-slate-300 p-0.5">
-                {(
-                  [
-                    ["ayri", "Ayrı sayfa"],
-                    ["carsaf", "Çarşaf"],
-                  ] as const
-                ).map(([d, etiket]) => (
-                  <button
-                    key={d}
-                    onClick={() => setDuzen(d)}
-                    title={
-                      d === "carsaf"
-                        ? "Tüm şubeler/öğretmenler tek sayfada, toplu liste"
-                        : "Her şube/öğretmen için ayrı sayfa"
-                    }
-                    className={clsx(
-                      "rounded-md px-2.5 py-1 text-xs font-medium",
-                      duzen === d ? "bg-slate-900 text-white" : "text-slate-600",
-                    )}
-                  >
-                    {etiket}
-                  </button>
-                ))}
-              </div>
-              <Buton tur="ikincil" onClick={yazdir}>
-                <Printer className="h-4 w-4" /> Yazdır
-              </Buton>
-              <Buton tur="ikincil" onClick={() => indir("pdf")}>
-                <Download className="h-4 w-4" /> PDF
-              </Buton>
-              <Buton tur="ikincil" onClick={() => indir("xlsx")}>
-                <FileSpreadsheet className="h-4 w-4" /> Excel
-              </Buton>
+        <Kart className="overflow-hidden">
+          <ProgramAracCubugu
+            bakis={bakis}
+            bakisDegistir={(b) => {
+              setBakis(b);
+              setAnahtar(null);
+            }}
+            duzen={duzen}
+            duzenDegistir={setDuzen}
+            anahtarlar={anahtarlar}
+            seciliAnahtar={seciliAnahtar}
+            anahtarDegistir={setAnahtar}
+            yazdir={yazdir}
+            indir={indir}
+          />
+
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-base font-semibold text-slate-900">{seciliAnahtar}</h2>
+            <div className="flex flex-wrap gap-1.5 text-xs">
+              {[
+                ["dolu", `${ozet.dolu} saat dolu`],
+                ["bos", `${ozet.bos} saat boş`],
+                ["bosluk", `${ozet.bosluk} boşluk`],
+                ["yogun", `en yoğun: ${ozet.enYogun.gun} (${ozet.enYogun.saat})`],
+              ].map(([k, metin]) => (
+                <span
+                  key={k}
+                  className="rounded-md bg-slate-100 px-2 py-1 font-medium text-slate-600"
+                >
+                  {metin}
+                </span>
+              ))}
             </div>
-          }
-        >
+          </div>
+
           {duzen === "carsaf" && (
-            <div className="mb-4">
+            <div className="mb-3">
               <Uyari>
-                Çıktı düzeni <b>çarşaf</b> seçili: yazdırma, PDF ve Excel çıktılarında
-                tüm {bakis === "sube" ? "şubeler" : "öğretmenler"} tek sayfada, toplu
-                liste olarak gelir. Aşağıdaki ekran görünümü tek tek gösterir.
+                Çıktı düzeni <b>çarşaf</b>: yazdırma, PDF ve Excel'de tüm{" "}
+                {bakis === "sube" ? "şubeler" : "öğretmenler"} tek sayfada gelir. Aşağıdaki
+                ekran görünümü tek tek gösterir.
               </Uyari>
             </div>
           )}
+
           {seciliAnahtar && (
             <ProgramIzgarasi
               gunler={gunler.data ?? []}
@@ -253,6 +246,11 @@ export default function ProgramDetay() {
               kilitle={(atama) => kilitle.mutate(atama)}
             />
           )}
+
+          <p className="mt-3 text-xs text-slate-400">
+            Hücreyi sürükleyerek taşıyın, çift tıklayarak kilitleyin. Kilitli dersler
+            yeniden üretimde yerinde kalır.
+          </p>
         </Kart>
       )}
 
@@ -263,22 +261,18 @@ export default function ProgramDetay() {
           sag={<Globe className="h-4 w-4 text-slate-400" />}
         >
           {program.public_token ? (
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <code className="flex-1 truncate rounded-lg bg-slate-100 px-3 py-2 text-sm">
-                  {`${location.origin}/p/${program.public_token}`}
-                </code>
-                <Buton
-                  tur="ikincil"
-                  onClick={() =>
-                    navigator.clipboard.writeText(
-                      `${location.origin}/p/${program.public_token}`,
-                    )
-                  }
-                >
-                  <Copy className="h-4 w-4" /> Kopyala
-                </Buton>
-              </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <code className="min-w-0 flex-1 truncate rounded-lg bg-slate-100 px-3 py-2 text-sm">
+                {`${location.origin}/p/${program.public_token}`}
+              </code>
+              <Buton
+                tur="ikincil"
+                onClick={() =>
+                  navigator.clipboard.writeText(`${location.origin}/p/${program.public_token}`)
+                }
+              >
+                <Copy className="h-4 w-4" /> Kopyala
+              </Buton>
               <Buton tur="tehlike" onClick={() => yayin.mutate(false)} yukleniyor={yayin.isPending}>
                 Yayından kaldır
               </Buton>

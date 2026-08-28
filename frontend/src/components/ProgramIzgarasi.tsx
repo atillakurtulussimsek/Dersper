@@ -1,17 +1,53 @@
 /** Haftalık program tablosu. Şube ya da öğretmen bakışıyla çizilir.
- *  `tasi` verilirse hücreler sürüklenebilir. */
+ *
+ *  Sütunlar eşit genişlikte sabitlenir (`table-fixed`) ve hücre metinleri
+ *  kırpılır; böylece gün sayısı ne olursa olsun tablo ekrana sığar, yatay
+ *  kaydırma yalnızca gerçekten gerektiğinde devreye girer.
+ *
+ *  `tasi` verilirse hücreler sürüklenebilir.
+ */
 import {
-  DndContext, PointerSensor, useDraggable, useDroppable, useSensor, useSensors,
-  type DragEndEvent,
+  DndContext, DragOverlay, PointerSensor, useDraggable, useDroppable, useSensor,
+  useSensors, type DragEndEvent, type DragStartEvent,
 } from "@dnd-kit/core";
+import { useState } from "react";
 import { Lock } from "lucide-react";
 import clsx from "clsx";
 
-import type { Gun, Hucre } from "../lib/types";
+import type { DersSaati, Gun, Hucre } from "../lib/types";
 
 export type Bakis = "sube" | "ogretmen";
 
-function Surukle({ hucre, bakis, kilitle }: {
+/** Hücrenin alt satırı: şube bakışında öğretmen, öğretmen bakışında şube. */
+function altSatir(hucre: Hucre, bakis: Bakis): string {
+  return bakis === "sube" ? hucre.teacher_name : hucre.section_name;
+}
+
+function HucreIcerigi({ hucre, bakis }: { hucre: Hucre; bakis: Bakis }) {
+  return (
+    <div
+      className="flex h-full w-full flex-col justify-center overflow-hidden rounded-md px-1.5 py-1 text-center"
+      style={{
+        background: `${hucre.subject_color}1f`,
+        boxShadow: `inset 3px 0 0 ${hucre.subject_color}`,
+      }}
+    >
+      <span className="flex items-center justify-center gap-1 truncate text-[12px] font-semibold leading-tight text-slate-800">
+        {hucre.is_locked && <Lock className="h-2.5 w-2.5 shrink-0 text-slate-500" />}
+        <span className="truncate">{hucre.subject_name}</span>
+      </span>
+      <span className="truncate text-[10.5px] leading-tight text-slate-500">
+        {altSatir(hucre, bakis)}
+      </span>
+    </div>
+  );
+}
+
+function Surukle({
+  hucre,
+  bakis,
+  kilitle,
+}: {
   hucre: Hucre;
   bakis: Bakis;
   kilitle?: (id: number) => void;
@@ -20,7 +56,6 @@ function Surukle({ hucre, bakis, kilitle }: {
     id: hucre.assignment_id,
     disabled: hucre.is_locked,
   });
-  const alt = bakis === "sube" ? hucre.teacher_name : hucre.section_name;
 
   return (
     <div
@@ -30,36 +65,42 @@ function Surukle({ hucre, bakis, kilitle }: {
       onDoubleClick={() => kilitle?.(hucre.assignment_id)}
       title={
         hucre.is_locked
-          ? "Kilitli — çift tıklayarak kilidi açın"
-          : "Sürükleyerek taşıyın · çift tıklayarak kilitleyin"
+          ? `${hucre.subject_name} · ${altSatir(hucre, bakis)} — kilitli, çift tıklayarak açın`
+          : `${hucre.subject_name} · ${altSatir(hucre, bakis)} — sürükleyerek taşıyın, çift tıklayarak kilitleyin`
       }
       className={clsx(
-        "flex h-full w-full flex-col justify-center rounded-md px-1.5 py-1 text-center leading-tight",
-        hucre.is_locked ? "cursor-default" : "cursor-grab active:cursor-grabbing",
-        isDragging && "opacity-40",
+        "h-full w-full transition-opacity",
+        hucre.is_locked
+          ? "cursor-default rounded-md ring-1 ring-inset ring-slate-400"
+          : "cursor-grab active:cursor-grabbing",
+        isDragging && "opacity-30",
       )}
-      style={{ background: `${hucre.subject_color}26`, borderLeft: `3px solid ${hucre.subject_color}` }}
     >
-      <span className="flex items-center justify-center gap-1 text-[11px] font-semibold text-slate-800">
-        {hucre.is_locked && <Lock className="h-3 w-3 shrink-0 text-slate-500" />}
-        <span className="truncate">{hucre.subject_name}</span>
-      </span>
-      <span className="truncate text-[10px] text-slate-500">{alt}</span>
+      <HucreIcerigi hucre={hucre} bakis={bakis} />
     </div>
   );
 }
 
-function Hedef({ periodId, cocuk }: { periodId: number; cocuk: React.ReactNode }) {
+function Hedef({
+  periodId,
+  bos,
+  children,
+}: {
+  periodId: number;
+  bos: boolean;
+  children: React.ReactNode;
+}) {
   const { setNodeRef, isOver } = useDroppable({ id: periodId });
   return (
     <td
       ref={setNodeRef}
       className={clsx(
         "h-14 border border-slate-200 p-0.5 align-middle transition-colors",
-        isOver && "bg-slate-200",
+        bos && "bg-slate-50/60",
+        isOver && "bg-slate-900/10 ring-2 ring-inset ring-slate-400",
       )}
     >
-      {cocuk}
+      {children}
     </td>
   );
 }
@@ -80,6 +121,7 @@ export default function ProgramIzgarasi({
   tasi?: (assignmentId: number, periodId: number) => void;
   kilitle?: (assignmentId: number) => void;
 }) {
+  const [suruklenen, setSuruklenen] = useState<Hucre | null>(null);
   const sensorler = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
   );
@@ -96,20 +138,44 @@ export default function ProgramIzgarasi({
   const yerlesim = new Map<string, Hucre>();
   for (const h of benimkiler) yerlesim.set(`${h.day_index}:${h.period_index}`, h);
 
+  /** Satır başlığı: ders sırası ve varsa zil saatleri. */
+  function saatAraligi(index: number): string | null {
+    for (const g of aktifGunler) {
+      const p = g.periods.find((x) => x.index === index);
+      if (p?.start_time && p?.end_time) {
+        return `${p.start_time.slice(0, 5)}–${p.end_time.slice(0, 5)}`;
+      }
+    }
+    return null;
+  }
+
   function bittiginde(e: DragEndEvent) {
+    setSuruklenen(null);
     if (!tasi || !e.over) return;
     tasi(Number(e.active.id), Number(e.over.id));
   }
 
+  function basladiginda(e: DragStartEvent) {
+    setSuruklenen(benimkiler.find((h) => h.assignment_id === Number(e.active.id)) ?? null);
+  }
+
   const tablo = (
-    <table className="w-full border-collapse">
+    <table className="w-full table-fixed border-collapse">
+      <colgroup>
+        <col className="w-[86px]" />
+        {aktifGunler.map((g) => (
+          <col key={g.id} />
+        ))}
+      </colgroup>
       <thead>
         <tr>
-          <th className="w-20 px-2 py-1.5 text-xs font-medium text-slate-500" />
+          <th className="border border-slate-200 bg-slate-100 px-2 py-2 text-[11px] font-semibold text-slate-500">
+            Saat
+          </th>
           {aktifGunler.map((g) => (
             <th
               key={g.id}
-              className="border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs font-semibold text-slate-700"
+              className="border border-slate-200 bg-slate-100 px-2 py-2 text-[12px] font-semibold text-slate-700"
             >
               {g.name}
             </th>
@@ -117,36 +183,63 @@ export default function ProgramIzgarasi({
         </tr>
       </thead>
       <tbody>
-        {Array.from({ length: enFazla }, (_, i) => (
-          <tr key={i}>
-            <th className="border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-600">
-              {i + 1}. ders
-            </th>
-            {aktifGunler.map((g) => {
-              const p = g.periods.find((x) => x.index === i);
-              if (!p)
-                return <td key={g.id} className="h-14 border border-slate-100 bg-slate-50/60" />;
-              if (p.is_break)
-                return (
+        {Array.from({ length: enFazla }, (_, i) => {
+          const aralik = saatAraligi(i);
+          return (
+            <tr key={i}>
+              <th className="border border-slate-200 bg-slate-50 px-1 py-1 text-center align-middle">
+                <span className="block text-[12px] font-semibold text-slate-700">
+                  {i + 1}.
+                </span>
+                {aralik && (
+                  <span className="block text-[9.5px] leading-tight text-slate-400">
+                    {aralik}
+                  </span>
+                )}
+              </th>
+              {aktifGunler.map((g) => {
+                const p: DersSaati | undefined = g.periods.find((x) => x.index === i);
+                if (!p) {
+                  return (
+                    <td
+                      key={g.id}
+                      className="h-14 border border-slate-100 bg-[repeating-linear-gradient(45deg,#f8fafc,#f8fafc_6px,#f1f5f9_6px,#f1f5f9_12px)]"
+                    />
+                  );
+                }
+                if (p.is_break) {
+                  return (
+                    <td
+                      key={g.id}
+                      className="h-14 border border-slate-200 bg-amber-50 text-center text-[10px] font-medium text-amber-700"
+                    >
+                      teneffüs
+                    </td>
+                  );
+                }
+                const h = yerlesim.get(`${g.index}:${i}`);
+                const icerik = h ? (
+                  <Surukle hucre={h} bakis={bakis} kilitle={kilitle} />
+                ) : null;
+                return tasi ? (
+                  <Hedef key={g.id} periodId={p.id} bos={!h}>
+                    {icerik}
+                  </Hedef>
+                ) : (
                   <td
                     key={g.id}
-                    className="h-14 border border-slate-200 bg-slate-100 text-center text-[10px] text-slate-400"
+                    className={clsx(
+                      "h-14 border border-slate-200 p-0.5",
+                      !h && "bg-slate-50/60",
+                    )}
                   >
-                    teneffüs
+                    {icerik}
                   </td>
                 );
-              const h = yerlesim.get(`${g.index}:${i}`);
-              const icerik = h ? <Surukle hucre={h} bakis={bakis} kilitle={kilitle} /> : null;
-              return tasi ? (
-                <Hedef key={g.id} periodId={p.id} cocuk={icerik} />
-              ) : (
-                <td key={g.id} className="h-14 border border-slate-200 p-0.5">
-                  {icerik}
-                </td>
-              );
-            })}
-          </tr>
-        ))}
+              })}
+            </tr>
+          );
+        })}
       </tbody>
     </table>
   );
@@ -154,8 +247,20 @@ export default function ProgramIzgarasi({
   if (!tasi) return <div className="overflow-x-auto">{tablo}</div>;
 
   return (
-    <DndContext sensors={sensorler} onDragEnd={bittiginde}>
+    <DndContext
+      sensors={sensorler}
+      onDragStart={basladiginda}
+      onDragEnd={bittiginde}
+      onDragCancel={() => setSuruklenen(null)}
+    >
       <div className="overflow-x-auto">{tablo}</div>
+      <DragOverlay dropAnimation={null}>
+        {suruklenen && (
+          <div className="h-14 w-32 rounded-md shadow-lg">
+            <HucreIcerigi hucre={suruklenen} bakis={bakis} />
+          </div>
+        )}
+      </DragOverlay>
     </DndContext>
   );
 }

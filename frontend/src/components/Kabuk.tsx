@@ -69,7 +69,7 @@ export default function Kabuk() {
       </aside>
 
       <main className="flex-1 overflow-x-hidden">
-        <div className="mx-auto max-w-6xl p-8">
+        <div className="mx-auto max-w-[1400px] p-6 lg:p-8">
           <Outlet />
         </div>
       </main>
