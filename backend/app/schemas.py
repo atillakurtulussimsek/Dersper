@@ -296,9 +296,16 @@ class SolveRunOut(ORMModel):
     status: SolveStatus
     started_at: datetime
     finished_at: datetime | None
+    updated_at: datetime | None
     seconds: float | None
     report: dict | None
     ai_explanation: str | None
+    # Arka plan ilerlemesi
+    attempts: int
+    best_placed: int
+    required: int
+    proven_infeasible: bool
+    stop_requested: bool
 
 
 # --- Yapay zeka ayarları ---

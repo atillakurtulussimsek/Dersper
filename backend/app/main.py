@@ -1,13 +1,25 @@
 """Dersper — FastAPI uygulaması."""
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
+from app.solver.arkaplan import yarim_kalanlari_isaretle
 from app.routers import (
     ai_settings, catalog, exports, public, setup, terms, timegrid, timetables,
 )
 
+@asynccontextmanager
+async def yasam_dongusu(_: FastAPI):
+    # Arka plan işleri uygulama süreciyle birlikte ölür; açık kalan
+    # çalıştırma kayıtlarını kapat.
+    yarim_kalanlari_isaretle()
+    yield
+
+
 app = FastAPI(
+    lifespan=yasam_dongusu,
     title="Dersper",
     description="Okullar için açık kaynaklı ders dağıtım programı.",
     version="0.1.0",

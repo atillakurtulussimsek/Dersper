@@ -8,19 +8,16 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from app.ai import client as ai
 from app.db import get_db
 from app.deps import aktif_donem, current_user
 from app.models import (
-    AiSettings, Assignment, CurriculumEntry, Day, Period, SolveRun, SolveStatus,
-    Term, Timetable, TimetableStatus,
+    Assignment, CurriculumEntry, Day, Period, SolveRun, SolveStatus, Term, Timetable,
+    TimetableStatus,
 )
 from app.schemas import (
     AssignmentMove, GridCell, SolveRunOut, TimetableGrid, TimetableIn, TimetableOut,
 )
-from app.solver.diagnose import rapor_olustur
-from app.solver.engine import SolveInput, solve
-from app.solver.loader import dersleri_yukle, slotlari_yukle
+from app.solver import arkaplan
 
 router = APIRouter(prefix="/timetables", tags=["ders programı"],
                    dependencies=[Depends(current_user)])
@@ -118,70 +115,79 @@ def izgara(
                          cells=izgara_hucreleri(db, timetable_id))
 
 
-@router.post("/{timetable_id}/solve", response_model=SolveRunOut)
+@router.post("/{timetable_id}/solve", response_model=SolveRunOut,
+             status_code=status.HTTP_202_ACCEPTED)
 def uret(
     timetable_id: int,
-    time_limit_seconds: float = 30.0,
     db: Session = Depends(get_db),
     donem: Term = Depends(aktif_donem),
 ) -> SolveRun:
-    """Programı üretir. Yerleşmeyen saat kalırsa tanı raporu ve yapay zeka
-    açıklaması üretilir; yerleşenler yine de kaydedilir."""
-    t = _programi_getir(db, timetable_id, donem)
-    slots = slotlari_yukle(db, donem)
-    lessons = dersleri_yukle(db, donem)
+    """Program üretimini arka planda başlatır ve hemen döner.
 
-    run = SolveRun(timetable_id=t.id, status=SolveStatus.CALISIYOR)
+    Üretim, tam yerleşim sağlanana ya da durdurulana kadar arka planda deneme
+    yapmayı sürdürür; ilerleme `/runs/active` ucundan izlenir.
+    """
+    t = _programi_getir(db, timetable_id, donem)
+
+    calisan = db.scalar(
+        select(SolveRun)
+        .where(SolveRun.timetable_id == t.id,
+               SolveRun.status.in_([SolveStatus.BEKLIYOR, SolveStatus.CALISIYOR]))
+        .limit(1)
+    )
+    if calisan is not None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Bu program için zaten bir üretim çalışıyor. Önce onu durdurun.",
+        )
+
+    run = SolveRun(timetable_id=t.id, status=SolveStatus.BEKLIYOR)
     db.add(run)
     db.commit()
+    db.refresh(run)
 
-    kilitli: dict[int, list[int]] = {}
-    for a in db.scalars(
-        select(Assignment).where(
-            Assignment.timetable_id == t.id, Assignment.is_locked.is_(True)
-        )
-    ):
-        kilitli.setdefault(a.curriculum_entry_id, []).append(a.period_id)
+    arkaplan.baslat(run.id, donem.id)
+    return run
 
-    sonuc = solve(SolveInput(
-        slots=slots, lessons=lessons, locked=kilitli,
-        time_limit_seconds=max(5.0, min(time_limit_seconds, 600.0)),
-    ))
 
-    for a in db.scalars(select(Assignment).where(Assignment.timetable_id == t.id)):
-        db.delete(a)
-    db.flush()
-    for entry_id, period_id in sonuc.placements:
-        db.add(Assignment(
-            timetable_id=t.id, curriculum_entry_id=entry_id,
-            period_id=period_id, is_locked=period_id in kilitli.get(entry_id, []),
-        ))
+@router.get("/{timetable_id}/runs/active", response_model=SolveRunOut | None)
+def calisan_uretim(
+    timetable_id: int, db: Session = Depends(get_db), donem: Term = Depends(aktif_donem)
+) -> SolveRun | None:
+    """Sürmekte olan üretim; yoksa null. Arayüz bunu düzenli aralıklarla sorar."""
+    _programi_getir(db, timetable_id, donem)
+    db.expire_all()
+    return db.scalar(
+        select(SolveRun)
+        .where(SolveRun.timetable_id == timetable_id,
+               SolveRun.status.in_([SolveStatus.BEKLIYOR, SolveStatus.CALISIYOR]))
+        .order_by(SolveRun.id.desc())
+        .limit(1)
+    )
 
-    rapor = rapor_olustur(slots, lessons, sonuc.unplaced, sonuc.status_name,
-                          sonuc.seconds)
-    run.report = rapor
-    run.seconds = sonuc.seconds
-    run.finished_at = datetime.now(timezone.utc)
 
-    if sonuc.ok and sonuc.placements:
-        run.status = SolveStatus.BASARILI
-        t.status = TimetableStatus.URETILDI
-    elif sonuc.placements:
-        run.status = SolveStatus.COZUMSUZ
-        t.status = TimetableStatus.TASLAK
-    else:
-        run.status = SolveStatus.HATA if not slots or not lessons else SolveStatus.COZUMSUZ
+@router.post("/{timetable_id}/runs/{run_id}/stop", response_model=SolveRunOut)
+def uretimi_durdur(
+    timetable_id: int,
+    run_id: int,
+    db: Session = Depends(get_db),
+    donem: Term = Depends(aktif_donem),
+) -> SolveRun:
+    """Çalışan üretimi durdurur; o ana kadarki en iyi yerleşim kaydedilir."""
+    _programi_getir(db, timetable_id, donem)
+    run = db.get(SolveRun, run_id)
+    if run is None or run.timetable_id != timetable_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Çalıştırma bulunamadı.")
 
-    if run.status is not SolveStatus.BASARILI:
-        ayar = db.scalar(select(AiSettings).limit(1))
-        try:
-            run.ai_explanation = ai.cozumsuzluk_acikla(ayar, rapor)
-        except ai.AiKapali:
-            run.ai_explanation = None
-        except Exception as e:  # sağlayıcı hatası programı üretmeyi engellemesin
-            run.ai_explanation = f"Yapay zeka açıklaması alınamadı: {e}"
-
+    run.stop_requested = True
     db.commit()
+    if not arkaplan.durdur(run.id) and run.status in (
+        SolveStatus.BEKLIYOR, SolveStatus.CALISIYOR
+    ):
+        # İş parçacığı yok (örneğin uygulama yeniden başlamış): kaydı kapat.
+        run.status = SolveStatus.DURDURULDU
+        run.finished_at = datetime.now(timezone.utc)
+        db.commit()
     db.refresh(run)
     return run
 

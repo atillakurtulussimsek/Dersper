@@ -22,6 +22,66 @@ def _sema():
     yield
 
 
+def uret_ve_bekle(c: TestClient, timetable_id: int, saniye: float = 60.0) -> dict:
+    """Arka plan üretimini başlatır ve bitmesini bekler.
+
+    Üretim artık eşzamansız çalıştığı için testler sonucu böyle okur.
+    """
+    import time
+
+    r = c.post(f"/api/timetables/{timetable_id}/solve")
+    assert r.status_code == 202, r.text
+    run_id = r.json()["id"]
+
+    son = time.monotonic() + saniye
+    while time.monotonic() < son:
+        aktif = c.get(f"/api/timetables/{timetable_id}/runs/active").json()
+        if aktif is None:
+            break
+        time.sleep(0.05)
+    else:
+        c.post(f"/api/timetables/{timetable_id}/runs/{run_id}/stop")
+        raise AssertionError("Üretim süresi doldu.")
+
+    return next(
+        d for d in c.get(f"/api/timetables/{timetable_id}/runs").json()
+        if d["id"] == run_id
+    )
+
+
+def cozumsuz_calistir(c: TestClient, timetable_id: int, saniye: float = 30.0) -> dict:
+    """Yerleşemeyeceği bilinen bir üretimi başlatır, ilk raporu bekler, durdurur.
+
+    Çözümsüz işler tasarım gereği kendiliğinden durmaz; test onları elle durdurur.
+    """
+    import time
+
+    r = c.post(f"/api/timetables/{timetable_id}/solve")
+    assert r.status_code == 202, r.text
+    run_id = r.json()["id"]
+
+    son = time.monotonic() + saniye
+    while time.monotonic() < son:
+        aktif = c.get(f"/api/timetables/{timetable_id}/runs/active").json()
+        if aktif is None:                       # kendiliğinden bitti
+            break
+        if aktif["attempts"] >= 1 and aktif["report"] is not None:
+            break
+        time.sleep(0.05)
+
+    c.post(f"/api/timetables/{timetable_id}/runs/{run_id}/stop")
+    son = time.monotonic() + saniye
+    while time.monotonic() < son:
+        if c.get(f"/api/timetables/{timetable_id}/runs/active").json() is None:
+            break
+        time.sleep(0.05)
+
+    return next(
+        d for d in c.get(f"/api/timetables/{timetable_id}/runs").json()
+        if d["id"] == run_id
+    )
+
+
 @pytest.fixture
 def istemci() -> TestClient:
     return TestClient(app)

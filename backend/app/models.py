@@ -47,6 +47,7 @@ class SolveStatus(str, enum.Enum):
     CALISIYOR = "calisiyor"
     BASARILI = "basarili"
     COZUMSUZ = "cozumsuz"      # kısıtlar çelişiyor
+    DURDURULDU = "durduruldu"  # kullanıcı iptal etti
     HATA = "hata"
 
 
@@ -275,7 +276,12 @@ class Assignment(Base):
 
 
 class SolveRun(Base):
-    """Bir program üretim denemesinin kaydı ve çözümsüzlük raporu."""
+    """Bir program üretim çalıştırması.
+
+    Çalıştırma arka planda sürer ve tam yerleşim sağlanana kadar birbiri ardına
+    deneme yapar; `attempts` kaçıncı denemede olduğumuzu, `best_placed` o ana
+    kadarki en iyi denemede kaç ders saatinin yerleştiğini tutar.
+    """
     __tablename__ = "solve_runs"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -283,9 +289,18 @@ class SolveRun(Base):
     status: Mapped[SolveStatus] = mapped_column(Enum(SolveStatus), default=SolveStatus.BEKLIYOR)
     started_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     finished_at: Mapped[datetime | None] = mapped_column(DateTime)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime)
     seconds: Mapped[float | None] = mapped_column()
     report: Mapped[dict | None] = mapped_column(JSON)        # yapılandırılmış tanı
     ai_explanation: Mapped[str | None] = mapped_column(Text)  # sade Türkçe açıklama
+
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    # En iyi denemede yerleşen ve toplamda yerleşmesi gereken ders saati.
+    best_placed: Mapped[int] = mapped_column(Integer, default=0)
+    required: Mapped[int] = mapped_column(Integer, default=0)
+    # Çözücü, kısıtların çeliştiğini kanıtladı mı?
+    proven_infeasible: Mapped[bool] = mapped_column(Boolean, default=False)
+    stop_requested: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
 class AiSettings(Base):

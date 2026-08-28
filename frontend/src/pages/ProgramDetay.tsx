@@ -4,9 +4,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "react-router-dom";
 import { Copy, Globe, Play } from "lucide-react";
 
+import GecmisCalistirmalar from "../components/GecmisCalistirmalar";
 import ProgramAracCubugu, { type Duzen } from "../components/ProgramAracCubugu";
 import ProgramIzgarasi, { type Bakis } from "../components/ProgramIzgarasi";
 import TaniRaporu from "../components/TaniRaporu";
+import UretimIzleme from "../components/UretimIzleme";
 import { Buton, Kart, Rozet, Uyari, Yukleniyor } from "../components/ui";
 import { get, jetonuAl, patch, post } from "../lib/api";
 import type { Deneme, Gun, Hucre, Izgara, Program } from "../lib/types";
@@ -64,13 +66,20 @@ export default function ProgramDetay() {
     queryKey: ["denemeler", id],
     queryFn: () => get<Deneme[]>(`/timetables/${id}/runs`),
   });
+  // Çalışan üretim varken sık sık sorulur; iş bitince yoklama kendiliğinden durur.
+  const calisan = useQuery({
+    queryKey: ["calisan-uretim", id],
+    queryFn: () => get<Deneme | null>(`/timetables/${id}/runs/active`),
+    refetchInterval: (sorgu) => (sorgu.state.data ? 1500 : false),
+  });
 
   const uret = useMutation({
-    mutationFn: () => post<Deneme>(`/timetables/${id}/solve?time_limit_seconds=45`),
+    mutationFn: () => post<Deneme>(`/timetables/${id}/solve`),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["izgara", id] });
+      qc.invalidateQueries({ queryKey: ["calisan-uretim", id] });
       qc.invalidateQueries({ queryKey: ["denemeler", id] });
     },
+    onError: (e: Error) => setHata(e.message),
   });
 
   const tasi = useMutation({
@@ -95,6 +104,16 @@ export default function ProgramDetay() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["izgara", id] }),
   });
 
+  const surenUretim = calisan.data ?? null;
+  // Üretim biter bitmez ızgarayı ve geçmişi bir kez tazele.
+  const [oncekiCalisan, setOncekiCalisan] = useState<number | null>(null);
+  if (surenUretim && surenUretim.id !== oncekiCalisan) setOncekiCalisan(surenUretim.id);
+  if (!surenUretim && oncekiCalisan !== null) {
+    setOncekiCalisan(null);
+    qc.invalidateQueries({ queryKey: ["izgara", id] });
+    qc.invalidateQueries({ queryKey: ["denemeler", id] });
+  }
+
   const hucreler = izgaraSorgu.data?.cells ?? [];
   const anahtarlar = useMemo(() => {
     const set = new Set(
@@ -117,7 +136,8 @@ export default function ProgramDetay() {
   );
 
   const sonDeneme = denemeler.data?.[0];
-  const gosterRapor = sonDeneme && sonDeneme.status !== "basarili" && sonDeneme.report !== null;
+  const gosterRapor =
+    sonDeneme && sonDeneme.status !== "basarili" && sonDeneme.report !== null;
 
   if (izgaraSorgu.isLoading || gunler.isLoading) return <Yukleniyor />;
   if (izgaraSorgu.error)
@@ -169,26 +189,40 @@ export default function ProgramDetay() {
           <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-500">
             <Rozet tur={DURUM[program.status].tur}>{DURUM[program.status].etiket}</Rozet>
             <span>{hucreler.length} ders saati yerleşmiş</span>
+            {surenUretim && (
+              <span className="text-slate-400">
+                · {surenUretim.attempts}. deneme sürüyor
+              </span>
+            )}
             {sonDeneme?.seconds != null && (
               <span className="text-slate-400">· {sonDeneme.seconds.toFixed(1)} sn</span>
             )}
           </p>
         </div>
-        <Buton onClick={() => uret.mutate()} yukleniyor={uret.isPending}>
+        <Buton
+          onClick={() => uret.mutate()}
+          yukleniyor={uret.isPending}
+          disabled={Boolean(surenUretim)}
+        >
           <Play className="h-4 w-4" />
-          {hucreler.length ? "Yeniden üret" : "Programı üret"}
+          {surenUretim
+            ? "Üretim sürüyor…"
+            : hucreler.length
+              ? "Yeniden üret"
+              : "Programı üret"}
         </Buton>
       </header>
 
-      {uret.isPending && (
-        <Uyari>
-          Program üretiliyor. Okulun büyüklüğüne göre bu işlem bir dakikaya kadar sürebilir.
-        </Uyari>
-      )}
-      {uret.error && <Uyari tur="hata">{(uret.error as Error).message}</Uyari>}
       {hata && <Uyari tur="hata">{hata}</Uyari>}
 
-      {gosterRapor && <TaniRaporu deneme={sonDeneme!} />}
+      {surenUretim && <UretimIzleme deneme={surenUretim} />}
+
+      {/* Bulgular üretim sürerken de gösterilir: kullanıcı beklerken düzeltebilir. */}
+      {surenUretim?.report ? (
+        <TaniRaporu deneme={surenUretim} />
+      ) : (
+        gosterRapor && <TaniRaporu deneme={sonDeneme!} />
+      )}
 
       {hucreler.length > 0 && (
         <Kart className="overflow-hidden">
@@ -253,6 +287,8 @@ export default function ProgramDetay() {
           </p>
         </Kart>
       )}
+
+      <GecmisCalistirmalar denemeler={denemeler.data ?? []} />
 
       {hucreler.length > 0 && (
         <Kart

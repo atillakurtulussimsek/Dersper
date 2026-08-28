@@ -1,6 +1,8 @@
 """Uçtan uca API testleri: kurulumdan yayına kadar tüm akış."""
 from fastapi.testclient import TestClient
 
+from tests.conftest import cozumsuz_calistir, uret_ve_bekle
+
 
 def _tanimlar(c: TestClient, ek: str = "") -> dict:
     """Küçük bir okul kurar ve kimlikleri döner. `ek`, adları benzersizleştirir."""
@@ -110,7 +112,7 @@ def test_ayni_dersin_iki_ogretmeni_ayni_saate_yerlesmez(yonetici: TestClient):
         })
 
     pid = yonetici.post("/api/timetables", json={"name": "Bölünmüş ders"}).json()["id"]
-    deneme = yonetici.post(f"/api/timetables/{pid}/solve?time_limit_seconds=30").json()
+    deneme = uret_ve_bekle(yonetici, pid)
     assert deneme["status"] == "basarili", deneme["report"]
 
     hucreler = yonetici.get(f"/api/timetables/{pid}/grid").json()["cells"]
@@ -153,7 +155,7 @@ def test_program_uretilir_ve_yayinlanir(yonetici: TestClient):
     _tanimlar(yonetici)
     pid = yonetici.post("/api/timetables", json={"name": "2026 Güz"}).json()["id"]
 
-    deneme = yonetici.post(f"/api/timetables/{pid}/solve?time_limit_seconds=30").json()
+    deneme = uret_ve_bekle(yonetici, pid)
     assert deneme["status"] == "basarili", deneme["report"]
 
     izgara = yonetici.get(f"/api/timetables/{pid}/grid").json()
@@ -179,7 +181,7 @@ def test_program_uretilir_ve_yayinlanir(yonetici: TestClient):
 def test_cikti_bicimleri(yonetici: TestClient):
     _tanimlar(yonetici)
     pid = yonetici.post("/api/timetables", json={"name": "Çıktı"}).json()["id"]
-    yonetici.post(f"/api/timetables/{pid}/solve?time_limit_seconds=30")
+    uret_ve_bekle(yonetici, pid)
     assert yonetici.get(f"/api/timetables/{pid}/export/xlsx?bakis=sube").status_code == 200
     assert yonetici.get(f"/api/timetables/{pid}/export/html?bakis=ogretmen").status_code == 200
 
@@ -196,13 +198,15 @@ def test_cozumsuz_program_tani_raporu_uretir(yonetici: TestClient):
         })
         assert r.status_code == 201, r.text
     pid = yonetici.post("/api/timetables", json={"name": "Çözümsüz"}).json()["id"]
-    deneme = yonetici.post(f"/api/timetables/{pid}/solve?time_limit_seconds=20").json()
+    deneme = cozumsuz_calistir(yonetici, pid)
 
-    assert deneme["status"] == "cozumsuz"
+    # Çözümsüz iş kendiliğinden durmaz; durdurulana kadar denemeye devam eder.
+    assert deneme["status"] == "durduruldu"
+    assert deneme["attempts"] >= 1
     kodlar = {b["kod"] for b in deneme["report"]["bulgular"]}
     assert "ogretmen_kapasite" in kodlar
     assert deneme["report"]["ozet"]["yerlesmeyen_toplam"] > 0
-    # Yapay zeka kapalıyken açıklama üretilmez ama üretim yine de tamamlanır.
+    # Yapay zeka kapalıyken açıklama üretilmez ama çalıştırma yine de kapanır.
     assert deneme["ai_explanation"] is None
 
 
@@ -248,7 +252,7 @@ def test_aksamci_sube_sabaha_ders_almaz(yonetici: TestClient):
         "weekly_hours": 10, "max_per_day": 2,
     })
     pid = yonetici.post("/api/timetables", json={"name": "Akşam"}).json()["id"]
-    deneme = yonetici.post(f"/api/timetables/{pid}/solve?time_limit_seconds=30").json()
+    deneme = uret_ve_bekle(yonetici, pid)
     assert deneme["status"] == "basarili", deneme["report"]
 
     hucreler = yonetici.get(f"/api/timetables/{pid}/grid").json()["cells"]
@@ -274,9 +278,9 @@ def test_asiri_kapali_sube_tani_raporunda_gorunur(yonetici: TestClient):
         "weekly_hours": 12, "max_per_day": 3,
     })
     pid = yonetici.post("/api/timetables", json={"name": "Dar"}).json()["id"]
-    deneme = yonetici.post(f"/api/timetables/{pid}/solve?time_limit_seconds=20").json()
+    deneme = cozumsuz_calistir(yonetici, pid)
 
-    assert deneme["status"] == "cozumsuz"
+    assert deneme["status"] == "durduruldu"
     bulgu = next(b for b in deneme["report"]["bulgular"] if b["kod"] == "sube_kapasite")
     assert bulgu["mevcut"] == 5
     assert bulgu["gereken"] == 12
@@ -319,7 +323,7 @@ def test_istenen_desen_programa_yansir(yonetici: TestClient):
         "weekly_hours": 5, "block_pattern": "3+2", "max_per_day": 3,
     })
     pid = yonetici.post("/api/timetables", json={"name": "Desen"}).json()["id"]
-    deneme = yonetici.post(f"/api/timetables/{pid}/solve?time_limit_seconds=30").json()
+    deneme = uret_ve_bekle(yonetici, pid)
     assert deneme["status"] == "basarili", deneme["report"]
 
     hucreler = yonetici.get(f"/api/timetables/{pid}/grid").json()["cells"]
@@ -527,7 +531,7 @@ def test_tercih_durumu_da_kopyalanir(yonetici: TestClient):
 def test_carsaf_html_tum_subeleri_tek_tabloda_verir(yonetici: TestClient):
     _tanimlar(yonetici)
     pid = yonetici.post("/api/timetables", json={"name": "Çarşaf"}).json()["id"]
-    yonetici.post(f"/api/timetables/{pid}/solve?time_limit_seconds=30")
+    uret_ve_bekle(yonetici, pid)
 
     r = yonetici.get(f"/api/timetables/{pid}/export/html?bakis=sube&duzen=carsaf")
     assert r.status_code == 200
@@ -542,7 +546,7 @@ def test_carsaf_html_tum_subeleri_tek_tabloda_verir(yonetici: TestClient):
 def test_carsaf_ogretmen_bakisi(yonetici: TestClient):
     _tanimlar(yonetici)
     pid = yonetici.post("/api/timetables", json={"name": "Çarşaf"}).json()["id"]
-    yonetici.post(f"/api/timetables/{pid}/solve?time_limit_seconds=30")
+    uret_ve_bekle(yonetici, pid)
 
     govde = yonetici.get(
         f"/api/timetables/{pid}/export/html?bakis=ogretmen&duzen=carsaf"
@@ -561,7 +565,7 @@ def test_carsaf_kisa_kod_kullanir(yonetici: TestClient):
         "section_id": s, "subject_id": d, "teacher_id": o, "weekly_hours": 4,
     })
     pid = yonetici.post("/api/timetables", json={"name": "Kod"}).json()["id"]
-    yonetici.post(f"/api/timetables/{pid}/solve?time_limit_seconds=30")
+    uret_ve_bekle(yonetici, pid)
 
     govde = yonetici.get(
         f"/api/timetables/{pid}/export/html?bakis=sube&duzen=carsaf"
@@ -575,7 +579,7 @@ def test_carsaf_excel_tek_sayfa(yonetici: TestClient):
 
     _tanimlar(yonetici)
     pid = yonetici.post("/api/timetables", json={"name": "Çarşaf"}).json()["id"]
-    yonetici.post(f"/api/timetables/{pid}/solve?time_limit_seconds=30")
+    uret_ve_bekle(yonetici, pid)
 
     r = yonetici.get(f"/api/timetables/{pid}/export/xlsx?bakis=sube&duzen=carsaf")
     assert r.status_code == 200
@@ -592,7 +596,7 @@ def test_ayri_duzen_hala_sube_basina_sayfa_verir(yonetici: TestClient):
 
     _tanimlar(yonetici)
     pid = yonetici.post("/api/timetables", json={"name": "Ayrı"}).json()["id"]
-    yonetici.post(f"/api/timetables/{pid}/solve?time_limit_seconds=30")
+    uret_ve_bekle(yonetici, pid)
 
     wb = load_workbook(io.BytesIO(
         yonetici.get(f"/api/timetables/{pid}/export/xlsx?bakis=sube").content

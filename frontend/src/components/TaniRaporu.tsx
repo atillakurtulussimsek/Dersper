@@ -47,7 +47,11 @@ export default function TaniRaporu({ deneme }: { deneme: Deneme }) {
   return (
     <div className="space-y-4">
       <Kart
-        baslik="Program neden tamamlanamadı"
+        baslik={
+          deneme.status === "calisiyor"
+            ? "Son denemede tıkanan noktalar"
+            : "Program neden tamamlanamadı"
+        }
         aciklama={`${rapor.ozet.yerlesmeyen_toplam} ders saati yerleşemedi · ${rapor.sure_sn} sn`}
       >
         <div className="space-y-4">

@@ -8,6 +8,7 @@ export type DenemeDurumu =
   | "calisiyor"
   | "basarili"
   | "cozumsuz"
+  | "durduruldu"
   | "hata";
 
 export interface Donem {
@@ -167,9 +168,18 @@ export interface Deneme {
   status: DenemeDurumu;
   started_at: string;
   finished_at: string | null;
+  updated_at: string | null;
   seconds: number | null;
   report: Rapor | null;
   ai_explanation: string | null;
+  /** Kaçıncı denemede olunduğu. */
+  attempts: number;
+  /** En iyi denemede yerleşen ve toplamda gereken ders saati. */
+  best_placed: number;
+  required: number;
+  /** Çözücü kısıtların çeliştiğini kanıtladı mı? */
+  proven_infeasible: boolean;
+  stop_requested: boolean;
 }
 
 export interface YapayZekaAyarlari {

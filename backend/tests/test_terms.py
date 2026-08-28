@@ -1,6 +1,8 @@
 """Dönemler, dönem yalıtımı, geçmiş dönemden aktarma ve yumuşak silme."""
 from fastapi.testclient import TestClient
 
+from tests.conftest import uret_ve_bekle
+
 
 def _donem_ac(c: TestClient, ad: str) -> int:
     """Yeni dönem açar ve aktif dönem yapar."""
@@ -174,7 +176,7 @@ def test_sube_silinince_mufredati_da_gizlenir(yonetici: TestClient):
 def test_silinen_program_listeden_kalkar_ve_yayindan_duser(yonetici: TestClient):
     _kucuk_okul(yonetici)
     pid = yonetici.post("/api/timetables", json={"name": "Deneme"}).json()["id"]
-    yonetici.post(f"/api/timetables/{pid}/solve?time_limit_seconds=20")
+    uret_ve_bekle(yonetici, pid)
     jeton = yonetici.post(f"/api/timetables/{pid}/publish").json()["public_token"]
 
     yonetici.delete(f"/api/timetables/{pid}")
@@ -279,7 +281,7 @@ def test_program_uretimi_yalnizca_kendi_donemini_gorur(yonetici: TestClient):
     _donem_ac(yonetici, "Yeni Dönem")
 
     pid = yonetici.post("/api/timetables", json={"name": "Boş Dönem"}).json()["id"]
-    deneme = yonetici.post(f"/api/timetables/{pid}/solve?time_limit_seconds=15").json()
+    deneme = uret_ve_bekle(yonetici, pid)
     assert deneme["status"] == "hata"
     # Izgara hazır gelir; eksik olan tanımlardır.
     kodlar = {b["kod"] for b in deneme["report"]["bulgular"]}

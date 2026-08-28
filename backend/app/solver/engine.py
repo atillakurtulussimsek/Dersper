@@ -70,6 +70,8 @@ class SolveInput:
     # entry_id -> yerinde kalması gereken period_id listesi
     locked: dict[int, list[int]] = field(default_factory=dict)
     time_limit_seconds: float = VARSAYILAN_SURE_SN
+    # Her denemede farklı bir arama yolu izlemek için.
+    seed: int = 0
 
 
 @dataclass
@@ -81,6 +83,9 @@ class SolveOutput:
     # Yerleşemeyen saatler: entry_id -> saat sayısı (sadece gevşetilmiş çözümde)
     unplaced: dict[int, int]
     status_name: str
+    # Sert model çözümsüz olduğunu KANITLADI mı? Kanıtlandıysa başka tohum
+    # denemek sonuç vermez; yalnızca süre yetmediyse yeniden denemek işe yarar.
+    proven_infeasible: bool = False
 
 
 def _gune_gore(slots: list[Slot]) -> dict[int, list[int]]:
@@ -101,10 +106,12 @@ def _ardisik_mi(slots: list[Slot], indices: list[int]) -> bool:
 
 def solve(data: SolveInput) -> SolveOutput:
     """Önce sert modeli dener; çözümsüzse gevşetilmiş modeli çözer."""
-    sonuc = _calistir(data, gevsek=False)
-    if sonuc.ok:
-        return sonuc
-    return _calistir(data, gevsek=True)
+    sert = _calistir(data, gevsek=False)
+    if sert.ok:
+        return sert
+    gevsek = _calistir(data, gevsek=True)
+    gevsek.proven_infeasible = sert.status_name == "INFEASIBLE"
+    return gevsek
 
 
 def _calistir(data: SolveInput, *, gevsek: bool) -> SolveOutput:
@@ -198,6 +205,7 @@ def _calistir(data: SolveInput, *, gevsek: bool) -> SolveOutput:
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = data.time_limit_seconds
     solver.parameters.num_workers = 8
+    solver.parameters.random_seed = data.seed
     status = solver.Solve(model)
     gecen = _time.monotonic() - basla
 
