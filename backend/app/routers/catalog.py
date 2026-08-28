@@ -11,8 +11,9 @@ from app.models import (
     Teacher, TeacherAvailability,
 )
 from app.schemas import (
-    AvailabilityCell, AvailabilityUpdate, CurriculumIn, CurriculumOut, SectionIn,
-    SectionOut, SubjectIn, SubjectOut, TeacherIn, TeacherOut,
+    AvailabilityCell, AvailabilityUpdate, CurriculumCopyIn, CurriculumCopyOut,
+    CurriculumIn, CurriculumOut, SectionIn, SectionOut, SubjectIn, SubjectOut,
+    TeacherIn, TeacherOut,
 )
 
 router = APIRouter(tags=["tanımlar"], dependencies=[Depends(current_user)])
@@ -222,6 +223,73 @@ def mufredat_ekle(payload: CurriculumIn, db: Session = Depends(get_db)) -> Curri
         )
     db.refresh(e)
     return e
+
+
+@router.post("/curriculum/copy", response_model=CurriculumCopyOut,
+             status_code=status.HTTP_201_CREATED)
+def mufredat_kopyala(
+    payload: CurriculumCopyIn, db: Session = Depends(get_db)
+) -> CurriculumCopyOut:
+    """Satırları hedef şubelere kopyalar; yalnızca şube değişir, gerisi aynı kalır.
+
+    Hedef şubede o ders zaten varsa satır atlanır ve gerekçesi bildirilir.
+    """
+    kaynaklar = list(db.scalars(
+        select(CurriculumEntry)
+        .options(selectinload(CurriculumEntry.subject))
+        .where(CurriculumEntry.id.in_(payload.entry_ids))
+    ))
+    if not kaynaklar:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Kopyalanacak satır bulunamadı.")
+
+    hedefler = list(db.scalars(
+        select(Section).where(Section.id.in_(payload.section_ids))
+    ))
+    if not hedefler:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Hedef şube bulunamadı.")
+
+    # Hangi şubede hangi dersin zaten tanımlı olduğu.
+    mevcut = {
+        (sid, subid)
+        for sid, subid in db.execute(
+            select(CurriculumEntry.section_id, CurriculumEntry.subject_id)
+        )
+    }
+
+    yeniler: list[CurriculumEntry] = []
+    atlananlar: list[str] = []
+
+    for hedef in sorted(hedefler, key=lambda s: s.name):
+        for kaynak in kaynaklar:
+            if hedef.id == kaynak.section_id:
+                atlananlar.append(
+                    f"{hedef.name} · {kaynak.subject.name}: kaynak şubenin kendisi."
+                )
+                continue
+            if (hedef.id, kaynak.subject_id) in mevcut:
+                atlananlar.append(
+                    f"{hedef.name} · {kaynak.subject.name}: bu şubede zaten tanımlı."
+                )
+                continue
+            kopya = CurriculumEntry(
+                section_id=hedef.id,
+                subject_id=kaynak.subject_id,
+                teacher_id=kaynak.teacher_id,
+                weekly_hours=kaynak.weekly_hours,
+                block_pattern=kaynak.block_pattern,
+                max_per_day=kaynak.max_per_day,
+            )
+            db.add(kopya)
+            yeniler.append(kopya)
+            mevcut.add((hedef.id, kaynak.subject_id))
+
+    db.commit()
+    for k in yeniler:
+        db.refresh(k)
+    return CurriculumCopyOut(
+        created=[CurriculumOut.model_validate(k) for k in yeniler],
+        skipped=atlananlar,
+    )
 
 
 @router.put("/curriculum/{entry_id}", response_model=CurriculumOut)

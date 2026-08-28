@@ -173,6 +173,12 @@ class CurriculumIn(BaseModel):
         return self
 
 
+class CurriculumCopyIn(BaseModel):
+    """Seçili müfredat satırlarını başka şubelere kopyalar."""
+    entry_ids: list[int] = Field(min_length=1)
+    section_ids: list[int] = Field(min_length=1)
+
+
 class CurriculumOut(ORMModel):
     id: int
     section_id: int
@@ -183,6 +189,12 @@ class CurriculumOut(ORMModel):
     max_per_day: int
     subject: SubjectOut
     teacher: TeacherOut
+
+
+class CurriculumCopyOut(BaseModel):
+    created: list[CurriculumOut]
+    # Kopyalanamayanlar için kullanıcıya gösterilecek gerekçeler.
+    skipped: list[str]
 
 
 # --- Program ---

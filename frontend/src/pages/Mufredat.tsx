@@ -1,11 +1,12 @@
 /** Şube bazında ders yükü: hangi şubede hangi ders, kaç saat, hangi öğretmenle. */
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Copy, Pencil, Plus, Trash2 } from "lucide-react";
 
 import {
   Alan, BosDurum, Buton, Girdi, Kart, Kutu, Secim, Tablo, Uyari, Yukleniyor,
 } from "../components/ui";
+import MufredatKopyala from "../components/MufredatKopyala";
 import { get } from "../lib/api";
 import { desenCoz, desenEtiketi, desenOnerileri } from "../lib/bloklar";
 import { hataMetni, useKaynak, useListe } from "../lib/hooks";
@@ -45,6 +46,8 @@ export default function Mufredat() {
   const [acik, setAcik] = useState(false);
   const [duzenlenen, setDuzenlenen] = useState<MufredatSatiri | null>(null);
   const [form, setForm] = useState(BOS);
+  // Kopyalama kutusunda gösterilecek satırlar; boşsa kutu kapalı.
+  const [kopyalanacak, setKopyalanacak] = useState<MufredatSatiri[] | null>(null);
 
   const haftalikSlot = useMemo(
     () =>
@@ -146,11 +149,22 @@ export default function Mufredat() {
                 : `Haftalık toplam ${toplam} saat · ızgarada ${haftalikSlot} ders saati var`
             }
             sag={
-              toplam > kullanilabilir && kullanilabilir > 0 ? (
-                <span className="rounded-md bg-red-100 px-2 py-1 text-xs font-medium text-red-800">
-                  {toplam - kullanilabilir} saat fazla
-                </span>
-              ) : null
+              <div className="flex items-center gap-2">
+                {toplam > kullanilabilir && kullanilabilir > 0 && (
+                  <span className="rounded-md bg-red-100 px-2 py-1 text-xs font-medium text-red-800">
+                    {toplam - kullanilabilir} saat fazla
+                  </span>
+                )}
+                {mufredat.data && mufredat.data.length > 0 && (
+                  <Buton
+                    tur="ikincil"
+                    onClick={() => setKopyalanacak(mufredat.data!)}
+                    title="Bu şubenin tüm müfredatını başka şubelere kopyala"
+                  >
+                    <Copy className="h-4 w-4" /> Müfredatı kopyala
+                  </Buton>
+                )}
+              </div>
             }
           >
             {mufredat.isLoading ? (
@@ -184,6 +198,14 @@ export default function Mufredat() {
                     <td className="px-3 py-2.5 text-slate-600">{m.max_per_day}</td>
                     <td className="px-3 py-2.5 text-right">
                       <div className="flex justify-end gap-1">
+                        <Buton
+                          tur="sade"
+                          onClick={() => setKopyalanacak([m])}
+                          aria-label="Kopyala"
+                          title="Bu dersi başka şubelere kopyala"
+                        >
+                          <Copy className="h-4 w-4" />
+                        </Buton>
                         <Buton tur="sade" onClick={() => ac(m)} aria-label="Düzenle">
                           <Pencil className="h-4 w-4" />
                         </Buton>
@@ -206,6 +228,17 @@ export default function Mufredat() {
             )}
           </Kart>
         </>
+      )}
+
+      {kopyalanacak && (
+        <MufredatKopyala
+          satirlar={kopyalanacak}
+          hedefAdaylari={(subeler.data ?? []).filter((s) => s.id !== secili)}
+          kapat={() => {
+            setKopyalanacak(null);
+            mufredat.refetch();
+          }}
+        />
       )}
 
       <Kutu

@@ -8,6 +8,7 @@ aSc TimeTables, ProgMatik, Bilsa ve Yabil gibi ücretli programlara özgür bir 
 ## Neler yapar
 
 - Öğretmen, ders, şube ve müfredat tanımları
+- Müfredatı başka şubelere kopyalama (tek ders ya da şubenin tamamı)
 - Güne göre değişken ders saati / zil düzeni
 - Öğretmen müsaitlik matrisi
 - Şube ders saati kısıtları (sabahçı / akşamcı şubeler)

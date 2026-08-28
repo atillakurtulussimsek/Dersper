@@ -256,3 +256,105 @@ def test_istenen_desen_programa_yansir(yonetici: TestClient):
     for h in hucreler:
         gunluk[h["day_index"]] = gunluk.get(h["day_index"], 0) + 1
     assert sorted(gunluk.values(), reverse=True) == [3, 2]
+
+
+def _kopyalama_ortami(c: TestClient) -> dict:
+    d1 = c.post("/api/subjects", json={"name": "Matematik"}).json()["id"]
+    d2 = c.post("/api/subjects", json={"name": "Türkçe"}).json()["id"]
+    o = c.post("/api/teachers", json={"full_name": "Ayşe Yılmaz"}).json()["id"]
+    kaynak = c.post("/api/sections", json={"name": "5-A"}).json()["id"]
+    hedef1 = c.post("/api/sections", json={"name": "5-B"}).json()["id"]
+    hedef2 = c.post("/api/sections", json={"name": "5-C"}).json()["id"]
+
+    e1 = c.post("/api/curriculum", json={
+        "section_id": kaynak, "subject_id": d1, "teacher_id": o,
+        "weekly_hours": 5, "block_pattern": "2+2+1", "max_per_day": 2,
+    }).json()["id"]
+    e2 = c.post("/api/curriculum", json={
+        "section_id": kaynak, "subject_id": d2, "teacher_id": o,
+        "weekly_hours": 4, "max_per_day": 1,
+    }).json()["id"]
+    return {"d1": d1, "d2": d2, "o": o, "kaynak": kaynak,
+            "hedef1": hedef1, "hedef2": hedef2, "e1": e1, "e2": e2}
+
+
+def test_tek_ders_baska_subelere_kopyalanir(yonetici: TestClient):
+    v = _kopyalama_ortami(yonetici)
+    r = yonetici.post("/api/curriculum/copy", json={
+        "entry_ids": [v["e1"]], "section_ids": [v["hedef1"], v["hedef2"]],
+    })
+    assert r.status_code == 201
+    olusan = r.json()["created"]
+    assert len(olusan) == 2
+    assert {k["section_id"] for k in olusan} == {v["hedef1"], v["hedef2"]}
+
+    # Şube dışındaki her şey aynı kalır.
+    for k in olusan:
+        assert k["subject_id"] == v["d1"]
+        assert k["teacher_id"] == v["o"]
+        assert k["weekly_hours"] == 5
+        assert k["block_pattern"] == "2+2+1"
+        assert k["max_per_day"] == 2
+
+
+def test_tum_mufredat_kopyalanir(yonetici: TestClient):
+    v = _kopyalama_ortami(yonetici)
+    r = yonetici.post("/api/curriculum/copy", json={
+        "entry_ids": [v["e1"], v["e2"]], "section_ids": [v["hedef1"]],
+    }).json()
+    assert len(r["created"]) == 2
+    hedefin = yonetici.get(f"/api/curriculum?section_id={v['hedef1']}").json()
+    assert {m["subject"]["name"] for m in hedefin} == {"Matematik", "Türkçe"}
+
+
+def test_zaten_tanimli_ders_atlanir(yonetici: TestClient):
+    v = _kopyalama_ortami(yonetici)
+    yonetici.post("/api/curriculum", json={
+        "section_id": v["hedef1"], "subject_id": v["d1"], "teacher_id": v["o"],
+        "weekly_hours": 2,
+    })
+    r = yonetici.post("/api/curriculum/copy", json={
+        "entry_ids": [v["e1"]], "section_ids": [v["hedef1"], v["hedef2"]],
+    }).json()
+
+    assert len(r["created"]) == 1                 # yalnızca 5-C'ye kopyalandı
+    assert len(r["skipped"]) == 1
+    assert "zaten tanımlı" in r["skipped"][0]
+    # Var olan satır değişmeden kalır.
+    kalan = yonetici.get(f"/api/curriculum?section_id={v['hedef1']}").json()
+    assert kalan[0]["weekly_hours"] == 2
+
+
+def test_kaynak_subeye_kopyalama_atlanir(yonetici: TestClient):
+    v = _kopyalama_ortami(yonetici)
+    r = yonetici.post("/api/curriculum/copy", json={
+        "entry_ids": [v["e1"]], "section_ids": [v["kaynak"]],
+    }).json()
+    assert r["created"] == []
+    assert "kaynak şubenin kendisi" in r["skipped"][0]
+
+
+def test_kopyalanan_satir_bagimsiz_duzenlenir(yonetici: TestClient):
+    v = _kopyalama_ortami(yonetici)
+    kopya = yonetici.post("/api/curriculum/copy", json={
+        "entry_ids": [v["e1"]], "section_ids": [v["hedef1"]],
+    }).json()["created"][0]
+
+    yonetici.put(f"/api/curriculum/{kopya['id']}", json={
+        "section_id": kopya["section_id"], "subject_id": v["d1"], "teacher_id": v["o"],
+        "weekly_hours": 3, "block_pattern": "2+1", "max_per_day": 2,
+    })
+    kaynak = yonetici.get(f"/api/curriculum?section_id={v['kaynak']}").json()
+    asil = next(m for m in kaynak if m["id"] == v["e1"])
+    assert asil["weekly_hours"] == 5              # kaynak etkilenmez
+    assert asil["block_pattern"] == "2+2+1"
+
+
+def test_bilinmeyen_satir_kopyalanamaz(yonetici: TestClient):
+    v = _kopyalama_ortami(yonetici)
+    assert yonetici.post("/api/curriculum/copy", json={
+        "entry_ids": [9999], "section_ids": [v["hedef1"]],
+    }).status_code == 404
+    assert yonetici.post("/api/curriculum/copy", json={
+        "entry_ids": [v["e1"]], "section_ids": [9999],
+    }).status_code == 404
