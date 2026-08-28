@@ -17,6 +17,8 @@ export default function ProgramDetay() {
   const { id } = useParams();
   const qc = useQueryClient();
   const [bakis, setBakis] = useState<Bakis>("sube");
+  // Çıktı düzeni: her şubeye ayrı sayfa mı, hepsi tek çarşafta mı.
+  const [duzen, setDuzen] = useState<"ayri" | "carsaf">("ayri");
   const [anahtar, setAnahtar] = useState<string | null>(null);
   const [tasimaHatasi, setTasimaHatasi] = useState<string | null>(null);
 
@@ -82,7 +84,7 @@ export default function ProgramDetay() {
   function ciktiAdresi(bicim: "pdf" | "xlsx" | "html") {
     // Çıktı uçları jeton ister; yeni sekmede açmak için sorgu dizesiyle taşınamaz,
     // bu yüzden fetch ile indirilir.
-    return `/api/timetables/${id}/export/${bicim}?bakis=${bakis}`;
+    return `/api/timetables/${id}/export/${bicim}?bakis=${bakis}&duzen=${duzen}`;
   }
 
   async function indir(bicim: "pdf" | "xlsx") {
@@ -98,7 +100,7 @@ export default function ProgramDetay() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `ders-programi-${bakis}.${bicim}`;
+    a.download = `ders-programi-${duzen}-${bakis}.${bicim}`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -196,6 +198,30 @@ export default function ProgramDetay() {
                   </option>
                 ))}
               </Secim>
+              <div className="flex rounded-lg border border-slate-300 p-0.5">
+                {(
+                  [
+                    ["ayri", "Ayrı sayfa"],
+                    ["carsaf", "Çarşaf"],
+                  ] as const
+                ).map(([d, etiket]) => (
+                  <button
+                    key={d}
+                    onClick={() => setDuzen(d)}
+                    title={
+                      d === "carsaf"
+                        ? "Tüm şubeler/öğretmenler tek sayfada, toplu liste"
+                        : "Her şube/öğretmen için ayrı sayfa"
+                    }
+                    className={clsx(
+                      "rounded-md px-2.5 py-1 text-xs font-medium",
+                      duzen === d ? "bg-slate-900 text-white" : "text-slate-600",
+                    )}
+                  >
+                    {etiket}
+                  </button>
+                ))}
+              </div>
               <Buton tur="ikincil" onClick={yazdir}>
                 <Printer className="h-4 w-4" /> Yazdır
               </Buton>
@@ -208,6 +234,15 @@ export default function ProgramDetay() {
             </div>
           }
         >
+          {duzen === "carsaf" && (
+            <div className="mb-4">
+              <Uyari>
+                Çıktı düzeni <b>çarşaf</b> seçili: yazdırma, PDF ve Excel çıktılarında
+                tüm {bakis === "sube" ? "şubeler" : "öğretmenler"} tek sayfada, toplu
+                liste olarak gelir. Aşağıdaki ekran görünümü tek tek gösterir.
+              </Uyari>
+            </div>
+          )}
           {seciliAnahtar && (
             <ProgramIzgarasi
               gunler={gunler.data ?? []}

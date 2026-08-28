@@ -63,9 +63,11 @@ def izgara_hucreleri(db: Session, timetable_id: int) -> list[GridCell]:
             section_id=a.entry.section_id,
             section_name=a.entry.section.name,
             subject_name=a.entry.subject.name,
+            subject_short=a.entry.subject.short_code,
             subject_color=a.entry.subject.color,
             teacher_id=a.entry.teacher_id,
             teacher_name=a.entry.teacher.full_name,
+            teacher_short=a.entry.teacher.short_code,
             is_locked=a.is_locked,
         ))
     return hucreler

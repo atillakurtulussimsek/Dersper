@@ -451,3 +451,86 @@ def test_tercih_durumu_da_kopyalanir(yonetici: TestClient):
     kopya = {h["period_id"]: h["state"] for h in
              yonetici.get(f"/api/sections/{hedef}/availability").json()}
     assert kopya == {saatler[0]["id"]: "uygun_degil", saatler[1]["id"]: "tercih"}
+
+
+def test_carsaf_html_tum_subeleri_tek_tabloda_verir(yonetici: TestClient):
+    _tanimlar(yonetici)
+    pid = yonetici.post("/api/timetables", json={"name": "Çarşaf"}).json()["id"]
+    yonetici.post(f"/api/timetables/{pid}/solve?time_limit_seconds=30")
+
+    r = yonetici.get(f"/api/timetables/{pid}/export/html?bakis=sube&duzen=carsaf")
+    assert r.status_code == 200
+    govde = r.text
+    assert "Çarşaf Liste (Şube)" in govde
+    assert govde.count("<table") == 1          # ayrı sayfalar değil, tek tablo
+    for sube in ("5-A", "5-B"):
+        assert sube in govde
+    assert "Pazartesi" in govde and "Cuma" in govde
+
+
+def test_carsaf_ogretmen_bakisi(yonetici: TestClient):
+    _tanimlar(yonetici)
+    pid = yonetici.post("/api/timetables", json={"name": "Çarşaf"}).json()["id"]
+    yonetici.post(f"/api/timetables/{pid}/solve?time_limit_seconds=30")
+
+    govde = yonetici.get(
+        f"/api/timetables/{pid}/export/html?bakis=ogretmen&duzen=carsaf"
+    ).text
+    assert "Çarşaf Liste (Öğretmen)" in govde
+    assert "Ayşe" in govde
+
+
+def test_carsaf_kisa_kod_kullanir(yonetici: TestClient):
+    d = yonetici.post("/api/subjects",
+                      json={"name": "Matematik", "short_code": "MAT"}).json()["id"]
+    o = yonetici.post("/api/teachers",
+                      json={"full_name": "Ayşe Yılmaz", "short_code": "AY"}).json()["id"]
+    s = yonetici.post("/api/sections", json={"name": "5-A"}).json()["id"]
+    yonetici.post("/api/curriculum", json={
+        "section_id": s, "subject_id": d, "teacher_id": o, "weekly_hours": 4,
+    })
+    pid = yonetici.post("/api/timetables", json={"name": "Kod"}).json()["id"]
+    yonetici.post(f"/api/timetables/{pid}/solve?time_limit_seconds=30")
+
+    govde = yonetici.get(
+        f"/api/timetables/{pid}/export/html?bakis=sube&duzen=carsaf"
+    ).text
+    assert ">MAT<" in govde and ">AY<" in govde
+
+
+def test_carsaf_excel_tek_sayfa(yonetici: TestClient):
+    import io
+    from openpyxl import load_workbook
+
+    _tanimlar(yonetici)
+    pid = yonetici.post("/api/timetables", json={"name": "Çarşaf"}).json()["id"]
+    yonetici.post(f"/api/timetables/{pid}/solve?time_limit_seconds=30")
+
+    r = yonetici.get(f"/api/timetables/{pid}/export/xlsx?bakis=sube&duzen=carsaf")
+    assert r.status_code == 200
+    wb = load_workbook(io.BytesIO(r.content))
+    assert wb.sheetnames == ["Çarşaf"]
+    ws = wb["Çarşaf"]
+    assert ws["A1"].value == "Şube"
+    assert {ws.cell(row=r_, column=1).value for r_ in (3, 4)} == {"5-A", "5-B"}
+
+
+def test_ayri_duzen_hala_sube_basina_sayfa_verir(yonetici: TestClient):
+    import io
+    from openpyxl import load_workbook
+
+    _tanimlar(yonetici)
+    pid = yonetici.post("/api/timetables", json={"name": "Ayrı"}).json()["id"]
+    yonetici.post(f"/api/timetables/{pid}/solve?time_limit_seconds=30")
+
+    wb = load_workbook(io.BytesIO(
+        yonetici.get(f"/api/timetables/{pid}/export/xlsx?bakis=sube").content
+    ))
+    assert sorted(wb.sheetnames) == ["5-A", "5-B"]
+
+
+def test_gecersiz_duzen_reddedilir(yonetici: TestClient):
+    pid = yonetici.post("/api/timetables", json={"name": "X"}).json()["id"]
+    assert yonetici.get(
+        f"/api/timetables/{pid}/export/html?duzen=yok"
+    ).status_code == 422

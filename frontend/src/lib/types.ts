@@ -97,9 +97,11 @@ export interface Hucre {
   section_id: number;
   section_name: string;
   subject_name: string;
+  subject_short: string | null;
   subject_color: string;
   teacher_id: number;
   teacher_name: string;
+  teacher_short: string | null;
   is_locked: boolean;
 }
 

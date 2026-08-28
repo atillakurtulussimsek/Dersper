@@ -243,9 +243,11 @@ class GridCell(BaseModel):
     section_id: int
     section_name: str
     subject_name: str
+    subject_short: str | None
     subject_color: str
     teacher_id: int
     teacher_name: str
+    teacher_short: str | None
     is_locked: bool
 
 
