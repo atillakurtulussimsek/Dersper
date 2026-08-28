@@ -9,33 +9,18 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.deps import current_user
-from app.models import Day, Institution, Period, Term, User
+from app.models import Institution, Term, User
 from app.schemas import (
     InstitutionOut, InstitutionUpdate, LoginRequest, SetupRequest, SetupStatus,
     Token, UserOut,
 )
 from app.security import create_access_token, hash_password, verify_password
+from app.varsayilanlar import varsayilan_izgara
 
 router = APIRouter(tags=["kurulum"])
 
-GUN_ADLARI = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"]
-VARSAYILAN_DERS_SAATI = 8
-
-
 def _kurulum_tamam(db: Session) -> bool:
     return db.scalar(select(Institution.id).limit(1)) is not None
-
-
-def _varsayilan_izgara(db: Session, donem: Term) -> None:
-    """Pazartesi–Cuma, günde 8 ders saati. Kullanıcı sonra düzenler."""
-    for i, ad in enumerate(GUN_ADLARI):
-        gun = Day(term_id=donem.id, index=i, name=ad, is_active=i < 5)
-        db.add(gun)
-        db.flush()
-        if not gun.is_active:
-            continue
-        for p in range(VARSAYILAN_DERS_SAATI):
-            db.add(Period(day_id=gun.id, index=p, name=f"{p + 1}. ders"))
 
 
 @router.get("/setup/status", response_model=SetupStatus)
@@ -63,7 +48,7 @@ def kurulumu_tamamla(payload: SetupRequest, db: Session = Depends(get_db)) -> To
         password_hash=hash_password(payload.password),
     )
     db.add(user)
-    _varsayilan_izgara(db, donem)
+    varsayilan_izgara(db, donem)
     db.commit()
     db.refresh(user)
     return Token(access_token=create_access_token(user.id))

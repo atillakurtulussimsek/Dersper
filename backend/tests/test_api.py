@@ -534,3 +534,30 @@ def test_gecersiz_duzen_reddedilir(yonetici: TestClient):
     assert yonetici.get(
         f"/api/timetables/{pid}/export/html?duzen=yok"
     ).status_code == 422
+
+
+def test_ogretmen_rengi_kaydedilir_ve_aktarilir(yonetici: TestClient):
+    o = yonetici.post("/api/teachers", json={
+        "full_name": "Renkli Öğretmen", "color": "#ef4444",
+    }).json()
+    assert o["color"] == "#ef4444"
+
+    # Renk verilmezse varsayılan gelir.
+    varsayilan = yonetici.post("/api/teachers", json={"full_name": "Sade"}).json()
+    assert varsayilan["color"] == "#94a3b8"
+
+    # Geçersiz renk reddedilir.
+    assert yonetici.post("/api/teachers", json={
+        "full_name": "Hatalı", "color": "kırmızı",
+    }).status_code == 422
+
+
+def test_renk_gecmis_donemden_aktarilirken_korunur(yonetici: TestClient):
+    eski = yonetici.get("/api/terms").json()[0]["id"]
+    kaynak = yonetici.post("/api/teachers", json={
+        "full_name": "Renkli Öğretmen", "color": "#8b5cf6",
+    }).json()["id"]
+
+    yonetici.post("/api/terms", json={"name": "Yeni Dönem"})
+    yonetici.post("/api/teachers/import", json={"term_id": eski, "ids": [kaynak]})
+    assert yonetici.get("/api/teachers").json()[0]["color"] == "#8b5cf6"

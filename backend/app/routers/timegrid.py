@@ -79,6 +79,9 @@ def izgarayi_kaydet(
             db.add(Period(day_id=gun.id, **p.model_dump()))
 
     db.commit()
+    # Oturum commit'te nesneleri geçersiz kılmıyor (expire_on_commit=False);
+    # yeniden okumadan önce elle geçersiz kılınmazsa eski ders saatleri döner.
+    db.expire_all()
     return _gunleri_getir(db, donem)
 
 
@@ -95,8 +98,8 @@ def ders_saati_ekle(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Gün bulunamadı.")
     db.add(Period(day_id=day_id, **payload.model_dump()))
     db.commit()
-    db.refresh(gun)
-    return gun
+    db.expire_all()
+    return db.get(Day, day_id)
 
 
 @router.get("/import/{term_id}", response_model=list[DayOut])
@@ -140,4 +143,5 @@ def izgarayi_aktar(
                           start_time=p.start_time, end_time=p.end_time,
                           is_break=p.is_break))
     db.commit()
+    db.expire_all()
     return _gunleri_getir(db, donem)

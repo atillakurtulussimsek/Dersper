@@ -131,6 +131,7 @@ class TeacherIn(BaseModel):
     branch: str | None = Field(default=None, max_length=100)
     max_daily_hours: int | None = Field(default=None, ge=1, le=20)
     notes: str | None = None
+    color: str = Field(default="#94a3b8", pattern=r"^#[0-9a-fA-F]{6}$")
     is_active: bool = True
 
 
@@ -141,6 +142,7 @@ class TeacherOut(ORMModel):
     branch: str | None
     max_daily_hours: int | None
     notes: str | None
+    color: str
     is_active: bool
 
 

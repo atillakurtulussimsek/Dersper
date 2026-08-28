@@ -8,7 +8,7 @@ aSc TimeTables, ProgMatik, Bilsa ve Yabil gibi ücretli programlara özgür bir 
 ## Neler yapar
 
 - **Dönemler**: her dönem kendi zaman ızgarası, kadrosu, dersleri, şubeleri ve programlarıyla bağımsız; geçmiş dönemden seçerek kayıt aktarma
-- Öğretmen, ders, şube ve müfredat tanımları
+- Öğretmen, ders, şube ve müfredat tanımları (kısa kod ve renk otomatik önerilir)
 - Müfredatı başka şubelere kopyalama (tek ders ya da şubenin tamamı)
 - Güne göre değişken ders saati / zil düzeni
 - Öğretmen müsaitlik matrisi

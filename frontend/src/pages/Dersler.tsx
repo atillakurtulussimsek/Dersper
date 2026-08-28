@@ -2,19 +2,16 @@ import { useState } from "react";
 import { Download, Pencil, Plus, Trash2, Wand2 } from "lucide-react";
 
 import GecmisDonemdenAktar from "../components/GecmisDonemdenAktar";
+import RenkSecici from "../components/RenkSecici";
 import {
   Alan, BosDurum, Buton, Girdi, Kart, Kutu, Tablo, Uyari, Yukleniyor,
 } from "../components/ui";
 import { hataMetni, useKaynak, useListe } from "../lib/hooks";
 import { kisaltmaOner } from "../lib/kisaltma";
+import { rastgeleRenk, VARSAYILAN_RENK } from "../lib/renkler";
 import type { Ders } from "../lib/types";
 
-const RENKLER = [
-  "#ef4444", "#f97316", "#eab308", "#22c55e", "#14b8a6",
-  "#3b82f6", "#8b5cf6", "#ec4899", "#64748b", "#0ea5e9",
-];
-
-const BOS = { name: "", short_code: "", color: RENKLER[8], is_active: true };
+const BOS = { name: "", short_code: "", color: VARSAYILAN_RENK, is_active: true };
 
 export default function Dersler() {
   const liste = useListe<Ders>("dersler", "/subjects");
@@ -25,15 +22,23 @@ export default function Dersler() {
   const [aktarimAcik, setAktarimAcik] = useState(false);
   // Kullanıcı kısa kodu elle değiştirdiyse ad yazdıkça üzerine yazmayız.
   const [kodElle, setKodElle] = useState(false);
+  // Yeni kayıtta renk rastgele atanır; kullanıcı isterse elle seçer.
+  const [renkRastgele, setRenkRastgele] = useState(true);
 
   /** Ders adı değişince kısa kodu da önerilenle günceller. */
   function adiDegistir(ad: string) {
     setForm((f) => ({ ...f, name: ad, short_code: kodElle ? f.short_code : kisaltmaOner(ad) }));
   }
 
+  /** Bu dönemde kullanılan renkler — rastgele seçim bunlardan kaçınır. */
+  function kullanilanRenkler(haric?: number): string[] {
+    return (liste.data ?? []).filter((d) => d.id !== haric).map((d) => d.color);
+  }
+
   function ac(ders?: Ders) {
     setDuzenlenen(ders ?? null);
     setKodElle(Boolean(ders?.short_code));
+    setRenkRastgele(!ders);
     setForm(
       ders
         ? {
@@ -42,7 +47,7 @@ export default function Dersler() {
             color: ders.color,
             is_active: ders.is_active,
           }
-        : BOS,
+        : { ...BOS, color: rastgeleRenk(kullanilanRenkler()) },
     );
     setAcik(true);
   }
@@ -180,21 +185,21 @@ export default function Dersler() {
               </Buton>
             </div>
           </Alan>
-          <Alan etiket="Renk">
-            <div className="flex flex-wrap gap-2">
-              {RENKLER.map((r) => (
-                <button
-                  key={r}
-                  type="button"
-                  onClick={() => setForm({ ...form, color: r })}
-                  style={{ background: r }}
-                  className={`h-8 w-8 rounded-full ring-offset-2 transition ${
-                    form.color === r ? "ring-2 ring-slate-900" : ""
-                  }`}
-                  aria-label={`Renk ${r}`}
-                />
-              ))}
-            </div>
+          <Alan
+            etiket="Renk"
+            ipucu={
+              renkRastgele
+                ? "Rastgele atandı. Düğmeye basarak yeniden karabilir, paletten elle de seçebilirsiniz."
+                : "Elle seçildi."
+            }
+          >
+            <RenkSecici
+              deger={form.color}
+              degistir={(renk) => setForm({ ...form, color: renk })}
+              rastgele={renkRastgele}
+              rastgeleDegistir={setRenkRastgele}
+              kullanilanlar={kullanilanRenkler(duzenlenen?.id)}
+            />
           </Alan>
           <label className="flex items-center gap-2 text-sm">
             <input

@@ -64,6 +64,7 @@ export interface Ogretmen {
   branch: string | null;
   max_daily_hours: number | null;
   notes: string | null;
+  color: string;
   is_active: boolean;
 }
 

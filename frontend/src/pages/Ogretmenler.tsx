@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { CalendarCheck, Download, Pencil, Plus, Trash2, Wand2 } from "lucide-react";
 
 import GecmisDonemdenAktar from "../components/GecmisDonemdenAktar";
+import RenkSecici from "../components/RenkSecici";
 import MusaitlikMatrisi from "../components/MusaitlikMatrisi";
 import {
   Alan, BosDurum, Buton, CokSatir, Girdi, Kart, Kutu, Tablo, Uyari, Yukleniyor,
@@ -10,6 +11,7 @@ import {
 import { get } from "../lib/api";
 import { hataMetni, useKaynak, useListe } from "../lib/hooks";
 import { ogretmenKoduOner } from "../lib/kisaltma";
+import { rastgeleRenk, VARSAYILAN_RENK } from "../lib/renkler";
 import type { Gun, Ogretmen } from "../lib/types";
 
 const BOS = {
@@ -18,6 +20,7 @@ const BOS = {
   branch: "",
   max_daily_hours: "" as number | "",
   notes: "",
+  color: VARSAYILAN_RENK,
   is_active: true,
 };
 
@@ -33,6 +36,8 @@ export default function Ogretmenler() {
   const [aktarimAcik, setAktarimAcik] = useState(false);
   // Kullanıcı kısa kodu elle değiştirdiyse ad yazdıkça üzerine yazmayız.
   const [kodElle, setKodElle] = useState(false);
+  // Yeni kayıtta renk rastgele atanır; kullanıcı isterse elle seçer.
+  const [renkRastgele, setRenkRastgele] = useState(true);
 
   /** Düzenlenen öğretmen dışındaki kayıtlı kodlar — çakışmayı önlemek için. */
   function baskaKodlar(): string[] {
@@ -54,9 +59,15 @@ export default function Ogretmenler() {
     }));
   }
 
+  /** Bu dönemde kullanılan renkler — rastgele seçim bunlardan kaçınır. */
+  function kullanilanRenkler(haric?: number): string[] {
+    return (liste.data ?? []).filter((o) => o.id !== haric).map((o) => o.color);
+  }
+
   function ac(o?: Ogretmen) {
     setDuzenlenen(o ?? null);
     setKodElle(Boolean(o?.short_code));
+    setRenkRastgele(!o);
     setForm(
       o
         ? {
@@ -65,9 +76,10 @@ export default function Ogretmenler() {
             branch: o.branch ?? "",
             max_daily_hours: o.max_daily_hours ?? "",
             notes: o.notes ?? "",
+            color: o.color,
             is_active: o.is_active,
           }
-        : BOS,
+        : { ...BOS, color: rastgeleRenk(kullanilanRenkler()) },
     );
     setAcik(true);
   }
@@ -80,6 +92,7 @@ export default function Ogretmenler() {
       branch: form.branch || null,
       max_daily_hours: form.max_daily_hours === "" ? null : Number(form.max_daily_hours),
       notes: form.notes || null,
+      color: form.color,
       is_active: form.is_active,
     };
     if (duzenlenen) await kaynak.guncelle.mutateAsync({ id: duzenlenen.id, veri });
@@ -130,7 +143,15 @@ export default function Ogretmenler() {
           <Tablo basliklar={["Ad soyad", "Branş", "Kısa kod", "Günlük en fazla", "Durum", ""]}>
             {liste.data.map((o) => (
               <tr key={o.id} className="hover:bg-slate-50">
-                <td className="px-3 py-2.5 font-medium">{o.full_name}</td>
+                <td className="px-3 py-2.5">
+                  <span className="flex items-center gap-2.5">
+                    <span
+                      className="h-3 w-3 shrink-0 rounded-full"
+                      style={{ background: o.color }}
+                    />
+                    <span className="font-medium">{o.full_name}</span>
+                  </span>
+                </td>
                 <td className="px-3 py-2.5 text-slate-500">{o.branch || "—"}</td>
                 <td className="px-3 py-2.5 text-slate-500">{o.short_code || "—"}</td>
                 <td className="px-3 py-2.5 text-slate-500">
@@ -238,6 +259,23 @@ export default function Ogretmenler() {
               }
             />
           </Alan>
+          <Alan
+            etiket="Renk"
+            ipucu={
+              renkRastgele
+                ? "Rastgele atandı. Düğmeye basarak yeniden karabilir, paletten elle de seçebilirsiniz."
+                : "Elle seçildi."
+            }
+          >
+            <RenkSecici
+              deger={form.color}
+              degistir={(renk) => setForm({ ...form, color: renk })}
+              rastgele={renkRastgele}
+              rastgeleDegistir={setRenkRastgele}
+              kullanilanlar={kullanilanRenkler(duzenlenen?.id)}
+            />
+          </Alan>
+
           <Alan etiket="Not">
             <CokSatir
               rows={2}

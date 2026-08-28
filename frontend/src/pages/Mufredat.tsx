@@ -197,7 +197,15 @@ export default function Mufredat() {
                         <span className="font-medium">{m.subject.name}</span>
                       </span>
                     </td>
-                    <td className="px-3 py-2.5 text-slate-600">{m.teacher.full_name}</td>
+                    <td className="px-3 py-2.5 text-slate-600">
+                      <span className="flex items-center gap-2">
+                        <span
+                          className="h-2.5 w-2.5 shrink-0 rounded-full"
+                          style={{ background: m.teacher.color }}
+                        />
+                        {m.teacher.full_name}
+                      </span>
+                    </td>
                     <td className="px-3 py-2.5 text-slate-600">{m.weekly_hours} saat</td>
                     <td className="px-3 py-2.5 font-mono text-xs text-slate-600">
                       {desenEtiketi(m.block_pattern, m.weekly_hours)}

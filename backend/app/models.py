@@ -140,6 +140,7 @@ class Teacher(Base, SoftDelete):
     branch: Mapped[str | None] = mapped_column(String(100))
     max_daily_hours: Mapped[int | None] = mapped_column(Integer)
     notes: Mapped[str | None] = mapped_column(Text)
+    color: Mapped[str] = mapped_column(String(7), default="#94a3b8")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     availability: Mapped[list[TeacherAvailability]] = relationship(

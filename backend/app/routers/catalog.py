@@ -155,6 +155,7 @@ def ogretmen_aktar(
             branch=kaynak_t.branch,
             max_daily_hours=kaynak_t.max_daily_hours,
             notes=kaynak_t.notes,
+            color=kaynak_t.color,
             is_active=kaynak_t.is_active,
         ))
         mevcut.add(kaynak_t.full_name.casefold())

@@ -35,12 +35,34 @@ def test_yeni_donem_bos_baslar_ve_aktif_olur(yonetici: TestClient):
     assert yeni["is_active"] is True
     assert yeni["counts"] == {
         "ogretmen": 0, "ders": 0, "sube": 0, "program": 0,
-        "ders_saati": 0, "mufredat": 0,
+        "ders_saati": 7, "mufredat": 0,     # ızgara hazır gelir
     }
 
     for yol in ("/api/teachers", "/api/subjects", "/api/sections",
-                "/api/curriculum", "/api/timegrid", "/api/timetables"):
+                "/api/curriculum", "/api/timetables"):
         assert yonetici.get(yol).json() == [], yol
+
+
+def test_yeni_donem_kullanilabilir_izgarayla_gelir(yonetici: TestClient):
+    """Izgara olmadan müsaitlik ve yerleştirme yapılamaz; hazır gelmeli."""
+    yonetici.post("/api/terms", json={"name": "2027-2028 Güz"})
+
+    izgara = yonetici.get("/api/timegrid").json()
+    assert len(izgara) == 7
+    aktif = [g for g in izgara if g["is_active"]]
+    assert [g["name"] for g in aktif] == [
+        "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma",
+    ]
+    assert all(len(g["periods"]) == 8 for g in aktif)
+
+    # Izgara düzenlenebilir durumda: gün kapatılıp ders saati eklenebilir.
+    izgara[0]["periods"].append({
+        "index": 8, "name": "9. ders", "start_time": None, "end_time": None,
+        "is_break": False,
+    })
+    r = yonetici.put("/api/timegrid", json=izgara)
+    assert r.status_code == 200
+    assert len(r.json()[0]["periods"]) == 9
 
 
 def test_donemler_arasi_gecis_veriyi_korur(yonetici: TestClient):
@@ -199,13 +221,18 @@ def test_aktarim_ayni_adi_atlar(yonetici: TestClient):
 
 def test_zaman_izgarasi_aktarilir(yonetici: TestClient):
     eski = yonetici.get("/api/terms").json()[0]["id"]
+    # Kaynak dönemde ızgarayı özelleştir: cuma kapalı.
+    kaynak_izgara = yonetici.get("/api/timegrid").json()
+    kaynak_izgara[4]["is_active"] = False
+    yonetici.put("/api/timegrid", json=kaynak_izgara)
+
     _donem_ac(yonetici, "Yeni Dönem")
-    assert yonetici.get("/api/timegrid").json() == []
+    assert len([g for g in yonetici.get("/api/timegrid").json() if g["is_active"]]) == 5
 
     yonetici.post(f"/api/timegrid/import/{eski}")
+    assert len([g for g in yonetici.get("/api/timegrid").json() if g["is_active"]]) == 4
     yeni = yonetici.get("/api/timegrid").json()
     assert len(yeni) == 7
-    assert len([g for g in yeni if g["is_active"]]) == 5
     assert len(yeni[0]["periods"]) == 8
 
 
@@ -254,5 +281,6 @@ def test_program_uretimi_yalnizca_kendi_donemini_gorur(yonetici: TestClient):
     pid = yonetici.post("/api/timetables", json={"name": "Boş Dönem"}).json()["id"]
     deneme = yonetici.post(f"/api/timetables/{pid}/solve?time_limit_seconds=15").json()
     assert deneme["status"] == "hata"
+    # Izgara hazır gelir; eksik olan tanımlardır.
     kodlar = {b["kod"] for b in deneme["report"]["bulgular"]}
-    assert kodlar == {"zaman_izgarasi_bos"}
+    assert kodlar == {"mufredat_bos"}

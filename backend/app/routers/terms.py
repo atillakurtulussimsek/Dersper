@@ -18,6 +18,7 @@ from app.models import (
     CurriculumEntry, Day, Institution, Section, Subject, Teacher, Term, Timetable,
 )
 from app.schemas import TermIn, TermOut
+from app.varsayilanlar import varsayilan_izgara
 
 router = APIRouter(prefix="/terms", tags=["dönem"], dependencies=[Depends(current_user)])
 
@@ -77,11 +78,16 @@ def donemler(db: Session = Depends(get_db)) -> list[TermOut]:
 
 @router.post("", response_model=TermOut, status_code=status.HTTP_201_CREATED)
 def donem_olustur(payload: TermIn, db: Session = Depends(get_db)) -> TermOut:
-    """Yeni dönem boş açılır ve hemen aktif dönem olur."""
+    """Yeni dönem tanımları boş, zaman ızgarası hazır açılır ve aktif olur.
+
+    Izgara olmadan müsaitlik işaretlenemez ve ders yerleştirilemez; bu yüzden
+    Pazartesi–Cuma, günde 8 ders saatlik düzenlenebilir bir iskelet kurulur.
+    """
     inst = kurum(db)
     donem = Term(**payload.model_dump())
     db.add(donem)
     db.flush()
+    varsayilan_izgara(db, donem)
     inst.active_term_id = donem.id
     db.commit()
     db.refresh(donem)
