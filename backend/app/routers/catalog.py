@@ -11,9 +11,9 @@ from app.models import (
     Teacher, TeacherAvailability,
 )
 from app.schemas import (
-    AvailabilityCell, AvailabilityUpdate, CurriculumCopyIn, CurriculumCopyOut,
-    CurriculumIn, CurriculumOut, SectionIn, SectionOut, SubjectIn, SubjectOut,
-    TeacherIn, TeacherOut,
+    AvailabilityCell, AvailabilityCopyIn, AvailabilityCopyOut, AvailabilityUpdate,
+    CurriculumCopyIn, CurriculumCopyOut, CurriculumIn, CurriculumOut, SectionIn,
+    SectionOut, SubjectIn, SubjectOut, TeacherIn, TeacherOut,
 )
 
 router = APIRouter(tags=["tanımlar"], dependencies=[Depends(current_user)])
@@ -184,6 +184,44 @@ def sube_musaitligi_kaydet(
     _getir(db, Section, section_id, "Şube")
     _musaitlik_yaz(db, SectionAvailability, "section_id", section_id, payload)
     return sube_musaitligi(section_id, db)
+
+
+@router.post("/sections/{section_id}/availability/copy",
+             response_model=AvailabilityCopyOut)
+def sube_musaitligini_kopyala(
+    section_id: int, payload: AvailabilityCopyIn, db: Session = Depends(get_db)
+) -> AvailabilityCopyOut:
+    """Kaynak şubenin müsaitlik tablosunu hedef şubelere aynen yazar.
+
+    Hedeflerin önceki işaretlemeleri tamamen silinir; birleştirme yapılmaz.
+    """
+    _getir(db, Section, section_id, "Şube")
+
+    kaynak = list(db.scalars(
+        select(SectionAvailability).where(SectionAvailability.section_id == section_id)
+    ))
+    hucreler = [
+        AvailabilityCell(period_id=r.period_id, state=r.state) for r in kaynak
+    ]
+
+    hedefler = [
+        s for s in db.scalars(select(Section).where(Section.id.in_(payload.section_ids)))
+        if s.id != section_id
+    ]
+    if not hedefler:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND, "Kopyalanacak geçerli bir hedef şube yok."
+        )
+
+    for hedef in hedefler:
+        _musaitlik_yaz(
+            db, SectionAvailability, "section_id", hedef.id,
+            AvailabilityUpdate(cells=hucreler),
+        )
+
+    return AvailabilityCopyOut(
+        copied_to=sorted(h.name for h in hedefler), cells=len(hucreler)
+    )
 
 
 @router.delete("/sections/{section_id}", status_code=status.HTTP_204_NO_CONTENT)

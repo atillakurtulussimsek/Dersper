@@ -11,7 +11,7 @@ aSc TimeTables, ProgMatik, Bilsa ve Yabil gibi ücretli programlara özgür bir 
 - Müfredatı başka şubelere kopyalama (tek ders ya da şubenin tamamı)
 - Güne göre değişken ders saati / zil düzeni
 - Öğretmen müsaitlik matrisi
-- Şube ders saati kısıtları (sabahçı / akşamcı şubeler)
+- Şube ders saati kısıtları (sabahçı / akşamcı şubeler), başka şubelere kopyalanabilir
 - Kısıt tabanlı otomatik program üretimi (Google OR-Tools CP-SAT)
 - Serbest ders dağılımı (5 saatlik ders 2+2+1, 1+1+2+1 ya da 3+2 olarak), günlük ders tekrar sınırı, çakışma önleme
 - Program yerleşmediğinde **yapay zeka destekli, sade Türkçe açıklama**: neyin tıkadığı, hangi kısıtın gevşetilmesi gerektiği

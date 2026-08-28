@@ -122,6 +122,18 @@ class AvailabilityUpdate(BaseModel):
     cells: list[AvailabilityCell]
 
 
+class AvailabilityCopyIn(BaseModel):
+    """Bir şubenin müsaitlik tablosunu başka şubelere kopyalar."""
+    section_ids: list[int] = Field(min_length=1)
+
+
+class AvailabilityCopyOut(BaseModel):
+    # Kopyalanan şube adları
+    copied_to: list[str]
+    # Her hedefe yazılan işaretli hücre sayısı
+    cells: int
+
+
 # --- Ders & şube ---
 
 class SubjectIn(BaseModel):

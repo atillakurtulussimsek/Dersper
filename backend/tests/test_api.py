@@ -358,3 +358,96 @@ def test_bilinmeyen_satir_kopyalanamaz(yonetici: TestClient):
     assert yonetici.post("/api/curriculum/copy", json={
         "entry_ids": [v["e1"]], "section_ids": [9999],
     }).status_code == 404
+
+
+def _saatler(c: TestClient) -> list[dict]:
+    return [p for g in c.get("/api/timegrid").json() if g["is_active"] for p in g["periods"]]
+
+
+def test_sube_musaitligi_baska_subelere_kopyalanir(yonetici: TestClient):
+    kaynak = yonetici.post("/api/sections", json={"name": "5-A"}).json()["id"]
+    h1 = yonetici.post("/api/sections", json={"name": "5-B"}).json()["id"]
+    h2 = yonetici.post("/api/sections", json={"name": "5-C"}).json()["id"]
+
+    sabah = [p for p in _saatler(yonetici) if p["index"] < 4]
+    yonetici.put(f"/api/sections/{kaynak}/availability", json={
+        "cells": [{"period_id": p["id"], "state": "uygun_degil"} for p in sabah]
+    })
+
+    r = yonetici.post(f"/api/sections/{kaynak}/availability/copy",
+                      json={"section_ids": [h1, h2]}).json()
+    assert r["copied_to"] == ["5-B", "5-C"]
+    assert r["cells"] == len(sabah)
+
+    for hedef in (h1, h2):
+        kopya = yonetici.get(f"/api/sections/{hedef}/availability").json()
+        assert {h["period_id"] for h in kopya} == {p["id"] for p in sabah}
+        assert all(h["state"] == "uygun_degil" for h in kopya)
+
+
+def test_kopyalama_hedefin_onceki_planini_siler(yonetici: TestClient):
+    """Birleştirme yok: hedefin eski işaretlemesi tamamen gider."""
+    kaynak = yonetici.post("/api/sections", json={"name": "6-A"}).json()["id"]
+    hedef = yonetici.post("/api/sections", json={"name": "6-B"}).json()["id"]
+    saatler = _saatler(yonetici)
+
+    # Hedefte tamamen farklı bir plan var.
+    aksam = [p for p in saatler if p["index"] >= 4]
+    yonetici.put(f"/api/sections/{hedef}/availability", json={
+        "cells": [{"period_id": p["id"], "state": "uygun_degil"} for p in aksam]
+    })
+    # Kaynakta sabah kapalı.
+    sabah = [p for p in saatler if p["index"] < 4]
+    yonetici.put(f"/api/sections/{kaynak}/availability", json={
+        "cells": [{"period_id": p["id"], "state": "uygun_degil"} for p in sabah]
+    })
+
+    yonetici.post(f"/api/sections/{kaynak}/availability/copy",
+                  json={"section_ids": [hedef]})
+
+    sonuc = yonetici.get(f"/api/sections/{hedef}/availability").json()
+    assert {h["period_id"] for h in sonuc} == {p["id"] for p in sabah}
+    assert not ({h["period_id"] for h in sonuc} & {p["id"] for p in aksam})
+
+
+def test_bos_musaitlik_kopyalanirsa_hedef_temizlenir(yonetici: TestClient):
+    kaynak = yonetici.post("/api/sections", json={"name": "7-A"}).json()["id"]
+    hedef = yonetici.post("/api/sections", json={"name": "7-B"}).json()["id"]
+
+    yonetici.put(f"/api/sections/{hedef}/availability", json={
+        "cells": [{"period_id": p["id"], "state": "uygun_degil"} for p in _saatler(yonetici)]
+    })
+    r = yonetici.post(f"/api/sections/{kaynak}/availability/copy",
+                      json={"section_ids": [hedef]}).json()
+    assert r["cells"] == 0
+    assert yonetici.get(f"/api/sections/{hedef}/availability").json() == []
+
+
+def test_kaynak_sube_hedeflerden_cikarilir(yonetici: TestClient):
+    kaynak = yonetici.post("/api/sections", json={"name": "8-A"}).json()["id"]
+    hedef = yonetici.post("/api/sections", json={"name": "8-B"}).json()["id"]
+
+    r = yonetici.post(f"/api/sections/{kaynak}/availability/copy",
+                      json={"section_ids": [kaynak, hedef]}).json()
+    assert r["copied_to"] == ["8-B"]
+
+    # Yalnızca kendisi hedefse istek reddedilir.
+    assert yonetici.post(f"/api/sections/{kaynak}/availability/copy",
+                         json={"section_ids": [kaynak]}).status_code == 404
+
+
+def test_tercih_durumu_da_kopyalanir(yonetici: TestClient):
+    kaynak = yonetici.post("/api/sections", json={"name": "9-A"}).json()["id"]
+    hedef = yonetici.post("/api/sections", json={"name": "9-B"}).json()["id"]
+    saatler = _saatler(yonetici)
+
+    yonetici.put(f"/api/sections/{kaynak}/availability", json={"cells": [
+        {"period_id": saatler[0]["id"], "state": "uygun_degil"},
+        {"period_id": saatler[1]["id"], "state": "tercih"},
+    ]})
+    yonetici.post(f"/api/sections/{kaynak}/availability/copy",
+                  json={"section_ids": [hedef]})
+
+    kopya = {h["period_id"]: h["state"] for h in
+             yonetici.get(f"/api/sections/{hedef}/availability").json()}
+    assert kopya == {saatler[0]["id"]: "uygun_degil", saatler[1]["id"]: "tercih"}

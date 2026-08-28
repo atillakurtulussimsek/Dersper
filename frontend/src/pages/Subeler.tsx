@@ -180,6 +180,9 @@ export default function Subeler() {
           yol={`/sections/${musaitlikIcin.id}`}
           aciklama="Şubenin ders görebileceği saatleri işaretleyin. Sabahçı şubelerde öğleden sonrasını, akşamcı şubelerde sabahı kapatın."
           gunler={izgara.data ?? []}
+          kopyaHedefleri={(liste.data ?? [])
+            .filter((s) => s.id !== musaitlikIcin.id)
+            .map((s) => ({ id: s.id, name: s.name }))}
           kapat={() => setMusaitlikIcin(null)}
         />
       )}
