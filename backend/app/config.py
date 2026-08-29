@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 720
     encryption_key: str = "degistir-beni"
 
+    # Herkese açık kurum kaydı. Kapalıyken yalnızca sistemde hiç kurum yokken
+    # (ilk kurulum) kayıt yapılabilir.
+    allow_registration: bool = True
+
     backend_host: str = "127.0.0.1"
     backend_port: int = 8000
     cors_origins: str = "http://localhost:5173"

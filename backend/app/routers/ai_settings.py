@@ -6,8 +6,8 @@ from sqlalchemy.orm import Session
 from app.ai import client as ai
 from app.crypto import decrypt, encrypt, mask
 from app.db import get_db
-from app.deps import current_user
-from app.models import AiSettings
+from app.deps import aktif_kurum, current_user
+from app.models import AiSettings, Institution
 from app.schemas import (
     AiModelsIn, AiModelsOut, AiSettingsIn, AiSettingsOut, AiTestResult,
 )
@@ -16,10 +16,11 @@ router = APIRouter(prefix="/ai", tags=["yapay zeka"],
                    dependencies=[Depends(current_user)])
 
 
-def _ayar(db: Session) -> AiSettings:
-    a = db.scalar(select(AiSettings).limit(1))
+def _ayar(db: Session, inst: Institution) -> AiSettings:
+    """Kurumun yapay zeka ayarı; yoksa oluşturulur."""
+    a = db.scalar(select(AiSettings).where(AiSettings.institution_id == inst.id))
     if a is None:
-        a = AiSettings()
+        a = AiSettings(institution_id=inst.id)
         db.add(a)
         db.commit()
         db.refresh(a)
@@ -38,13 +39,19 @@ def _cikti(a: AiSettings) -> AiSettingsOut:
 
 
 @router.get("/settings", response_model=AiSettingsOut)
-def ayarlar(db: Session = Depends(get_db)) -> AiSettingsOut:
-    return _cikti(_ayar(db))
+def ayarlar(
+    db: Session = Depends(get_db), inst: Institution = Depends(aktif_kurum)
+) -> AiSettingsOut:
+    return _cikti(_ayar(db, inst))
 
 
 @router.put("/settings", response_model=AiSettingsOut)
-def ayarlari_kaydet(payload: AiSettingsIn, db: Session = Depends(get_db)) -> AiSettingsOut:
-    a = _ayar(db)
+def ayarlari_kaydet(
+    payload: AiSettingsIn,
+    db: Session = Depends(get_db),
+    inst: Institution = Depends(aktif_kurum),
+) -> AiSettingsOut:
+    a = _ayar(db, inst)
     a.enabled = payload.enabled
     a.base_url = (payload.base_url or "").strip() or None
     a.model = payload.model.strip() or "gpt-4o-mini"
@@ -56,8 +63,10 @@ def ayarlari_kaydet(payload: AiSettingsIn, db: Session = Depends(get_db)) -> AiS
 
 
 @router.delete("/settings/key", response_model=AiSettingsOut)
-def anahtari_sil(db: Session = Depends(get_db)) -> AiSettingsOut:
-    a = _ayar(db)
+def anahtari_sil(
+    db: Session = Depends(get_db), inst: Institution = Depends(aktif_kurum)
+) -> AiSettingsOut:
+    a = _ayar(db, inst)
     a.api_key_encrypted = None
     a.enabled = False
     db.commit()
@@ -69,9 +78,13 @@ VARSAYILAN_ADRES = "https://api.openai.com/v1"
 
 
 @router.post("/models", response_model=AiModelsOut)
-def modeller(payload: AiModelsIn, db: Session = Depends(get_db)) -> AiModelsOut:
+def modeller(
+    payload: AiModelsIn,
+    db: Session = Depends(get_db),
+    inst: Institution = Depends(aktif_kurum),
+) -> AiModelsOut:
     """Sağlayıcıdaki modelleri listeler; aynı zamanda adres ve anahtarı doğrular."""
-    ayar = _ayar(db)
+    ayar = _ayar(db, inst)
     try:
         liste = ai.modelleri_getir(ayar, payload.base_url, payload.api_key)
     except ai.AiKapali as e:
@@ -91,6 +104,8 @@ def modeller(payload: AiModelsIn, db: Session = Depends(get_db)) -> AiModelsOut:
 
 
 @router.post("/test", response_model=AiTestResult)
-def test(db: Session = Depends(get_db)) -> AiTestResult:
-    ok, mesaj = ai.baglanti_testi(_ayar(db))
+def test(
+    db: Session = Depends(get_db), inst: Institution = Depends(aktif_kurum)
+) -> AiTestResult:
+    ok, mesaj = ai.baglanti_testi(_ayar(db, inst))
     return AiTestResult(ok=ok, message=mesaj)

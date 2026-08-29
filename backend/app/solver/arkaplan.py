@@ -213,7 +213,7 @@ def _yerlesimleri_yaz(run_id: int, yerlesim: list[tuple[int, int]],
 def _bitir(db, run_id: int, durum: SolveStatus, rapor: dict | None,
            baslangic: datetime | None = None) -> None:
     from app.ai import client as ai
-    from app.models import AiSettings
+    from app.models import AiSettings, Term
 
     with SessionLocal() as oturum:
         run = oturum.get(SolveRun, run_id)
@@ -232,7 +232,13 @@ def _bitir(db, run_id: int, durum: SolveStatus, rapor: dict | None,
             if program is not None and program.status is TimetableStatus.TASLAK:
                 program.status = TimetableStatus.URETILDI
         elif rapor is not None:
-            ayar = oturum.scalar(select(AiSettings).limit(1))
+            # Yapay zeka ayarı programın bağlı olduğu kurumdan gelir.
+            ayar = oturum.scalar(
+                select(AiSettings)
+                .join(Term, Term.institution_id == AiSettings.institution_id)
+                .join(Timetable, Timetable.term_id == Term.id)
+                .where(Timetable.id == run.timetable_id)
+            )
             try:
                 run.ai_explanation = ai.cozumsuzluk_acikla(ayar, rapor)
             except ai.AiKapali:

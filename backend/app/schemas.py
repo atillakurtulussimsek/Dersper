@@ -45,7 +45,8 @@ class ImportOut(BaseModel):
 
 # --- Kurulum & oturum ---
 
-class SetupRequest(BaseModel):
+class RegisterRequest(BaseModel):
+    """Yeni kurum kaydı: kurum, ilk kullanıcı ve ilk dönem birlikte açılır."""
     institution_name: str = Field(min_length=2, max_length=200)
     institution_type: InstitutionType = InstitutionType.K12
     term_name: str = Field(default="2026-2027 Güz Dönemi", min_length=1, max_length=150)
@@ -54,8 +55,11 @@ class SetupRequest(BaseModel):
     password: str = Field(min_length=8, max_length=128)
 
 
-class SetupStatus(BaseModel):
-    completed: bool
+class AuthStatus(BaseModel):
+    # Sistemde hiç kurum var mı — yoksa ilk kayıt her durumda açıktır.
+    has_institutions: bool
+    # Yeni kurum kaydı şu an yapılabilir mi?
+    registration_open: bool
 
 
 class LoginRequest(BaseModel):
@@ -73,6 +77,20 @@ class UserOut(ORMModel):
     email: str
     full_name: str
     is_active: bool
+
+
+class UserCreate(BaseModel):
+    """Kuruma kullanıcı ekleme. Rol yoktur; herkes yöneticidir."""
+    full_name: str = Field(min_length=2, max_length=200)
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=128)
+
+
+class UserUpdate(BaseModel):
+    full_name: str = Field(min_length=2, max_length=200)
+    is_active: bool = True
+    # Boş bırakılırsa parola değişmez.
+    password: str | None = Field(default=None, min_length=8, max_length=128)
 
 
 class InstitutionOut(ORMModel):

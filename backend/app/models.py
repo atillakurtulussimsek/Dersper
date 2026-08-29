@@ -1,6 +1,8 @@
 """Veri modeli.
 
-Tek kurumlu kurulum: `Institution` tablosunda tek satır bulunur.
+Çok kurumlu: her kurum (`Institution`) kendi kullanıcıları, dönemleri ve
+tanımlarıyla diğerlerinden yalıtılmıştır. Bir kullanıcı tam olarak bir kuruma
+aittir; başka bir kurumda çalışmak için ayrı hesap gerekir.
 
 Tüm tanımlar bir **döneme** (`Term`) aittir: zaman ızgarası, öğretmenler,
 dersler, şubeler, müfredat ve programlar. Yeni dönem boş başlar; geçmiş
@@ -71,18 +73,24 @@ class Institution(Base):
     )
     address: Mapped[str | None] = mapped_column(String(500))
     # Üzerinde çalışılan dönem. Tüm uçlar bu döneme göre süzer.
+    # institutions ↔ terms arasında döngüsel yabancı anahtar var; use_alter
+    # ile bu kısıt tablolar kurulduktan sonra eklenir.
     active_term_id: Mapped[int | None] = mapped_column(
-        ForeignKey("terms.id", ondelete="SET NULL")
+        ForeignKey("terms.id", ondelete="SET NULL", use_alter=True,
+                   name="fk_institutions_active_term")
     )
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 
 class Term(Base, SoftDelete):
-    """Öğretim dönemi. Tüm tanımlar bir döneme bağlıdır."""
+    """Öğretim dönemi. Tüm tanımlar bir döneme, dönem de bir kuruma bağlıdır."""
 
     __tablename__ = "terms"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    institution_id: Mapped[int] = mapped_column(
+        ForeignKey("institutions.id", ondelete="CASCADE")
+    )
     name: Mapped[str] = mapped_column(String(150))
     starts_on: Mapped[date | None] = mapped_column(Date)
     ends_on: Mapped[date | None] = mapped_column(Date)
@@ -90,9 +98,17 @@ class Term(Base, SoftDelete):
 
 
 class User(Base):
+    """Kurum kullanıcısı.
+
+    E-posta sistem genelinde eşsizdir: bir hesap tek bir kuruma bağlıdır.
+    Kurum içinde rol ayrımı yoktur; her kullanıcı yöneticidir.
+    """
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    institution_id: Mapped[int] = mapped_column(
+        ForeignKey("institutions.id", ondelete="CASCADE")
+    )
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     full_name: Mapped[str] = mapped_column(String(200))
     password_hash: Mapped[str] = mapped_column(String(255))
@@ -306,10 +322,13 @@ class SolveRun(Base):
 
 
 class AiSettings(Base):
-    """Kurumun kendi yapay zeka sağlayıcısı. Tek satır."""
+    """Kurumun kendi yapay zeka sağlayıcısı. Kurum başına tek satır."""
     __tablename__ = "ai_settings"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    institution_id: Mapped[int] = mapped_column(
+        ForeignKey("institutions.id", ondelete="CASCADE"), unique=True
+    )
     enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     base_url: Mapped[str | None] = mapped_column(String(300))
     api_key_encrypted: Mapped[str | None] = mapped_column(Text)

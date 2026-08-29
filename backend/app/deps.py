@@ -1,4 +1,8 @@
-"""Ortak bağımlılıklar: oturum doğrulama ve aktif dönem."""
+"""Ortak bağımlılıklar: oturum doğrulama, kurum yalıtımı ve aktif dönem.
+
+Her kullanıcı tam olarak bir kuruma aittir. Uçların tamamı kullanıcının kendi
+kurumuna göre süzülür; başka kurumun kaydına kimlikle bile erişilemez.
+"""
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
@@ -32,28 +36,41 @@ def current_user(
     return user
 
 
-def kurum(db: Session) -> Institution:
-    inst = db.scalar(select(Institution).limit(1))
+def aktif_kurum(
+    db: Session = Depends(get_db), user: User = Depends(current_user)
+) -> Institution:
+    """Oturum açan kullanıcının kurumu."""
+    inst = db.get(Institution, user.institution_id)
+    if inst is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Kurum bulunamadı.")
+    return inst
+
+
+def kurum(db: Session, user: User) -> Institution:
+    """Bağımlılık dışından çağrılan sürüm."""
+    inst = db.get(Institution, user.institution_id)
     if inst is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Kurum bulunamadı.")
     return inst
 
 
 def aktif_donem(
-    db: Session = Depends(get_db), _: User = Depends(current_user)
+    db: Session = Depends(get_db), inst: Institution = Depends(aktif_kurum)
 ) -> Term:
-    """Üzerinde çalışılan dönem. Tüm tanımlar buna göre süzülür.
+    """Kurumun üzerinde çalıştığı dönem. Tüm tanımlar buna göre süzülür.
 
-    Aktif dönem silinmiş ya da hiç seçilmemişse, silinmemiş en yeni dönem
-    otomatik seçilir; hiç dönem yoksa çağıran yönlendirilir.
+    Aktif dönem silinmiş ya da hiç seçilmemişse, kurumun silinmemiş en yeni
+    dönemi otomatik seçilir; hiç dönem yoksa çağıran yönlendirilir.
     """
-    inst = kurum(db)
     donem = db.get(Term, inst.active_term_id) if inst.active_term_id else None
-    if donem is not None and not donem.is_deleted:
+    if donem is not None and not donem.is_deleted and donem.institution_id == inst.id:
         return donem
 
     donem = db.scalar(
-        select(Term).where(Term.deleted_at.is_(None)).order_by(Term.id.desc()).limit(1)
+        select(Term)
+        .where(Term.institution_id == inst.id, Term.deleted_at.is_(None))
+        .order_by(Term.id.desc())
+        .limit(1)
     )
     if donem is None:
         raise HTTPException(

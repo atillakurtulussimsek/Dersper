@@ -90,7 +90,7 @@ def istemci() -> TestClient:
 @pytest.fixture
 def yonetici(istemci: TestClient) -> TestClient:
     """Kurulumu tamamlanmış, oturum açmış istemci."""
-    jeton = istemci.post("/api/setup", json={
+    jeton = istemci.post("/api/auth/register", json={
         "institution_name": "Test Ortaokulu",
         "institution_type": "k12",
         "full_name": "Test Yönetici",
@@ -99,3 +99,21 @@ def yonetici(istemci: TestClient) -> TestClient:
     }).json()["access_token"]
     istemci.headers["Authorization"] = f"Bearer {jeton}"
     return istemci
+
+
+@pytest.fixture
+def ikinci_kurum(istemci: TestClient) -> TestClient:
+    """Ayrı bir kurum ve kullanıcısı — yalıtım testleri için."""
+    from fastapi.testclient import TestClient as TC
+    from app.main import app as uygulama
+
+    c = TC(uygulama)
+    jeton = c.post("/api/auth/register", json={
+        "institution_name": "Diğer Lise",
+        "institution_type": "k12",
+        "full_name": "Diğer Yönetici",
+        "email": "diger@ornek.com",
+        "password": "parola1234",
+    }).json()["access_token"]
+    c.headers["Authorization"] = f"Bearer {jeton}"
+    return c

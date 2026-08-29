@@ -49,7 +49,8 @@ def _donemin(model, donem: Term):
 
 def _kaynak_donem(db: Session, term_id: int, donem: Term) -> Term:
     kaynak = db.get(Term, term_id)
-    if kaynak is None:
+    # Başka kurumun dönemi, kimliği bilinse bile okunamaz.
+    if kaynak is None or kaynak.institution_id != donem.institution_id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Kaynak dönem bulunamadı.")
     if kaynak.id == donem.id:
         raise HTTPException(
@@ -469,6 +470,20 @@ def sube_aktar(
 
 # --- Müfredat ---
 
+def _atama_getir(db: Session, entry_id: int, donem: Term) -> CurriculumEntry:
+    """Ders atamasını getirir; başka döneme (dolayısıyla kuruma) aitse 404.
+
+    Atamanın kendi `term_id`si yoktur; dönem bağı şube üzerinden kurulur.
+    """
+    e = db.get(CurriculumEntry, entry_id)
+    if e is None or e.deleted_at is not None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Ders ataması bulunamadı.")
+    sube = db.get(Section, e.section_id)
+    if sube is None or sube.term_id != donem.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Ders ataması bulunamadı.")
+    return e
+
+
 def _mufredat_sorgusu(donem: Term):
     return (
         select(CurriculumEntry)
@@ -680,7 +695,7 @@ def mufredat_guncelle(
     db: Session = Depends(get_db),
     donem: Term = Depends(aktif_donem),
 ) -> CurriculumEntry:
-    e = _getir(db, CurriculumEntry, entry_id, "Müfredat satırı")
+    e = _atama_getir(db, entry_id, donem)
     _getir(db, Section, payload.section_id, "Şube", donem)
     _getir(db, Subject, payload.subject_id, "Ders", donem)
     _getir(db, Teacher, payload.teacher_id, "Öğretmen", donem)
@@ -701,6 +716,6 @@ def mufredat_guncelle(
 def mufredat_sil(
     entry_id: int, db: Session = Depends(get_db), donem: Term = Depends(aktif_donem)
 ):
-    e = _getir(db, CurriculumEntry, entry_id, "Müfredat satırı")
+    e = _atama_getir(db, entry_id, donem)
     e.deleted_at = _simdi()
     db.commit()

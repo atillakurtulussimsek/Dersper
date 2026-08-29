@@ -45,16 +45,17 @@ def _tablolar(db: Session, timetable_id: int, bakis: str) -> dict[str, dict]:
     return dict(sorted(gruplar.items()))
 
 
-def _baslik(db: Session, timetable_id: int) -> tuple[Timetable, str]:
+def _baslik(db: Session, timetable_id: int, donem: Term) -> tuple[Timetable, str]:
+    """Program yalnızca kendi dönemi üzerinden okunur; kurum yalıtımı burada başlar."""
     t = db.get(Timetable, timetable_id)
-    if t is None or t.is_deleted:
+    if t is None or t.is_deleted or t.term_id != donem.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Ders programı bulunamadı.")
-    kurum = db.scalar(select(Institution).limit(1))
+    kurum = db.get(Institution, donem.institution_id)
     return t, (kurum.name if kurum else "")
 
 
 def _html(db: Session, timetable_id: int, bakis: str, donem: Term) -> str:
-    t, kurum_adi = _baslik(db, timetable_id)
+    t, kurum_adi = _baslik(db, timetable_id, donem)
     gunler, ders_indexleri = _izgara_yapisi(db, donem)
     gruplar = _tablolar(db, timetable_id, bakis)
 
@@ -106,7 +107,7 @@ def _carsaf_html(db: Session, timetable_id: int, bakis: str, donem: Term) -> str
     Satırlar şube/öğretmen, sütunlar gün × ders saati. Hücrelerde yer dar
     olduğu için tanımlıysa kısa kodlar kullanılır.
     """
-    t, kurum_adi = _baslik(db, timetable_id)
+    t, kurum_adi = _baslik(db, timetable_id, donem)
     gunler, _ = _izgara_yapisi(db, donem)
     gruplar = _tablolar(db, timetable_id, bakis)
 
@@ -244,6 +245,7 @@ def excel_cikti(
     from openpyxl import Workbook
     from openpyxl.styles import Alignment, Border, Font, Side
 
+    _baslik(db, timetable_id, donem)      # kurum yalıtımı denetimi
     gunler, ders_indexleri = _izgara_yapisi(db, donem)
     gruplar = _tablolar(db, timetable_id, bakis)
 

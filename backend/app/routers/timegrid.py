@@ -26,6 +26,15 @@ def _gunleri_getir(db: Session, donem: Term) -> list[Day]:
     )
 
 
+def _kaynak_donem(db: Session, term_id: int, donem: Term) -> Term:
+    """Aynı kuruma ait, farklı bir dönem."""
+    kaynak = db.get(Term, term_id)
+    if (kaynak is None or kaynak.id == donem.id
+            or kaynak.institution_id != donem.institution_id):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Kaynak dönem bulunamadı.")
+    return kaynak
+
+
 def _yerlesim_var_mi(db: Session, donem: Term) -> bool:
     return db.scalar(
         select(Assignment.id)
@@ -107,9 +116,7 @@ def aktarilabilir_izgara(
     term_id: int, db: Session = Depends(get_db), donem: Term = Depends(aktif_donem)
 ) -> list[Day]:
     """Kaynak dönemin zaman ızgarası — aktarmadan önce göstermek için."""
-    kaynak = db.get(Term, term_id)
-    if kaynak is None or kaynak.id == donem.id:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Kaynak dönem bulunamadı.")
+    kaynak = _kaynak_donem(db, term_id, donem)
     return _gunleri_getir(db, kaynak)
 
 
@@ -119,9 +126,7 @@ def izgarayi_aktar(
     term_id: int, db: Session = Depends(get_db), donem: Term = Depends(aktif_donem)
 ) -> list[Day]:
     """Kaynak dönemin ızgarasını bu döneme kopyalar; mevcut ızgaranın yerine geçer."""
-    kaynak = db.get(Term, term_id)
-    if kaynak is None or kaynak.id == donem.id:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Kaynak dönem bulunamadı.")
+    kaynak = _kaynak_donem(db, term_id, donem)
     if _yerlesim_var_mi(db, donem):
         raise HTTPException(
             status.HTTP_409_CONFLICT,

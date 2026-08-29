@@ -31,7 +31,7 @@ def _tanimlar(c: TestClient, ek: str = "") -> dict:
 
 
 def test_kurulum_ve_oturum(yonetici: TestClient):
-    assert yonetici.get("/api/setup/status").json()["completed"] is True
+    assert yonetici.get("/api/auth/status").json()["has_institutions"] is True
     # kurulumda verilen parolayla yeniden giriş yapılabilir
     r = yonetici.post("/api/auth/login", json={
         "email": "yonetici@ornek.com", "password": "parola1234",
@@ -41,12 +41,13 @@ def test_kurulum_ve_oturum(yonetici: TestClient):
     assert yonetici.get("/api/institution").json()["name"] == "Test Ortaokulu"
 
 
-def test_kurulum_ikinci_kez_reddedilir(yonetici: TestClient):
-    r = yonetici.post("/api/setup", json={
+def test_ayni_eposta_ikinci_kez_kayit_olamaz(yonetici: TestClient):
+    r = yonetici.post("/api/auth/register", json={
         "institution_name": "İkinci Okul", "institution_type": "k12",
-        "full_name": "Biri", "email": "baska@ornek.com", "password": "parola1234",
+        "full_name": "Biri", "email": "yonetici@ornek.com", "password": "parola1234",
     })
     assert r.status_code == 409
+    assert "yalnızca bir kuruma" in r.text
 
 
 def test_jetonsuz_erisim_engellenir(istemci: TestClient):

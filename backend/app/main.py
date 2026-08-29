@@ -7,7 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.solver.arkaplan import yarim_kalanlari_isaretle
 from app.routers import (
-    ai_settings, catalog, exports, public, setup, terms, timegrid, timetables,
+    ai_settings, auth, catalog, exports, public, terms, timegrid, timetables,
+    users,
 )
 
 @asynccontextmanager
@@ -34,7 +35,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-for r in (setup.router, terms.router, timegrid.router, catalog.router,
+for r in (auth.router, users.router, terms.router, timegrid.router, catalog.router,
           timetables.router, exports.router, ai_settings.router, public.router):
     app.include_router(r, prefix="/api")
 
