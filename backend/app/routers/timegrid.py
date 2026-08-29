@@ -26,6 +26,23 @@ def _gunleri_getir(db: Session, donem: Term) -> list[Day]:
     )
 
 
+def _eski_yerlesimleri_temizle(db: Session, donem: Term) -> None:
+    """Izgara değişmeden önce döneme ait tüm yerleşimleri siler.
+
+    Geriye yalnızca silinmiş programların yerleşimleri kalmış olabilir (canlı
+    programı olan dönemde ızgara değiştirilemiyor). Ders saatleri yenilendiği
+    için bunlar zaten geçersizleşir. Veritabanı seviyesindeki art arda silmeye
+    güvenmiyoruz: SQLite yabancı anahtarları varsayılan olarak zorlamaz.
+    """
+    for atama in db.scalars(
+        select(Assignment)
+        .join(Timetable, Timetable.id == Assignment.timetable_id)
+        .where(Timetable.term_id == donem.id)
+    ):
+        db.delete(atama)
+    db.flush()
+
+
 def _kaynak_donem(db: Session, term_id: int, donem: Term) -> Term:
     """Aynı kuruma ait, farklı bir dönem."""
     kaynak = db.get(Term, term_id)
@@ -36,10 +53,16 @@ def _kaynak_donem(db: Session, term_id: int, donem: Term) -> Term:
 
 
 def _yerlesim_var_mi(db: Session, donem: Term) -> bool:
+    """Dönemde yerleşmiş ders var mı.
+
+    Silinmiş programlar sayılmaz: silme yumuşak olduğu için yerleşimleri
+    veritabanında durur, ama kullanıcı o programı listede görmez. Sayılırsa
+    "programı silin" denip duran, çıkışı olmayan bir hataya dönüşür.
+    """
     return db.scalar(
         select(Assignment.id)
         .join(Timetable, Timetable.id == Assignment.timetable_id)
-        .where(Timetable.term_id == donem.id)
+        .where(Timetable.term_id == donem.id, Timetable.deleted_at.is_(None))
         .limit(1)
     ) is not None
 
@@ -65,6 +88,7 @@ def izgarayi_kaydet(
             "Önce programı silin.",
         )
 
+    _eski_yerlesimleri_temizle(db, donem)
     mevcut = {d.index: d for d in _gunleri_getir(db, donem)}
     gelen_indexler = {d.index for d in payload}
 
@@ -134,6 +158,7 @@ def izgarayi_aktar(
             "Önce programı silin.",
         )
 
+    _eski_yerlesimleri_temizle(db, donem)
     for gun in _gunleri_getir(db, donem):
         db.delete(gun)
     db.flush()

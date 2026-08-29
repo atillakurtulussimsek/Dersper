@@ -3,6 +3,8 @@ from fastapi.testclient import TestClient
 
 from tests.conftest import uret_ve_bekle
 
+from tests.conftest import uret_ve_bekle
+
 
 def _donem_ac(c: TestClient, ad: str) -> int:
     """Yeni dönem açar ve aktif dönem yapar."""
@@ -286,3 +288,57 @@ def test_program_uretimi_yalnizca_kendi_donemini_gorur(yonetici: TestClient):
     # Izgara hazır gelir; eksik olan tanımlardır.
     kodlar = {b["kod"] for b in deneme["report"]["bulgular"]}
     assert kodlar == {"mufredat_bos"}
+
+
+def test_silinen_program_izgara_degisimini_engellemez(yonetici: TestClient):
+    """Yumuşak silinen programın yerleşimleri ızgarayı kilitlememeli."""
+    _kucuk_okul(yonetici)
+    pid = yonetici.post("/api/timetables", json={"name": "Deneme"}).json()["id"]
+    uret_ve_bekle(yonetici, pid)
+    assert yonetici.get(f"/api/timetables/{pid}/grid").json()["cells"]
+
+    izgara = yonetici.get("/api/timegrid").json()
+    # Program dururken ızgara kilitli.
+    assert yonetici.put("/api/timegrid", json=izgara).status_code == 409
+
+    # Silindikten sonra açılmalı.
+    yonetici.delete(f"/api/timetables/{pid}")
+    assert yonetici.get("/api/timetables").json() == []
+    r = yonetici.put("/api/timegrid", json=izgara)
+    assert r.status_code == 200, r.text
+
+
+def test_silinen_program_izgara_aktarimini_engellemez(yonetici: TestClient):
+    eski = yonetici.get("/api/terms").json()[0]["id"]
+    _donem_ac(yonetici, "İkinci Dönem")
+    _kucuk_okul(yonetici)
+    pid = yonetici.post("/api/timetables", json={"name": "Deneme"}).json()["id"]
+    uret_ve_bekle(yonetici, pid)
+
+    assert yonetici.post(f"/api/timegrid/import/{eski}").status_code == 409
+    yonetici.delete(f"/api/timetables/{pid}")
+    assert yonetici.post(f"/api/timegrid/import/{eski}").status_code == 201
+
+
+def test_izgara_degisince_silinmis_programin_yerlesimleri_temizlenir(yonetici: TestClient):
+    """Ders saatleri silinince onlara bağlı eski yerleşimler de gider."""
+    from sqlalchemy import func, select
+
+    from app.db import SessionLocal
+    from app.models import Assignment
+
+    _kucuk_okul(yonetici)
+    pid = yonetici.post("/api/timetables", json={"name": "Deneme"}).json()["id"]
+    uret_ve_bekle(yonetici, pid)
+    yonetici.delete(f"/api/timetables/{pid}")
+
+    with SessionLocal() as oturum:
+        assert oturum.scalar(select(func.count()).select_from(Assignment)) > 0
+
+    izgara = yonetici.get("/api/timegrid").json()
+    izgara[0]["periods"] = izgara[0]["periods"][:4]
+    assert yonetici.put("/api/timegrid", json=izgara).status_code == 200
+
+    with SessionLocal() as oturum:
+        kalan = oturum.scalar(select(func.count()).select_from(Assignment))
+    assert kalan == 0        # ders saatleri yenilendi, eski yerleşimler düştü
