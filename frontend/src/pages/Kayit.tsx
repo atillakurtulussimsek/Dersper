@@ -1,11 +1,16 @@
-/** İlk kurulum sihirbazı. Kurum ve tek yönetici hesabı oluşturur. */
+/** Kurum kaydı. Kurumu, ilk kullanıcıyı ve ilk dönemi birlikte oluşturur.
+ *
+ *  Sunucuda kayıt kapalıysa (ALLOW_REGISTRATION=false) bu sayfa yalnızca
+ *  sistemde hiç kurum yokken açılır; ilk kurulum böylece kilitlenmez.
+ */
 import { useState } from "react";
+import { Link } from "react-router-dom";
 
 import { Alan, Buton, Girdi, Secim, Uyari } from "../components/ui";
 import { ApiHatasi, jetonuKaydet, post } from "../lib/api";
 import type { KurumTipi } from "../lib/types";
 
-export default function Kurulum() {
+export default function Kayit() {
   const [kurumAdi, setKurumAdi] = useState("");
   const [kurumTipi, setKurumTipi] = useState<KurumTipi>("k12");
   const [donemAdi, setDonemAdi] = useState("2026-2027 Güz Dönemi");
@@ -24,7 +29,7 @@ export default function Kurulum() {
 
     setGonderiliyor(true);
     try {
-      const { access_token } = await post<{ access_token: string }>("/setup", {
+      const { access_token } = await post<{ access_token: string }>("/auth/register", {
         institution_name: kurumAdi,
         institution_type: kurumTipi,
         term_name: donemAdi,
@@ -35,7 +40,7 @@ export default function Kurulum() {
       jetonuKaydet(access_token);
       location.href = "/";
     } catch (e) {
-      setHata(e instanceof ApiHatasi ? e.message : "Kurulum tamamlanamadı.");
+      setHata(e instanceof ApiHatasi ? e.message : "Kayıt tamamlanamadı.");
       setGonderiliyor(false);
     }
   }
@@ -47,10 +52,10 @@ export default function Kurulum() {
         className="w-full max-w-lg space-y-5 rounded-xl border border-slate-200 bg-white p-8 shadow-sm"
       >
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">Dersper kurulumu</h1>
+          <h1 className="text-xl font-semibold tracking-tight">Kurum kaydı</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Kurumunuzu tanımlayın ve yönetici hesabınızı oluşturun. Bu ekran yalnızca
-            bir kez görünür.
+            Kurumunuzu tanımlayın ve ilk hesabınızı oluşturun. Bir hesap yalnızca bir
+            kuruma bağlanır; başka bir kurum için ayrı hesap açmanız gerekir.
           </p>
         </div>
 
@@ -122,8 +127,15 @@ export default function Kurulum() {
         </div>
 
         <Buton type="submit" yukleniyor={gonderiliyor} className="w-full">
-          Kurulumu tamamla
+          Kurumu oluştur
         </Buton>
+
+        <p className="text-center text-sm text-slate-500">
+          Hesabınız var mı?{" "}
+          <Link to="/giris" className="font-medium text-slate-900 hover:underline">
+            Giriş yapın
+          </Link>
+        </p>
       </form>
     </div>
   );

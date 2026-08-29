@@ -2,6 +2,7 @@
 
 Okullar ve kurslar için ücretsiz, açık kaynaklı **haftalık ders dağıtım (ders programı) yazılımı**.
 Web tabanlı, kendi sunucunuza kurulur, verileriniz sizde kalır.
+Çok kurumlu: her kurum kendi kullanıcıları, dönemleri ve programlarıyla yalıtılmıştır.
 
 aSc TimeTables, ProgMatik, Bilsa ve Yabil gibi ücretli programlara özgür bir alternatif.
 
@@ -64,7 +65,11 @@ Sonra kök dizinden:
 
 `run.sh` backend'i ve frontend'i birlikte başlatır. Arayüz: http://localhost:5173
 
-İlk açılışta kurum bilgilerinizi ve yönetici hesabınızı oluşturan bir kurulum sihirbazı karşılar.
+İlk açılışta kurum kaydı ekranı karşılar: kurumunuzu, ilk hesabınızı ve ilk döneminizi oluşturur.
+
+Herkese açık kayıt `.env` içindeki `ALLOW_REGISTRATION` ile kapatılabilir. Kapalıyken bile,
+sistemde hiç kurum yoksa ilk kayda izin verilir; sonraki hesapları kurum içinden
+**Kullanıcılar** bölümünden açarsınız. Bir hesap yalnızca bir kuruma bağlanır.
 
 Silme her yerde yumuşaktır: kayıtlar gizlenir, veritabanından kaldırılmaz.
 

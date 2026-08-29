@@ -2,7 +2,7 @@
 import { useQuery } from "@tanstack/react-query";
 import {
   BookOpen, CalendarClock, CalendarRange, GraduationCap, LayoutGrid, LogOut,
-  Settings, Table2, Users,
+  Settings, Table2, UserCog, Users,
 } from "lucide-react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import clsx from "clsx";
@@ -20,6 +20,7 @@ const MENU = [
   { yol: "/zaman-izgarasi", ad: "Zaman Izgarası", ikon: CalendarClock },
   { yol: "/programlar", ad: "Ders Programları", ikon: LayoutGrid },
   { yol: "/donemler", ad: "Dönemler", ikon: CalendarRange },
+  { yol: "/kullanicilar", ad: "Kullanıcılar", ikon: UserCog },
   { yol: "/ayarlar", ad: "Ayarlar", ikon: Settings },
 ];
 

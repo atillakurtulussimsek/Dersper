@@ -1,13 +1,20 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 
 import { Alan, Buton, Girdi, Uyari } from "../components/ui";
-import { ApiHatasi, jetonuKaydet, post } from "../lib/api";
+import { ApiHatasi, get, jetonuKaydet, post } from "../lib/api";
+import type { OturumDurumu } from "../lib/types";
 
 export default function Giris() {
   const [eposta, setEposta] = useState("");
   const [parola, setParola] = useState("");
   const [hata, setHata] = useState<string | null>(null);
   const [gonderiliyor, setGonderiliyor] = useState(false);
+  const durum = useQuery({
+    queryKey: ["auth-status"],
+    queryFn: () => get<OturumDurumu>("/auth/status"),
+  });
 
   async function gonder(e: React.FormEvent) {
     e.preventDefault();
@@ -62,6 +69,15 @@ export default function Giris() {
         <Buton type="submit" yukleniyor={gonderiliyor} className="w-full">
           Giriş yap
         </Buton>
+
+        {durum.data?.registration_open && (
+          <p className="text-center text-sm text-slate-500">
+            Kurumunuz kayıtlı değil mi?{" "}
+            <Link to="/kayit" className="font-medium text-slate-900 hover:underline">
+              Kurum kaydı oluşturun
+            </Link>
+          </p>
+        )}
       </form>
     </div>
   );

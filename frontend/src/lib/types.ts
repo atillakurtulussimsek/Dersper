@@ -11,6 +11,11 @@ export type DenemeDurumu =
   | "durduruldu"
   | "hata";
 
+export interface OturumDurumu {
+  has_institutions: boolean;
+  registration_open: boolean;
+}
+
 export interface Donem {
   id: number;
   name: string;

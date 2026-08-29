@@ -18,13 +18,17 @@ export default function Yayin() {
     queryKey: ["yayin", token],
     queryFn: () => get<Izgara>(`/public/timetables/${token}`),
   });
+  // Girişsiz uçlar: kurum ve ızgara yayın jetonundan çözülür.
   const gunler = useQuery({
-    queryKey: ["yayin-izgara"],
-    queryFn: () => get<Gun[]>("/timegrid").catch(() => [] as Gun[]),
+    queryKey: ["yayin-izgara", token],
+    queryFn: () => get<Gun[]>(`/public/timetables/${token}/timegrid`),
   });
   const kurum = useQuery({
-    queryKey: ["yayin-kurum"],
-    queryFn: () => get<{ name: string | null }>("/public/institution"),
+    queryKey: ["yayin-kurum", token],
+    queryFn: () =>
+      get<{ name: string | null; term: string | null }>(
+        `/public/timetables/${token}/institution`,
+      ),
   });
 
   if (izgara.isLoading) return <Yukleniyor />;
@@ -67,7 +71,9 @@ export default function Yayin() {
   return (
     <div className="mx-auto max-w-5xl space-y-5 p-6 sm:p-10">
       <header>
-        <p className="text-sm text-slate-500">{kurum.data?.name}</p>
+        <p className="text-sm text-slate-500">
+          {[kurum.data?.name, kurum.data?.term].filter(Boolean).join(" · ")}
+        </p>
         <h1 className="text-xl font-semibold tracking-tight">{izgara.data!.timetable.name}</h1>
       </header>
 
