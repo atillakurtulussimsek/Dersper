@@ -74,8 +74,36 @@ export async function api<T>(
   if (yanit.status === 204) return undefined as T;
 
   const metin = await yanit.text();
-  const govde = metin ? JSON.parse(metin) : null;
-  if (!yanit.ok) throw new ApiHatasi(yanit.status, hataMesaji(yanit.status, govde));
+
+  // Yanıt JSON olmayabilir: ters vekil yanlış kurulduğunda /api istekleri
+  // arayüzün index.html'ine ya da bir hata sayfasına düşer. Bu durumda ham
+  // gövdeyi ayrıştırmaya çalışmak asıl sebebi gizler.
+  let govde: unknown = null;
+  let jsonMu = true;
+  if (metin) {
+    try {
+      govde = JSON.parse(metin);
+    } catch {
+      jsonMu = false;
+    }
+  }
+
+  if (!yanit.ok) {
+    throw new ApiHatasi(
+      yanit.status,
+      jsonMu
+        ? hataMesaji(yanit.status, govde)
+        : `Sunucu ${yanit.status} döndürdü ve yanıt JSON değil. ` +
+          `/api istekleri backend'e ulaşmıyor olabilir (ters vekil ayarı).`,
+    );
+  }
+  if (!jsonMu) {
+    throw new ApiHatasi(
+      502,
+      "Sunucu JSON yerine sayfa içeriği döndürdü. /api istekleri backend'e " +
+        "yönlendirilmiyor — ters vekil (nginx) ayarını kontrol edin.",
+    );
+  }
   return govde as T;
 }
 
