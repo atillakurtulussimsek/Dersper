@@ -33,8 +33,10 @@ services:
     expose:
       - "8000"
     healthcheck:
+      # Veritabanını da yoklar: MySQL erişilemezken servis 'sağlıklı' görünüp
+      # isteklerde askıda kalmasın.
       test: ["CMD", "python", "-c",
-             "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/api/health')"]
+             "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/api/health/db')"]
       interval: 30s
       timeout: 5s
       # Açılışta migration çalıştığı için ilk kontrol geciktirilir.

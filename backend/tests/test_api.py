@@ -729,3 +729,23 @@ def test_bos_model_listesi_hata_sayilir(yonetici: TestClient, monkeypatch):
     r = yonetici.post("/api/ai/models", json={"api_key": "sk-x"})
     assert r.status_code == 502
     assert "boş bir model listesi" in r.text
+
+
+def test_saglik_uclari(istemci: TestClient):
+    assert istemci.get("/api/health").json() == {"status": "ok"}
+    assert istemci.get("/api/health/db").json() == {"status": "ok"}
+
+
+def test_veritabani_erisilemezse_503(istemci: TestClient, monkeypatch):
+    """Veritabanı yoksa servis 'sağlıklı' demek yerine açıkça hata vermeli."""
+    from app import main
+
+    class Kopuk:
+        def connect(self):
+            raise OSError("Can't connect to MySQL server (110)")
+
+    monkeypatch.setattr("app.db.engine", Kopuk())
+    r = istemci.get("/api/health/db")
+    assert r.status_code == 503
+    assert "Veritabanına ulaşılamıyor" in r.text
+    assert main is not None

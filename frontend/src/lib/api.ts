@@ -50,7 +50,21 @@ export async function api<T>(
   const jeton = jetonuAl();
   if (jeton) basliklar.set("Authorization", `Bearer ${jeton}`);
 
-  const yanit = await fetch(`/api${yol}`, { ...secenekler, headers: basliklar });
+  // Sunucu bağlantıyı kabul edip yanıt vermezse istek süresiz askıda kalır;
+  // program üretimi gibi uzun işlemler için sınır cömert tutuldu.
+  const signal = secenekler.signal ?? AbortSignal.timeout(120_000);
+  let yanit: Response;
+  try {
+    yanit = await fetch(`/api${yol}`, { ...secenekler, headers: basliklar, signal });
+  } catch (e) {
+    if (e instanceof DOMException && e.name === "TimeoutError") {
+      throw new ApiHatasi(
+        504,
+        "Sunucu zamanında yanıt vermedi. Veritabanına erişilemiyor olabilir.",
+      );
+    }
+    throw new ApiHatasi(0, "Sunucuya bağlanılamadı. Ağ bağlantınızı kontrol edin.");
+  }
 
   if (yanit.status === 401) {
     jetonuSil();

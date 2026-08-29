@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Navigate, Route, Routes } from "react-router-dom";
 
-import { Yukleniyor } from "./components/ui";
+import { Buton, Uyari, Yukleniyor } from "./components/ui";
 import Kabuk from "./components/Kabuk";
 import { get, jetonuAl } from "./lib/api";
 import Ayarlar from "./pages/Ayarlar";
@@ -24,9 +24,32 @@ export default function App() {
   const durum = useQuery({
     queryKey: ["auth-status"],
     queryFn: () => get<OturumDurumu>("/auth/status"),
+    // Sunucuya ulaşılamıyorsa sonsuza kadar beklemektense hata göster.
+    retry: 1,
   });
 
-  if (durum.isLoading) return <Yukleniyor metin="Başlatılıyor…" />;
+  if (durum.isPending) return <Yukleniyor metin="Başlatılıyor…" />;
+
+  if (durum.isError) {
+    return (
+      <div className="flex min-h-screen items-center justify-center p-4">
+        <div className="w-full max-w-md space-y-4 rounded-xl border border-slate-200 bg-white p-8 shadow-sm">
+          <h1 className="text-lg font-semibold tracking-tight">
+            Sunucuya ulaşılamıyor
+          </h1>
+          <Uyari tur="hata">{(durum.error as Error).message}</Uyari>
+          <p className="text-sm text-slate-500">
+            Uygulama çalışıyor ama <code>/api</code> yanıt vermedi. En sık sebebi
+            veritabanına erişilememesidir; <code>/api/health/db</code> adresi
+            durumu söyler.
+          </p>
+          <Buton onClick={() => durum.refetch()} yukleniyor={durum.isFetching}>
+            Yeniden dene
+          </Buton>
+        </div>
+      </div>
+    );
+  }
 
   const kayitAcik = durum.data?.registration_open ?? false;
   const oturumVar = Boolean(jetonuAl());

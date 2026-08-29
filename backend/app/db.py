@@ -6,10 +6,23 @@ from sqlalchemy.orm import DeclarativeBase, sessionmaker, Session
 
 from app.config import settings
 
+def _baglanti_ayarlari() -> dict:
+    """Sürücüye özel bağlantı seçenekleri.
+
+    MySQL'de zaman aşımı verilmezse, erişilemeyen bir sunucuya yapılan bağlantı
+    TCP zaman aşımına kadar (dakikalarca) askıda kalır; istek de öyle. Kısa bir
+    sınır, sorunu askıda kalma yerine açık bir hataya çevirir.
+    """
+    if settings.database_url.startswith("mysql"):
+        return {"connect_timeout": 10, "read_timeout": 60, "write_timeout": 60}
+    return {}
+
+
 engine = create_engine(
     settings.database_url,
     pool_pre_ping=True,   # uzak sunucuda kopan bağlantıları sessizce yeniler
     pool_recycle=1800,
+    connect_args=_baglanti_ayarlari(),
     future=True,
 )
 
