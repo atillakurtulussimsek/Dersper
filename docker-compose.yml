@@ -33,10 +33,12 @@ services:
     expose:
       - "8000"
     healthcheck:
-      # Veritabanını da yoklar: MySQL erişilemezken servis 'sağlıklı' görünüp
-      # isteklerde askıda kalmasın.
+      # Yalnızca sürecin ayakta olduğunu yoklar. Veritabanı denetimini buraya
+      # bağlamak, geçici bir veritabanı kesintisinde nginx'in her isteğe 502
+      # vermesine ve sitenin tamamen düşmesine yol açardı. Veritabanı durumu
+      # /api/health/db adresinden ayrıca sorulur; arayüz sebebi kendisi gösterir.
       test: ["CMD", "python", "-c",
-             "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/api/health/db')"]
+             "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/api/health')"]
       interval: 30s
       timeout: 5s
       # Açılışta migration çalıştığı için ilk kontrol geciktirilir.
@@ -47,8 +49,10 @@ services:
     build:
       context: ./frontend
     depends_on:
+      # Sağlıklı olmasını beklemez: backend sorunluysa bile arayüz açılmalı ve
+      # hatayı göstermeli. Aksi halde kullanıcı bomboş bir 502 sayfası görür.
       backend:
-        condition: service_healthy
+        condition: service_started
     restart: unless-stopped
     expose:
       - "80"
