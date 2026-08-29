@@ -52,7 +52,9 @@ export default function Kayit() {
         className="w-full max-w-lg space-y-5 rounded-xl border border-cizgi bg-yuzey p-8 shadow-sm"
       >
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">Kurum kaydı</h1>
+          <h1 className="font-baslik text-2xl font-semibold tracking-tight text-murekkep">
+            Kurum kaydı
+          </h1>
           <p className="mt-1 text-sm text-murekkep-silik">
             Kurumunuzu tanımlayın ve ilk hesabınızı oluşturun. Bir hesap yalnızca bir
             kuruma bağlanır; başka bir kurum için ayrı hesap açmanız gerekir.

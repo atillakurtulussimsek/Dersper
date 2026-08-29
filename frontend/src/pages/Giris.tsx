@@ -40,8 +40,12 @@ export default function Giris() {
         className="w-full max-w-sm space-y-5 rounded-xl border border-cizgi bg-yuzey p-8 shadow-sm"
       >
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">Dersper</h1>
-          <p className="mt-1 text-sm text-murekkep-silik">Yönetici girişi</p>
+          <h1 className="font-baslik text-2xl font-semibold tracking-tight text-murekkep">
+            Dersper
+          </h1>
+          <p className="mt-1 text-sm text-murekkep-silik">
+            Kurum hesabınızla giriş yapın.
+          </p>
         </div>
 
         {hata && <Uyari tur="hata">{hata}</Uyari>}

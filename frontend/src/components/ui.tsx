@@ -77,22 +77,32 @@ export function Alan({
 }
 
 const GIRDI_STILI = clsx(
-  "w-full rounded-lg border border-cizgi-guclu bg-yuzey px-3 py-2 text-sm text-murekkep",
+  "rounded-lg border border-cizgi-guclu bg-yuzey px-3 py-2 text-sm text-murekkep",
   "placeholder:text-murekkep-silik/70 transition-colors",
   "focus:border-murekkep focus:outline-none focus:ring-1 focus:ring-murekkep",
   "disabled:bg-yuzey-alt disabled:text-murekkep-silik",
 );
 
+/** Varsayılan genişlik tam; ama çağıran kendi genişliğini verdiyse ona dokunma.
+ *
+ *  Tailwind sınıfları eşit özgüllüktedir, dolayısıyla `w-full` ile `w-28` bir
+ *  arada verildiğinde kazanan sınıfın yazılış sırası değil, üretilen CSS'teki
+ *  sırasıdır. Bu da alanların beklenmedik genişliklere çıkmasına yol açar. */
+function girdiSinifi(gelen?: string): string {
+  const genislikVar = gelen ? /(^|\s)(w-|min-w-|max-w-|flex-1|basis-)/.test(gelen) : false;
+  return clsx(GIRDI_STILI, !genislikVar && "w-full", gelen);
+}
+
 export function Girdi(props: InputHTMLAttributes<HTMLInputElement>) {
-  return <input {...props} className={clsx(GIRDI_STILI, props.className)} />;
+  return <input {...props} className={girdiSinifi(props.className)} />;
 }
 
 export function Secim(props: SelectHTMLAttributes<HTMLSelectElement>) {
-  return <select {...props} className={clsx(GIRDI_STILI, props.className)} />;
+  return <select {...props} className={girdiSinifi(props.className)} />;
 }
 
 export function CokSatir(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea {...props} className={clsx(GIRDI_STILI, props.className)} />;
+  return <textarea {...props} className={girdiSinifi(props.className)} />;
 }
 
 export function Kart({

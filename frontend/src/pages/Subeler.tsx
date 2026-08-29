@@ -3,7 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { CalendarCheck, Download, Pencil, Plus, Trash2 } from "lucide-react";
 
 import {
-  Alan, BosDurum, Buton, Girdi, Kart, Kutu, Tablo, Uyari, Yukleniyor,
+  Alan, BosDurum, Buton, Girdi, Kart, Kutu, SayfaBasligi, Tablo, Uyari,
+  Yukleniyor,
 } from "../components/ui";
 import GecmisDonemdenAktar from "../components/GecmisDonemdenAktar";
 import MusaitlikMatrisi from "../components/MusaitlikMatrisi";
@@ -55,22 +56,20 @@ export default function Subeler() {
 
   return (
     <div className="space-y-5">
-      <header className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Şubeler</h1>
-          <p className="text-sm text-murekkep-silik">
-            Programı yapılacak sınıf şubeleri ve ders görebilecekleri saatler.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Buton tur="ikincil" onClick={() => setAktarimAcik(true)}>
-            <Download className="h-4 w-4" /> Geçmiş dönemden aktar
-          </Buton>
-          <Buton onClick={() => ac()}>
-            <Plus className="h-4 w-4" /> Şube ekle
-          </Buton>
-        </div>
-      </header>
+      <SayfaBasligi
+        baslik="Şubeler"
+        aciklama="Programı yapılacak sınıf şubeleri ve ders görebilecekleri saatler."
+        sag={
+          <>
+            <Buton tur="ikincil" onClick={() => setAktarimAcik(true)}>
+              <Download className="h-4 w-4" /> Geçmiş dönemden aktar
+            </Buton>
+            <Buton onClick={() => ac()}>
+              <Plus className="h-4 w-4" /> Şube ekle
+            </Buton>
+          </>
+        }
+      />
 
       {hata && <Uyari tur="hata">{hata}</Uyari>}
 

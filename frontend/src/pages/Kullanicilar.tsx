@@ -8,7 +8,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Pencil, Plus, UserCheck, UserX } from "lucide-react";
 
 import {
-  Alan, Buton, Girdi, Kart, Kutu, Rozet, Tablo, Uyari, Yukleniyor,
+  Alan, Buton, Girdi, Kart, Kutu, Rozet, SayfaBasligi, Tablo, Uyari,
+  Yukleniyor,
 } from "../components/ui";
 import { get, post, put } from "../lib/api";
 import type { Kullanici } from "../lib/types";
@@ -63,18 +64,15 @@ export default function Kullanicilar() {
 
   return (
     <div className="space-y-5">
-      <header className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Kullanıcılar</h1>
-          <p className="text-sm text-murekkep-silik">
-            Kurumunuzda çalışan hesaplar. Eklediğiniz herkes sizinle aynı yetkilere
-            sahiptir.
-          </p>
-        </div>
-        <Buton onClick={() => ac()}>
-          <Plus className="h-4 w-4" /> Kullanıcı ekle
-        </Buton>
-      </header>
+      <SayfaBasligi
+        baslik="Kullanıcılar"
+        aciklama="Kurumunuzda çalışan hesaplar. Eklediğiniz herkes sizinle aynı yetkilere sahiptir."
+        sag={
+          <Buton onClick={() => ac()}>
+            <Plus className="h-4 w-4" /> Kullanıcı ekle
+          </Buton>
+        }
+      />
 
       {hata && <Uyari tur="hata">{hata.message}</Uyari>}
 

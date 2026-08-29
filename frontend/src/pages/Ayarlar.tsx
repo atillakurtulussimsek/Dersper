@@ -3,7 +3,9 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { KeyRound, ListRestart, Pencil, Sparkles } from "lucide-react";
 
-import { Alan, Buton, Girdi, Kart, Secim, Uyari, Yukleniyor } from "../components/ui";
+import {
+  Alan, Buton, Girdi, Kart, SayfaBasligi, Secim, Uyari, Yukleniyor,
+} from "../components/ui";
 import { del, get, post, put } from "../lib/api";
 import type { Kurum, KurumTipi, ModelListesi, YapayZekaAyarlari } from "../lib/types";
 
@@ -99,10 +101,10 @@ export default function Ayarlar() {
 
   return (
     <div className="space-y-5">
-      <header>
-        <h1 className="text-xl font-semibold tracking-tight">Ayarlar</h1>
-        <p className="text-sm text-murekkep-silik">Kurum bilgileri ve yapay zeka bağlantısı.</p>
-      </header>
+      <SayfaBasligi
+        baslik="Ayarlar"
+        aciklama="Kurum bilgileri ve yapay zeka bağlantısı."
+      />
 
       <Kart baslik="Kurum bilgileri">
         <form

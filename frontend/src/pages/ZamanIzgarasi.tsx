@@ -3,7 +3,9 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Coffee, Download, Minus, Plus } from "lucide-react";
 
-import { Buton, Girdi, Kart, Kutu, Secim, Uyari, Yukleniyor } from "../components/ui";
+import {
+  Buton, Girdi, Kart, Kutu, SayfaBasligi, Secim, Uyari, Yukleniyor,
+} from "../components/ui";
 import { get, post, put } from "../lib/api";
 import type { DersSaati, Donem, Gun } from "../lib/types";
 
@@ -93,29 +95,26 @@ export default function ZamanIzgarasi() {
 
   return (
     <div className="space-y-5">
-      <header className="flex items-start justify-between">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Zaman Izgarası</h1>
-          <p className="text-sm text-murekkep-silik">
-            Hangi günlerde kaç ders saati olduğu. Teneffüs olarak işaretlenen saatlere
-            ders yerleştirilmez.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Buton
-            tur="ikincil"
-            onClick={() => {
-              setKaynakId(gecmis[0]?.id ?? null);
-              setAktarimAcik(true);
-            }}
-          >
-            <Download className="h-4 w-4" /> Geçmiş dönemden aktar
-          </Buton>
-          <Buton onClick={() => kaydet.mutate()} yukleniyor={kaydet.isPending}>
-            Kaydet
-          </Buton>
-        </div>
-      </header>
+      <SayfaBasligi
+        baslik="Zaman Izgarası"
+        aciklama="Hangi günlerde kaç ders saati olduğu. Teneffüs olarak işaretlenen saatlere ders yerleştirilmez."
+        sag={
+          <>
+    <Buton
+                tur="ikincil"
+                onClick={() => {
+                  setKaynakId(gecmis[0]?.id ?? null);
+                  setAktarimAcik(true);
+                }}
+              >
+                <Download className="h-4 w-4" /> Geçmiş dönemden aktar
+              </Buton>
+              <Buton onClick={() => kaydet.mutate()} yukleniyor={kaydet.isPending}>
+                Kaydet
+              </Buton>
+          </>
+        }
+      />
 
       {kaydet.error && <Uyari tur="hata">{(kaydet.error as Error).message}</Uyari>}
       {kaydet.isSuccess && !kaydet.isPending && (

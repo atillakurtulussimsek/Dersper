@@ -4,7 +4,8 @@ import { Download, Pencil, Plus, Trash2, Wand2 } from "lucide-react";
 import GecmisDonemdenAktar from "../components/GecmisDonemdenAktar";
 import RenkSecici from "../components/RenkSecici";
 import {
-  Alan, BosDurum, Buton, Girdi, Kart, Kutu, Tablo, Uyari, Yukleniyor,
+  Alan, BosDurum, Buton, Girdi, Kart, Kutu, SayfaBasligi, Tablo, Uyari,
+  Yukleniyor,
 } from "../components/ui";
 import { hataMetni, useKaynak, useListe } from "../lib/hooks";
 import { kisaltmaOner } from "../lib/kisaltma";
@@ -64,22 +65,20 @@ export default function Dersler() {
 
   return (
     <div className="space-y-5">
-      <header className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Dersler</h1>
-          <p className="text-sm text-murekkep-silik">
-            Okulda okutulan ders adları. Renkler program ızgarasında kullanılır.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Buton tur="ikincil" onClick={() => setAktarimAcik(true)}>
-            <Download className="h-4 w-4" /> Geçmiş dönemden aktar
-          </Buton>
-          <Buton onClick={() => ac()}>
-            <Plus className="h-4 w-4" /> Ders ekle
-          </Buton>
-        </div>
-      </header>
+      <SayfaBasligi
+        baslik="Dersler"
+        aciklama="Okulda okutulan ders adları. Renkler program ızgarasında kullanılır."
+        sag={
+          <>
+            <Buton tur="ikincil" onClick={() => setAktarimAcik(true)}>
+              <Download className="h-4 w-4" /> Geçmiş dönemden aktar
+            </Buton>
+            <Buton onClick={() => ac()}>
+              <Plus className="h-4 w-4" /> Ders ekle
+            </Buton>
+          </>
+        }
+      />
 
       {hata && <Uyari tur="hata">{hata}</Uyari>}
 

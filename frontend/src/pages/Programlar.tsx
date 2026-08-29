@@ -3,7 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { Plus, Trash2 } from "lucide-react";
 
 import {
-  Alan, BosDurum, Buton, Girdi, Kart, Kutu, Rozet, Tablo, Uyari, Yukleniyor,
+  Alan, BosDurum, Buton, Girdi, Kart, Kutu, Rozet, SayfaBasligi, Tablo,
+  Uyari, Yukleniyor,
 } from "../components/ui";
 import { hataMetni, useKaynak, useListe } from "../lib/hooks";
 import type { Program, ProgramDurumu } from "../lib/types";
@@ -33,17 +34,15 @@ export default function Programlar() {
 
   return (
     <div className="space-y-5">
-      <header className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Ders Programları</h1>
-          <p className="text-sm text-murekkep-silik">
-            Birden çok program taslağı tutabilir, karşılaştırıp birini yayınlayabilirsiniz.
-          </p>
-        </div>
-        <Buton onClick={() => setAcik(true)}>
-          <Plus className="h-4 w-4" /> Yeni program
-        </Buton>
-      </header>
+      <SayfaBasligi
+        baslik="Ders Programları"
+        aciklama="Birden çok program taslağı tutabilir, karşılaştırıp birini yayınlayabilirsiniz."
+        sag={
+          <Buton onClick={() => setAcik(true)}>
+            <Plus className="h-4 w-4" /> Yeni program
+          </Buton>
+        }
+      />
 
       {hata && <Uyari tur="hata">{hata}</Uyari>}
 

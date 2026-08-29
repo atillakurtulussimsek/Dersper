@@ -34,7 +34,7 @@ export default function App() {
     return (
       <div className="flex min-h-screen items-center justify-center p-4">
         <div className="w-full max-w-md space-y-4 rounded-xl border border-cizgi bg-yuzey p-8 shadow-sm">
-          <h1 className="text-lg font-semibold tracking-tight">
+          <h1 className="font-baslik text-xl font-semibold tracking-tight text-murekkep">
             Sunucuya ulaşılamıyor
           </h1>
           <Uyari tur="hata">{(durum.error as Error).message}</Uyari>

@@ -70,11 +70,13 @@ export default function Yayin() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 p-6 sm:p-10">
-      <header>
+      <header className="ray">
         <p className="text-sm text-murekkep-silik">
           {[kurum.data?.name, kurum.data?.term].filter(Boolean).join(" · ")}
         </p>
-        <h1 className="text-xl font-semibold tracking-tight">{izgara.data!.timetable.name}</h1>
+        <h1 className="font-baslik text-2xl font-semibold tracking-tight text-murekkep">
+          {izgara.data!.timetable.name}
+        </h1>
       </header>
 
       <Kart

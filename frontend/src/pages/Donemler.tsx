@@ -4,7 +4,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
 
 import {
-  Alan, Buton, Girdi, Kart, Kutu, Rozet, Tablo, Uyari, Yukleniyor,
+  Alan, Buton, Girdi, Kart, Kutu, Rozet, SayfaBasligi, Tablo, Uyari,
+  Yukleniyor,
 } from "../components/ui";
 import { del, get, post, put } from "../lib/api";
 import type { Donem } from "../lib/types";
@@ -93,18 +94,15 @@ export default function Donemler() {
 
   return (
     <div className="space-y-5">
-      <header className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Dönemler</h1>
-          <p className="text-sm text-murekkep-silik">
-            Her dönem kendi zaman ızgarası, öğretmenleri, dersleri, şubeleri ve
-            programlarıyla bağımsızdır.
-          </p>
-        </div>
-        <Buton onClick={() => ac()}>
-          <Plus className="h-4 w-4" /> Yeni dönem
-        </Buton>
-      </header>
+      <SayfaBasligi
+        baslik="Dönemler"
+        aciklama="Her dönem kendi zaman ızgarası, öğretmenleri, dersleri, şubeleri ve programlarıyla bağımsızdır."
+        sag={
+          <Buton onClick={() => ac()}>
+            <Plus className="h-4 w-4" /> Yeni dönem
+          </Buton>
+        }
+      />
 
       {hata && <Uyari tur="hata">{hata.message}</Uyari>}
 

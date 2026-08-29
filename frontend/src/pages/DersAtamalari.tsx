@@ -9,7 +9,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Copy, Download, Pencil, Plus, Trash2 } from "lucide-react";
 
 import {
-  Alan, BosDurum, Buton, Girdi, Kart, Kutu, Secim, Tablo, Uyari, Yukleniyor,
+  Alan, BosDurum, Buton, Girdi, Kart, Kutu, SayfaBasligi, Secim, Tablo,
+  Uyari, Yukleniyor,
 } from "../components/ui";
 import GecmisDonemdenAktar from "../components/GecmisDonemdenAktar";
 import MufredatKopyala from "../components/MufredatKopyala";
@@ -106,25 +107,22 @@ export default function DersAtamalari() {
 
   return (
     <div className="space-y-5">
-      <header className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Ders Atamaları</h1>
-          <p className="text-sm text-murekkep-silik">
-            Hangi şubede hangi dersi kimin, kaç saat okutacağı. Program bu tabloya
-            göre üretilir.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Buton tur="ikincil" onClick={() => setAktarimAcik(true)}>
-            <Download className="h-4 w-4" /> Geçmiş dönemden aktar
-          </Buton>
-          {hazir ? (
-            <Buton onClick={() => ac()}>
-              <Plus className="h-4 w-4" /> Ders ata
+      <SayfaBasligi
+        baslik="Ders Atamaları"
+        aciklama="Hangi şubede hangi dersi kimin, kaç saat okutacağı. Program bu tabloya göre üretilir."
+        sag={
+          <>
+            <Buton tur="ikincil" onClick={() => setAktarimAcik(true)}>
+              <Download className="h-4 w-4" /> Geçmiş dönemden aktar
             </Buton>
-          ) : null}
-        </div>
-      </header>
+            {hazir ? (
+              <Buton onClick={() => ac()}>
+                <Plus className="h-4 w-4" /> Ders ata
+              </Buton>
+            ) : null}
+          </>
+        }
+      />
 
       {hata && <Uyari tur="hata">{hata}</Uyari>}
 
