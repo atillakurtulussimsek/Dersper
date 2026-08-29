@@ -49,11 +49,11 @@ export default function Kayit() {
     <div className="flex min-h-screen items-center justify-center p-4">
       <form
         onSubmit={gonder}
-        className="w-full max-w-lg space-y-5 rounded-xl border border-slate-200 bg-white p-8 shadow-sm"
+        className="w-full max-w-lg space-y-5 rounded-xl border border-cizgi bg-yuzey p-8 shadow-sm"
       >
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Kurum kaydı</h1>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-1 text-sm text-murekkep-silik">
             Kurumunuzu tanımlayın ve ilk hesabınızı oluşturun. Bir hesap yalnızca bir
             kuruma bağlanır; başka bir kurum için ayrı hesap açmanız gerekir.
           </p>
@@ -89,7 +89,7 @@ export default function Kayit() {
           />
         </Alan>
 
-        <hr className="border-slate-100" />
+        <hr className="border-cizgi" />
 
         <Alan etiket="Adınız soyadınız">
           <Girdi required value={adSoyad} onChange={(e) => setAdSoyad(e.target.value)} />
@@ -130,9 +130,9 @@ export default function Kayit() {
           Kurumu oluştur
         </Buton>
 
-        <p className="text-center text-sm text-slate-500">
+        <p className="text-center text-sm text-murekkep-silik">
           Hesabınız var mı?{" "}
-          <Link to="/giris" className="font-medium text-slate-900 hover:underline">
+          <Link to="/giris" className="font-medium text-murekkep hover:underline">
             Giriş yapın
           </Link>
         </p>

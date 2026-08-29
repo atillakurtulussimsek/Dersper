@@ -71,19 +71,19 @@ export default function UretimIzleme({ deneme }: { deneme: Deneme }) {
       }
     >
       <div className="space-y-4">
-        <div className="flex items-center gap-2 text-sm text-slate-600">
-          <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
+        <div className="flex items-center gap-2 text-sm text-murekkep-yumusak">
+          <Loader2 className="h-4 w-4 animate-spin text-murekkep-silik" />
           Tam yerleşim sağlanana kadar denemeye devam ediliyor.
         </div>
 
         <div>
-          <div className="mb-1 flex justify-between text-xs text-slate-500">
+          <div className="mb-1 flex justify-between text-xs text-murekkep-silik">
             <span>En iyi deneme</span>
             <span>%{oran}</span>
           </div>
-          <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+          <div className="h-2 overflow-hidden rounded-full bg-yuzey-alt">
             <div
-              className="h-full rounded-full bg-slate-900 transition-all duration-500"
+              className="h-full rounded-full bg-murekkep transition-all duration-500"
               style={{ width: `${oran}%` }}
             />
           </div>
@@ -91,21 +91,21 @@ export default function UretimIzleme({ deneme }: { deneme: Deneme }) {
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {istatistikler.map(([etiket, deger]) => (
-            <div key={etiket} className="rounded-lg bg-slate-50 px-3 py-2">
-              <p className="text-xs text-slate-500">{etiket}</p>
-              <p className="text-lg font-semibold tabular-nums text-slate-900">{deger}</p>
+            <div key={etiket} className="rounded-lg bg-yuzey-alt px-3 py-2">
+              <p className="text-xs text-murekkep-silik">{etiket}</p>
+              <p className="text-lg font-semibold tabular-nums text-murekkep">{deger}</p>
             </div>
           ))}
         </div>
 
         {deneme.proven_infeasible && (
-          <div className="flex gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-            <div className="text-sm text-amber-900">
+          <div className="flex gap-3 rounded-lg border border-uyari/25 bg-uyari-zemin px-4 py-3">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-uyari" />
+            <div className="text-sm text-uyari">
               <p className="font-medium">
                 Bu kısıtlarla tam yerleşim mümkün değil — çözücü bunu kanıtladı.
               </p>
-              <p className="mt-0.5 text-amber-800">
+              <p className="mt-0.5 text-uyari">
                 Denemeler sürüyor ama sonuç değişmeyecek. Aşağıdaki bulguları giderip
                 yeniden başlatmanız gerekiyor. Denemeler arası bekleme kademeli olarak
                 açıldığı için işlemci boşuna yorulmaz.

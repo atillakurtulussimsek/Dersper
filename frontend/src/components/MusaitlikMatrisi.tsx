@@ -16,9 +16,9 @@ type Hucreler = Record<number, Musaitlik>;
 const SIRA: Musaitlik[] = ["uygun", "uygun_degil", "tercih"];
 
 const STIL: Record<Musaitlik, string> = {
-  uygun: "bg-white hover:bg-slate-100 text-slate-400",
-  uygun_degil: "bg-red-500 text-white hover:bg-red-600",
-  tercih: "bg-emerald-500 text-white hover:bg-emerald-600",
+  uygun: "bg-yuzey hover:bg-yuzey-alt text-murekkep-silik",
+  uygun_degil: "bg-hata/85 text-uzeri hover:bg-hata",
+  tercih: "bg-basari/85 text-uzeri hover:bg-basari",
 };
 
 const ISARET: Record<Musaitlik, string> = {
@@ -144,7 +144,7 @@ export default function MusaitlikMatrisi({
                 <tr>
                   <th className="px-2 py-1" />
                   {aktifGunler.map((g) => (
-                    <th key={g.id} className="px-2 py-1 text-xs font-medium text-slate-600">
+                    <th key={g.id} className="px-2 py-1 text-xs font-medium text-murekkep-yumusak">
                       {g.name}
                     </th>
                   ))}
@@ -153,18 +153,18 @@ export default function MusaitlikMatrisi({
               <tbody>
                 {Array.from({ length: enFazla }, (_, i) => (
                   <tr key={i}>
-                    <th className="pr-2 text-right text-xs font-medium text-slate-500">
+                    <th className="pr-2 text-right text-xs font-medium text-murekkep-silik">
                       {i + 1}.
                     </th>
                     {aktifGunler.map((g) => {
                       const p = g.periods.find((x) => x.index === i);
                       if (!p)
-                        return <td key={g.id} className="h-8 w-16 bg-slate-50" />;
+                        return <td key={g.id} className="h-8 w-16 bg-yuzey-alt" />;
                       if (p.is_break)
                         return (
                           <td
                             key={g.id}
-                            className="h-8 w-16 border border-slate-200 bg-slate-100 text-center text-[10px] text-slate-400"
+                            className="h-8 w-16 border border-cizgi bg-yuzey-alt text-center text-[10px] text-murekkep-silik"
                           >
                             tnf
                           </td>
@@ -177,7 +177,7 @@ export default function MusaitlikMatrisi({
                             onMouseDown={() => cevir(p.id)}
                             onMouseEnter={() => boya(p.id)}
                             className={clsx(
-                              "h-8 w-16 border border-slate-200 text-xs transition-colors",
+                              "h-8 w-16 border border-cizgi text-xs transition-colors",
                               STIL[d],
                             )}
                             title={p.name}
@@ -197,18 +197,18 @@ export default function MusaitlikMatrisi({
         {kopyaSonucu && <Uyari tur="basari">{kopyaSonucu}</Uyari>}
 
         {kopyaModu && kopyaHedefleri && (
-          <div className="space-y-3 rounded-lg border border-slate-200 p-4">
+          <div className="space-y-3 rounded-lg border border-cizgi p-4">
             <Uyari tur="hata">
               Seçtiğiniz şubelerin mevcut müsaitlik tablosu <b>tamamen silinir</b> ve
               yerine bu tablo yazılır. Birleştirme yapılmaz.
             </Uyari>
 
             {!kopyaHedefleri.length ? (
-              <p className="text-sm text-slate-500">Kopyalanacak başka şube yok.</p>
+              <p className="text-sm text-murekkep-silik">Kopyalanacak başka şube yok.</p>
             ) : (
               <>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-slate-700">Hedef şubeler</span>
+                  <span className="text-sm font-medium text-murekkep-yumusak">Hedef şubeler</span>
                   <Buton
                     tur="sade"
                     onClick={() =>
@@ -228,7 +228,7 @@ export default function MusaitlikMatrisi({
                   {kopyaHedefleri.map((h) => (
                     <label
                       key={h.id}
-                      className="flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm hover:bg-slate-50"
+                      className="flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm hover:bg-yuzey-alt"
                     >
                       <input
                         type="checkbox"
@@ -238,7 +238,7 @@ export default function MusaitlikMatrisi({
                             s.includes(h.id) ? s.filter((x) => x !== h.id) : [...s, h.id],
                           )
                         }
-                        className="h-4 w-4 rounded border-slate-300"
+                        className="h-4 w-4 rounded border-cizgi-guclu"
                       />
                       {h.name}
                     </label>

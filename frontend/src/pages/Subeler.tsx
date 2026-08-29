@@ -58,7 +58,7 @@ export default function Subeler() {
       <header className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Şubeler</h1>
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-murekkep-silik">
             Programı yapılacak sınıf şubeleri ve ders görebilecekleri saatler.
           </p>
         </div>
@@ -86,11 +86,11 @@ export default function Subeler() {
         ) : (
           <Tablo basliklar={["Şube", "Sınıf seviyesi", "Öğrenci", "Durum", ""]}>
             {liste.data.map((s) => (
-              <tr key={s.id} className="hover:bg-slate-50">
+              <tr key={s.id} className="hover:bg-yuzey-alt">
                 <td className="px-3 py-2.5 font-medium">{s.name}</td>
-                <td className="px-3 py-2.5 text-slate-500">{s.grade_level ?? "—"}</td>
-                <td className="px-3 py-2.5 text-slate-500">{s.student_count ?? "—"}</td>
-                <td className="px-3 py-2.5 text-slate-500">
+                <td className="px-3 py-2.5 text-murekkep-silik">{s.grade_level ?? "—"}</td>
+                <td className="px-3 py-2.5 text-murekkep-silik">{s.student_count ?? "—"}</td>
+                <td className="px-3 py-2.5 text-murekkep-silik">
                   {s.is_active ? "Aktif" : "Pasif"}
                 </td>
                 <td className="px-3 py-2.5 text-right">
@@ -114,7 +114,7 @@ export default function Subeler() {
                       }}
                       aria-label="Sil"
                     >
-                      <Trash2 className="h-4 w-4 text-red-600" />
+                      <Trash2 className="h-4 w-4 text-hata" />
                     </Buton>
                   </div>
                 </td>
@@ -163,11 +163,11 @@ export default function Subeler() {
               type="checkbox"
               checked={form.is_active}
               onChange={(e) => setForm({ ...form, is_active: e.target.checked })}
-              className="h-4 w-4 rounded border-slate-300"
+              className="h-4 w-4 rounded border-cizgi-guclu"
             />
             Aktif (pasif şubeler programa dahil edilmez)
           </label>
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-murekkep-silik">
             Şubenin yalnızca sabah ya da yalnızca akşam ders görmesi gerekiyorsa,
             kaydettikten sonra listedeki takvim düğmesinden saatlerini sınırlayın.
           </p>

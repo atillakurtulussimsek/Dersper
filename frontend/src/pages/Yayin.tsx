@@ -71,7 +71,7 @@ export default function Yayin() {
   return (
     <div className="mx-auto max-w-5xl space-y-5 p-6 sm:p-10">
       <header>
-        <p className="text-sm text-slate-500">
+        <p className="text-sm text-murekkep-silik">
           {[kurum.data?.name, kurum.data?.term].filter(Boolean).join(" · ")}
         </p>
         <h1 className="text-xl font-semibold tracking-tight">{izgara.data!.timetable.name}</h1>
@@ -80,7 +80,7 @@ export default function Yayin() {
       <Kart
         sag={
           <div className="flex items-center gap-2">
-            <div className="flex rounded-lg border border-slate-300 p-0.5">
+            <div className="flex rounded-lg border border-cizgi-guclu p-0.5">
               {(["sube", "ogretmen"] as Bakis[]).map((b) => (
                 <button
                   key={b}
@@ -90,7 +90,7 @@ export default function Yayin() {
                   }}
                   className={clsx(
                     "rounded-md px-2.5 py-1 text-xs font-medium",
-                    bakis === b ? "bg-slate-900 text-white" : "text-slate-600",
+                    bakis === b ? "bg-murekkep text-uzeri" : "text-murekkep-yumusak",
                   )}
                 >
                   {b === "sube" ? "Şube" : "Öğretmen"}
@@ -122,7 +122,7 @@ export default function Yayin() {
         )}
       </Kart>
 
-      <p className="text-center text-xs text-slate-400">
+      <p className="text-center text-xs text-murekkep-silik">
         Dersper ile hazırlandı · açık kaynak ders dağıtım programı
       </p>
     </div>

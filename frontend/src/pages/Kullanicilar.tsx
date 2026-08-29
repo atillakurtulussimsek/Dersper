@@ -66,7 +66,7 @@ export default function Kullanicilar() {
       <header className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Kullanıcılar</h1>
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-murekkep-silik">
             Kurumunuzda çalışan hesaplar. Eklediğiniz herkes sizinle aynı yetkilere
             sahiptir.
           </p>
@@ -89,14 +89,14 @@ export default function Kullanicilar() {
         ) : (
           <Tablo basliklar={["Ad soyad", "E-posta", "Durum", ""]}>
             {liste.data?.map((k) => (
-              <tr key={k.id} className="hover:bg-slate-50">
+              <tr key={k.id} className="hover:bg-yuzey-alt">
                 <td className="px-3 py-2.5">
                   <span className="flex items-center gap-2">
                     <span className="font-medium">{k.full_name}</span>
                     {k.id === ben.data?.id && <Rozet>siz</Rozet>}
                   </span>
                 </td>
-                <td className="px-3 py-2.5 text-slate-500">{k.email}</td>
+                <td className="px-3 py-2.5 text-murekkep-silik">{k.email}</td>
                 <td className="px-3 py-2.5">
                   <Rozet tur={k.is_active ? "iyi" : "kotu"}>
                     {k.is_active ? "Açık" : "Kapalı"}
@@ -124,9 +124,9 @@ export default function Kullanicilar() {
                         }}
                       >
                         {k.is_active ? (
-                          <UserX className="h-4 w-4 text-red-600" />
+                          <UserX className="h-4 w-4 text-hata" />
                         ) : (
-                          <UserCheck className="h-4 w-4 text-emerald-600" />
+                          <UserCheck className="h-4 w-4 text-basari" />
                         )}
                       </Buton>
                     )}

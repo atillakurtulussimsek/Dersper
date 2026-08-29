@@ -101,7 +101,7 @@ export default function Ayarlar() {
     <div className="space-y-5">
       <header>
         <h1 className="text-xl font-semibold tracking-tight">Ayarlar</h1>
-        <p className="text-sm text-slate-500">Kurum bilgileri ve yapay zeka bağlantısı.</p>
+        <p className="text-sm text-murekkep-silik">Kurum bilgileri ve yapay zeka bağlantısı.</p>
       </header>
 
       <Kart baslik="Kurum bilgileri">
@@ -145,7 +145,7 @@ export default function Ayarlar() {
       <Kart
         baslik="Yapay zeka"
         aciklama="Kendi API anahtarınızı kullanırsınız; anahtar şifrelenerek saklanır ve yalnızca sizin sunucunuzda kalır."
-        sag={<Sparkles className="h-4 w-4 text-slate-400" />}
+        sag={<Sparkles className="h-4 w-4 text-murekkep-silik" />}
       >
         <form
           className="space-y-4"
@@ -165,7 +165,7 @@ export default function Ayarlar() {
               type="checkbox"
               checked={yzForm.enabled}
               onChange={(e) => setYzForm({ ...yzForm, enabled: e.target.checked })}
-              className="h-4 w-4 rounded border-slate-300"
+              className="h-4 w-4 rounded border-cizgi-guclu"
             />
             Yapay zeka desteğini aç
           </label>
@@ -181,7 +181,7 @@ export default function Ayarlar() {
                     setElleModel(false);
                     setYzForm({ ...yzForm, base_url: u.url, model: u.model });
                   }}
-                  className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+                  className="rounded-lg border border-cizgi-guclu bg-yuzey px-3 py-1.5 text-sm text-murekkep-yumusak hover:bg-yuzey-alt"
                 >
                   {u.ad}
                 </button>

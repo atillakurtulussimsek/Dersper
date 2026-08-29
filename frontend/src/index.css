@@ -1,12 +1,116 @@
+/* Yazı tipleri pakete gömülüdür; dışarıya istek gitmez. */
+@import "@fontsource-variable/bricolage-grotesque";
+@import "@fontsource-variable/ibm-plex-sans";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/500.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* Tasarım belirteçleri.
+ *
+ * Tez: renk yalnızca veriye aittir. Arayüzün tamamı akromatik mürekkep/kağıt;
+ * ekrandaki tek kroma kaynağı kullanıcının seçtiği ders ve öğretmen renkleridir.
+ * Güçlü bir marka rengi, ızgaradaki on kadar ders rengiyle kavga ederdi.
+ *
+ * Değerler alfa kullanılabilsin diye boşlukla ayrılmış RGB kanallarıdır.
+ */
 @layer base {
+  :root {
+    /* Kağıt: nötrden hafifçe soğuk, mavi-mor kaçışlı mürekkep ailesi. */
+    --kagit: 252 252 253;        /* sayfa zemini */
+    --yuzey: 255 255 255;        /* kart, panel */
+    --yuzey-alt: 246 246 249;    /* tablo başlığı, ikincil zemin */
+    --cizgi: 227 227 235;        /* ayraç */
+    --cizgi-guclu: 205 205 217;  /* girdi kenarı */
+    --murekkep: 22 22 31;        /* birincil metin, birincil düğme */
+    --murekkep-yumusak: 71 71 88;
+    --murekkep-silik: 122 122 143;
+    --uzeri: 255 255 255;        /* mürekkep üzerindeki metin */
+
+    /* Durum renkleri düşük doygunlukta: ders renkleriyle yarışmazlar. */
+    --basari: 21 105 74;
+    --basari-zemin: 226 244 236;
+    --uyari: 141 88 6;
+    --uyari-zemin: 252 240 219;
+    --hata: 176 42 42;
+    --hata-zemin: 253 232 232;
+
+    /* Ders rengi kompozisyonu: açık temada soluk zemin + koyu metin. */
+    --ders-zemin-alfa: 0.14;
+    --ders-bar-alfa: 1;
+
+    --gecis: 140ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .koyu {
+    --kagit: 15 15 20;
+    --yuzey: 23 23 31;
+    --yuzey-alt: 30 30 40;
+    --cizgi: 42 42 55;
+    --cizgi-guclu: 58 58 74;
+    --murekkep: 237 237 242;
+    --murekkep-yumusak: 178 178 195;
+    --murekkep-silik: 132 132 152;
+    --uzeri: 15 15 20;
+
+    --basari: 109 214 168;
+    --basari-zemin: 18 44 35;
+    --uyari: 235 183 92;
+    --uyari-zemin: 52 39 15;
+    --hata: 248 143 143;
+    --hata-zemin: 58 24 24;
+
+    /* Koyu zeminde %14 tint görünmez ve üstündeki metin okunmaz kalırdı.
+     * Renk katı sol bara taşınır, zemin yalnızca hafif bir iz bırakır. */
+    --ders-zemin-alfa: 0.2;
+    --ders-bar-alfa: 1;
+  }
+
   html {
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
+
   body {
-    @apply bg-slate-50 text-slate-900;
+    @apply bg-kagit text-murekkep;
+    font-feature-settings: "cv05" 1;
+  }
+
+  /* Saatler, ders sıraları ve 2+2+1 desenleri hizalı okunsun. */
+  .sayisal {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+  }
+}
+
+@layer components {
+  /* İmza: saat rayı.
+   * İnce dikey çizgi ve çentikler; yan menüde, kart başlıklarında ve ızgarada
+   * tekrar eder. Uygulamanın tamamı tek bir sürekli ders programı gibi okunur. */
+  .ray {
+    position: relative;
+    padding-left: 1.125rem;
+  }
+  .ray::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0.15em;
+    bottom: 0.15em;
+    width: 2px;
+    background: rgb(var(--murekkep));
+    opacity: 0.85;
+  }
+  .ray::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0.15em;
+    width: 0.5rem;
+    height: 2px;
+    background: rgb(var(--murekkep));
+    opacity: 0.85;
   }
 }

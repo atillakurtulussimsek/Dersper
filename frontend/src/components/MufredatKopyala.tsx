@@ -68,13 +68,13 @@ export default function MufredatKopyala({
             )}
             {sonuc.skipped.length > 0 && (
               <div className="space-y-1.5">
-                <p className="text-sm font-medium text-slate-700">
+                <p className="text-sm font-medium text-murekkep-yumusak">
                   {sonuc.skipped.length} atama atlandı:
                 </p>
-                <ul className="space-y-1 text-sm text-slate-600">
+                <ul className="space-y-1 text-sm text-murekkep-yumusak">
                   {sonuc.skipped.map((s, i) => (
                     <li key={i} className="flex gap-2">
-                      <span className="text-slate-400">•</span>
+                      <span className="text-murekkep-silik">•</span>
                       {s}
                     </li>
                   ))}
@@ -103,7 +103,7 @@ export default function MufredatKopyala({
             ) : (
               <>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-slate-700">Hedef şubeler</span>
+                  <span className="text-sm font-medium text-murekkep-yumusak">Hedef şubeler</span>
                   <Buton
                     tur="sade"
                     onClick={() =>
@@ -114,20 +114,20 @@ export default function MufredatKopyala({
                   </Buton>
                 </div>
 
-                <div className="max-h-64 space-y-1 overflow-y-auto rounded-lg border border-slate-200 p-2">
+                <div className="max-h-64 space-y-1 overflow-y-auto rounded-lg border border-cizgi p-2">
                   {hedefAdaylari.map((s) => (
                     <label
                       key={s.id}
-                      className="flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm hover:bg-slate-50"
+                      className="flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm hover:bg-yuzey-alt"
                     >
                       <input
                         type="checkbox"
                         checked={secili.includes(s.id)}
                         onChange={() => degistir(s.id)}
-                        className="h-4 w-4 rounded border-slate-300"
+                        className="h-4 w-4 rounded border-cizgi-guclu"
                       />
                       <span className="font-medium">{s.name}</span>
-                      {!s.is_active && <span className="text-xs text-slate-400">pasif</span>}
+                      {!s.is_active && <span className="text-xs text-murekkep-silik">pasif</span>}
                     </label>
                   ))}
                 </div>

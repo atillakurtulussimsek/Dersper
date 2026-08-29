@@ -18,7 +18,7 @@ function Segment<T extends string>({
   degistir: (d: T) => void;
 }) {
   return (
-    <div className="flex shrink-0 rounded-lg border border-slate-300 bg-white p-0.5">
+    <div className="flex shrink-0 rounded-lg border border-cizgi-guclu bg-yuzey p-0.5">
       {secenekler.map((s) => (
         <button
           key={s.id}
@@ -26,7 +26,7 @@ function Segment<T extends string>({
           title={s.ipucu}
           className={clsx(
             "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
-            deger === s.id ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100",
+            deger === s.id ? "bg-murekkep text-uzeri" : "text-murekkep-yumusak hover:bg-yuzey-alt",
           )}
         >
           {s.etiket}
@@ -58,7 +58,7 @@ export default function ProgramAracCubugu({
   indir: (bicim: "pdf" | "xlsx") => void;
 }) {
   return (
-    <div className="sticky top-0 z-20 -mx-5 -mt-5 mb-4 space-y-2.5 border-b border-slate-200 bg-white/95 px-5 py-3 backdrop-blur">
+    <div className="sticky top-0 z-20 -mx-5 -mt-5 mb-4 space-y-2.5 border-b border-cizgi bg-yuzey/95 px-5 py-3 backdrop-blur">
       <div className="flex flex-wrap items-center gap-2">
         <Segment
           deger={bakis}
@@ -69,7 +69,7 @@ export default function ProgramAracCubugu({
           ]}
         />
 
-        <span className="text-xs text-slate-400">Çıktı:</span>
+        <span className="text-xs text-murekkep-silik">Çıktı:</span>
         <Segment
           deger={duzen}
           degistir={duzenDegistir}
@@ -113,8 +113,8 @@ export default function ProgramAracCubugu({
               className={clsx(
                 "shrink-0 rounded-lg px-2.5 py-1 text-xs font-medium transition-colors",
                 a === seciliAnahtar
-                  ? "bg-slate-900 text-white"
-                  : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-100",
+                  ? "bg-murekkep text-uzeri"
+                  : "border border-cizgi-guclu bg-yuzey text-murekkep-yumusak hover:bg-yuzey-alt",
               )}
             >
               {a}

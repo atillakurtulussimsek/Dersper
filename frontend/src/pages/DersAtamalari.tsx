@@ -109,7 +109,7 @@ export default function DersAtamalari() {
       <header className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Ders Atamaları</h1>
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-murekkep-silik">
             Hangi şubede hangi dersi kimin, kaç saat okutacağı. Program bu tabloya
             göre üretilir.
           </p>
@@ -144,8 +144,8 @@ export default function DersAtamalari() {
                 onClick={() => setSubeId(s.id)}
                 className={
                   s.id === secili
-                    ? "rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white"
-                    : "rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+                    ? "rounded-lg bg-murekkep px-3 py-1.5 text-sm font-medium text-uzeri"
+                    : "rounded-lg border border-cizgi-guclu bg-yuzey px-3 py-1.5 text-sm text-murekkep-yumusak hover:bg-yuzey-alt"
                 }
               >
                 {s.name}
@@ -164,7 +164,7 @@ export default function DersAtamalari() {
             sag={
               <div className="flex items-center gap-2">
                 {toplam > kullanilabilir && kullanilabilir > 0 && (
-                  <span className="rounded-md bg-red-100 px-2 py-1 text-xs font-medium text-red-800">
+                  <span className="rounded-md bg-hata-zemin px-2 py-1 text-xs font-medium text-hata">
                     {toplam - kullanilabilir} saat fazla
                   </span>
                 )}
@@ -193,7 +193,7 @@ export default function DersAtamalari() {
                 basliklar={["Ders", "Öğretmen", "Haftalık", "Dağılım", "Günde en fazla", ""]}
               >
                 {mufredat.data.map((m) => (
-                  <tr key={m.id} className="hover:bg-slate-50">
+                  <tr key={m.id} className="hover:bg-yuzey-alt">
                     <td className="px-3 py-2.5">
                       <span className="flex items-center gap-2.5">
                         <span
@@ -203,7 +203,7 @@ export default function DersAtamalari() {
                         <span className="font-medium">{m.subject.name}</span>
                       </span>
                     </td>
-                    <td className="px-3 py-2.5 text-slate-600">
+                    <td className="px-3 py-2.5 text-murekkep-yumusak">
                       <span className="flex items-center gap-2">
                         <span
                           className="h-2.5 w-2.5 shrink-0 rounded-full"
@@ -212,11 +212,11 @@ export default function DersAtamalari() {
                         {m.teacher.full_name}
                       </span>
                     </td>
-                    <td className="px-3 py-2.5 text-slate-600">{m.weekly_hours} saat</td>
-                    <td className="px-3 py-2.5 font-mono text-xs text-slate-600">
+                    <td className="px-3 py-2.5 text-murekkep-yumusak">{m.weekly_hours} saat</td>
+                    <td className="px-3 py-2.5 font-mono text-xs text-murekkep-yumusak">
                       {desenEtiketi(m.block_pattern, m.weekly_hours)}
                     </td>
-                    <td className="px-3 py-2.5 text-slate-600">{m.max_per_day}</td>
+                    <td className="px-3 py-2.5 text-murekkep-yumusak">{m.max_per_day}</td>
                     <td className="px-3 py-2.5 text-right">
                       <div className="flex justify-end gap-1">
                         <Buton
@@ -244,7 +244,7 @@ export default function DersAtamalari() {
                           }}
                           aria-label="Sil"
                         >
-                          <Trash2 className="h-4 w-4 text-red-600" />
+                          <Trash2 className="h-4 w-4 text-hata" />
                         </Buton>
                       </div>
                     </td>
@@ -301,7 +301,7 @@ export default function DersAtamalari() {
               ))}
             </Secim>
           </Alan>
-          <p className="-mt-2 text-xs text-slate-500">
+          <p className="-mt-2 text-xs text-murekkep-silik">
             Aynı dersi farklı öğretmenlerle birden çok kez atayabilirsiniz; saatler
             öğretmenler arasında bölünür.
           </p>
@@ -363,8 +363,8 @@ export default function DersAtamalari() {
                 onClick={() => setForm({ ...form, block_pattern: o })}
                 className={
                   form.block_pattern.replace(/[,\s]+/g, "+") === o
-                    ? "rounded-lg bg-slate-900 px-2.5 py-1 font-mono text-xs text-white"
-                    : "rounded-lg border border-slate-300 bg-white px-2.5 py-1 font-mono text-xs text-slate-700 hover:bg-slate-50"
+                    ? "rounded-lg bg-murekkep px-2.5 py-1 font-mono text-xs text-uzeri"
+                    : "rounded-lg border border-cizgi-guclu bg-yuzey px-2.5 py-1 font-mono text-xs text-murekkep-yumusak hover:bg-yuzey-alt"
                 }
               >
                 {o}
@@ -372,7 +372,7 @@ export default function DersAtamalari() {
             ))}
           </div>
 
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-murekkep-silik">
             <b>2+2+1</b>: iki gün çift ders, bir gün tek saat. <b>1+1+1+1+1</b>: beş ayrı
             saat. Blokların toplamı haftalık saate eşit olmalı; günlük sınır da bu
             dağılımı karşılamalıdır.

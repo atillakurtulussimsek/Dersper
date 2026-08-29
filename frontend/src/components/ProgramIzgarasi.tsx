@@ -23,20 +23,31 @@ function altSatir(hucre: Hucre, bakis: Bakis): string {
   return bakis === "sube" ? hucre.teacher_name : hucre.section_name;
 }
 
+/** Ders renginin hücre kompozisyonu.
+ *
+ *  Renk kullanıcıya aittir ve her iki temada okunur kalmalıdır. Sabit bir
+ *  saydamlık işe yaramaz: açık temada yeterli olan %12, koyu zeminde kaybolur.
+ *  Zemin payı temaya göre belirteçten gelir; rengin kendisi solda katı bir
+ *  barda durur, orada her koşulda görünür.
+ */
+function dersZemini(renk: string): React.CSSProperties {
+  return {
+    background: `color-mix(in srgb, ${renk} calc(var(--ders-zemin-alfa) * 100%), transparent)`,
+    boxShadow: `inset 3px 0 0 ${renk}`,
+  };
+}
+
 function HucreIcerigi({ hucre, bakis }: { hucre: Hucre; bakis: Bakis }) {
   return (
     <div
       className="flex h-full w-full flex-col justify-center overflow-hidden rounded-md px-1.5 py-1 text-center"
-      style={{
-        background: `${hucre.subject_color}1f`,
-        boxShadow: `inset 3px 0 0 ${hucre.subject_color}`,
-      }}
+      style={dersZemini(hucre.subject_color)}
     >
-      <span className="flex items-center justify-center gap-1 truncate text-[12px] font-semibold leading-tight text-slate-800">
-        {hucre.is_locked && <Lock className="h-2.5 w-2.5 shrink-0 text-slate-500" />}
+      <span className="flex items-center justify-center gap-1 truncate text-[12px] font-semibold leading-tight text-murekkep">
+        {hucre.is_locked && <Lock className="h-2.5 w-2.5 shrink-0 text-murekkep-silik" />}
         <span className="truncate">{hucre.subject_name}</span>
       </span>
-      <span className="truncate text-[10.5px] leading-tight text-slate-500">
+      <span className="truncate text-[10.5px] leading-tight text-murekkep-silik">
         {altSatir(hucre, bakis)}
       </span>
     </div>
@@ -71,7 +82,7 @@ function Surukle({
       className={clsx(
         "h-full w-full transition-opacity",
         hucre.is_locked
-          ? "cursor-default rounded-md ring-1 ring-inset ring-slate-400"
+          ? "cursor-default rounded-md ring-1 ring-inset ring-cizgi-guclu"
           : "cursor-grab active:cursor-grabbing",
         isDragging && "opacity-30",
       )}
@@ -95,9 +106,9 @@ function Hedef({
     <td
       ref={setNodeRef}
       className={clsx(
-        "h-14 border border-slate-200 p-0.5 align-middle transition-colors",
-        bos && "bg-slate-50/60",
-        isOver && "bg-slate-900/10 ring-2 ring-inset ring-slate-400",
+        "h-14 border border-cizgi p-0.5 align-middle transition-colors",
+        bos && "bg-yuzey-alt/60",
+        isOver && "bg-murekkep/10 ring-2 ring-inset ring-cizgi-guclu",
       )}
     >
       {children}
@@ -169,13 +180,13 @@ export default function ProgramIzgarasi({
       </colgroup>
       <thead>
         <tr>
-          <th className="border border-slate-200 bg-slate-100 px-2 py-2 text-[11px] font-semibold text-slate-500">
+          <th className="border border-cizgi bg-yuzey-alt px-2 py-2 text-[11px] font-semibold text-murekkep-silik">
             Saat
           </th>
           {aktifGunler.map((g) => (
             <th
               key={g.id}
-              className="border border-slate-200 bg-slate-100 px-2 py-2 text-[12px] font-semibold text-slate-700"
+              className="border border-cizgi bg-yuzey-alt px-2 py-2 text-[12px] font-semibold text-murekkep-yumusak"
             >
               {g.name}
             </th>
@@ -187,12 +198,12 @@ export default function ProgramIzgarasi({
           const aralik = saatAraligi(i);
           return (
             <tr key={i}>
-              <th className="border border-slate-200 bg-slate-50 px-1 py-1 text-center align-middle">
-                <span className="block text-[12px] font-semibold text-slate-700">
+              <th className="border border-cizgi bg-yuzey-alt px-1 py-1 text-center align-middle">
+                <span className="sayisal block text-[12px] font-semibold text-murekkep-yumusak">
                   {i + 1}.
                 </span>
                 {aralik && (
-                  <span className="block text-[9.5px] leading-tight text-slate-400">
+                  <span className="sayisal block font-mono text-[9px] leading-tight text-murekkep-silik">
                     {aralik}
                   </span>
                 )}
@@ -203,7 +214,7 @@ export default function ProgramIzgarasi({
                   return (
                     <td
                       key={g.id}
-                      className="h-14 border border-slate-100 bg-[repeating-linear-gradient(45deg,#f8fafc,#f8fafc_6px,#f1f5f9_6px,#f1f5f9_12px)]"
+                      className="h-14 border border-cizgi bg-[repeating-linear-gradient(45deg,#f8fafc,#f8fafc_6px,#f1f5f9_6px,#f1f5f9_12px)]"
                     />
                   );
                 }
@@ -211,7 +222,7 @@ export default function ProgramIzgarasi({
                   return (
                     <td
                       key={g.id}
-                      className="h-14 border border-slate-200 bg-amber-50 text-center text-[10px] font-medium text-amber-700"
+                      className="h-14 border border-cizgi bg-uyari-zemin text-center text-[10px] font-medium text-uyari"
                     >
                       teneffüs
                     </td>
@@ -229,8 +240,8 @@ export default function ProgramIzgarasi({
                   <td
                     key={g.id}
                     className={clsx(
-                      "h-14 border border-slate-200 p-0.5",
-                      !h && "bg-slate-50/60",
+                      "h-14 border border-cizgi p-0.5",
+                      !h && "bg-yuzey-alt/60",
                     )}
                   >
                     {icerik}

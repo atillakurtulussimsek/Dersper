@@ -187,18 +187,22 @@ export default function ProgramDetay() {
   return (
     <div className="space-y-4">
       <header className="flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="truncate text-xl font-semibold tracking-tight">{program.name}</h1>
-          <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-500">
+        <div className="ray min-w-0">
+          <h1 className="truncate font-baslik text-2xl font-semibold tracking-tight text-murekkep">
+            {program.name}
+          </h1>
+          <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-murekkep-silik">
             <Rozet tur={DURUM[program.status].tur}>{DURUM[program.status].etiket}</Rozet>
-            <span>{hucreler.length} ders saati yerleşmiş</span>
+            <span className="sayisal">{hucreler.length} ders saati yerleşmiş</span>
             {surenUretim && (
-              <span className="text-slate-400">
+              <span className="sayisal text-murekkep-silik">
                 · {surenUretim.attempts}. deneme sürüyor
               </span>
             )}
             {sonDeneme?.seconds != null && (
-              <span className="text-slate-400">· {sonDeneme.seconds.toFixed(1)} sn</span>
+              <span className="sayisal text-murekkep-silik">
+                · {sonDeneme.seconds.toFixed(1)} sn
+              </span>
             )}
           </p>
         </div>
@@ -245,7 +249,7 @@ export default function ProgramDetay() {
           />
 
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-base font-semibold text-slate-900">{seciliAnahtar}</h2>
+            <h2 className="text-base font-semibold text-murekkep">{seciliAnahtar}</h2>
             <div className="flex flex-wrap gap-1.5 text-xs">
               {[
                 ["dolu", `${ozet.dolu} saat dolu`],
@@ -255,7 +259,7 @@ export default function ProgramDetay() {
               ].map(([k, metin]) => (
                 <span
                   key={k}
-                  className="rounded-md bg-slate-100 px-2 py-1 font-medium text-slate-600"
+                  className="rounded-md bg-yuzey-alt px-2 py-1 font-medium text-murekkep-yumusak"
                 >
                   {metin}
                 </span>
@@ -284,7 +288,7 @@ export default function ProgramDetay() {
             />
           )}
 
-          <p className="mt-3 text-xs text-slate-400">
+          <p className="mt-3 text-xs text-murekkep-silik">
             Hücreyi sürükleyerek taşıyın, çift tıklayarak kilitleyin. Kilitli dersler
             yeniden üretimde yerinde kalır.
           </p>
@@ -299,11 +303,11 @@ export default function ProgramDetay() {
         <Kart
           baslik="Yayın"
           aciklama="Yayınlanan program, girişe gerek kalmadan bir bağlantı üzerinden görüntülenebilir."
-          sag={<Globe className="h-4 w-4 text-slate-400" />}
+          sag={<Globe className="h-4 w-4 text-murekkep-silik" />}
         >
           {program.public_token ? (
             <div className="flex flex-wrap items-center gap-2">
-              <code className="min-w-0 flex-1 truncate rounded-lg bg-slate-100 px-3 py-2 text-sm">
+              <code className="min-w-0 flex-1 truncate rounded-lg bg-yuzey-alt px-3 py-2 text-sm">
                 {`${location.origin}/p/${program.public_token}`}
               </code>
               <Buton

@@ -96,7 +96,7 @@ export default function Donemler() {
       <header className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Dönemler</h1>
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-murekkep-silik">
             Her dönem kendi zaman ızgarası, öğretmenleri, dersleri, şubeleri ve
             programlarıyla bağımsızdır.
           </p>
@@ -120,19 +120,19 @@ export default function Donemler() {
         ) : (
           <Tablo basliklar={["Dönem", "Tarih", "İçerik", ""]}>
             {donemler.data?.map((d) => (
-              <tr key={d.id} className="hover:bg-slate-50">
+              <tr key={d.id} className="hover:bg-yuzey-alt">
                 <td className="px-3 py-2.5">
                   <span className="flex items-center gap-2">
                     <span className="font-medium">{d.name}</span>
                     {d.is_active && <Rozet tur="iyi">Aktif</Rozet>}
                   </span>
                 </td>
-                <td className="px-3 py-2.5 text-slate-500">
+                <td className="px-3 py-2.5 text-murekkep-silik">
                   {d.starts_on || d.ends_on
                     ? `${d.starts_on ?? "…"} → ${d.ends_on ?? "…"}`
                     : "—"}
                 </td>
-                <td className="px-3 py-2.5 text-slate-500">{ozet(d)}</td>
+                <td className="px-3 py-2.5 text-murekkep-silik">{ozet(d)}</td>
                 <td className="px-3 py-2.5 text-right">
                   <div className="flex justify-end gap-1">
                     {!d.is_active && (
@@ -160,7 +160,7 @@ export default function Donemler() {
                           sil.mutate(d.id);
                       }}
                     >
-                      <Trash2 className="h-4 w-4 text-red-600" />
+                      <Trash2 className="h-4 w-4 text-hata" />
                     </Buton>
                   </div>
                 </td>
@@ -180,19 +180,19 @@ export default function Donemler() {
         }
       >
         {!silinmisGoster ? (
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-murekkep-silik">
             Hiçbir veri kalıcı olarak silinmez. Listeyi görmek için “Göster”e basın.
           </p>
         ) : silinmisler.isLoading ? (
           <Yukleniyor />
         ) : !silinmisler.data?.length ? (
-          <p className="text-sm text-slate-500">Silinmiş dönem yok.</p>
+          <p className="text-sm text-murekkep-silik">Silinmiş dönem yok.</p>
         ) : (
           <Tablo basliklar={["Dönem", "İçerik", ""]}>
             {silinmisler.data.map((d) => (
-              <tr key={d.id} className="hover:bg-slate-50">
-                <td className="px-3 py-2.5 font-medium text-slate-600">{d.name}</td>
-                <td className="px-3 py-2.5 text-slate-500">{ozet(d)}</td>
+              <tr key={d.id} className="hover:bg-yuzey-alt">
+                <td className="px-3 py-2.5 font-medium text-murekkep-yumusak">{d.name}</td>
+                <td className="px-3 py-2.5 text-murekkep-silik">{ozet(d)}</td>
                 <td className="px-3 py-2.5 text-right">
                   <Buton tur="ikincil" onClick={() => geriAl.mutate(d.id)}>
                     <RotateCcw className="h-4 w-4" /> Geri al

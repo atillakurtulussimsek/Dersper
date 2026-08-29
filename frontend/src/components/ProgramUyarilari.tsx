@@ -27,18 +27,18 @@ function UyariSatiri({
     <div
       className={
         gizli
-          ? "flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3"
-          : "flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3"
+          ? "flex items-start gap-3 rounded-lg border border-cizgi bg-yuzey-alt px-4 py-3"
+          : "flex items-start gap-3 rounded-lg border border-uyari/25 bg-uyari-zemin px-4 py-3"
       }
     >
       <AlertTriangle
-        className={`mt-0.5 h-4 w-4 shrink-0 ${gizli ? "text-slate-400" : "text-amber-600"}`}
+        className={`mt-0.5 h-4 w-4 shrink-0 ${gizli ? "text-murekkep-silik" : "text-uyari"}`}
       />
       <div className="min-w-0 flex-1">
-        <p className={`text-sm font-medium ${gizli ? "text-slate-600" : "text-amber-900"}`}>
+        <p className={`text-sm font-medium ${gizli ? "text-murekkep-yumusak" : "text-uyari"}`}>
           {uyari.baslik}
         </p>
-        <p className={`mt-0.5 text-sm ${gizli ? "text-slate-500" : "text-amber-800"}`}>
+        <p className={`mt-0.5 text-sm ${gizli ? "text-murekkep-silik" : "text-uyari"}`}>
           {uyari.detay}
         </p>
       </div>
@@ -130,7 +130,7 @@ export default function ProgramUyarilari({ timetableId }: { timetableId: string 
         {degistir.error && <Uyari tur="hata">{(degistir.error as Error).message}</Uyari>}
 
         {acik.length > 0 && (
-          <p className="pt-1 text-xs text-slate-500">
+          <p className="pt-1 text-xs text-murekkep-silik">
             Düzeltmek için ilgili hücreyi yukarıdaki ızgarada başka bir saate
             sürükleyebilir ya da Ders Atamaları'ndan günlük sınırı değiştirebilirsiniz.
           </p>

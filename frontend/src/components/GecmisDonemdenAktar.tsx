@@ -69,13 +69,13 @@ export default function GecmisDonemdenAktar<T extends { id: number }>({
             )}
             {sonuc.skipped.length > 0 && (
               <div className="space-y-1.5">
-                <p className="text-sm font-medium text-slate-700">
+                <p className="text-sm font-medium text-murekkep-yumusak">
                   {sonuc.skipped.length} kayıt atlandı:
                 </p>
-                <ul className="max-h-48 space-y-1 overflow-y-auto text-sm text-slate-600">
+                <ul className="max-h-48 space-y-1 overflow-y-auto text-sm text-murekkep-yumusak">
                   {sonuc.skipped.map((s, i) => (
                     <li key={i} className="flex gap-2">
-                      <span className="text-slate-400">•</span>
+                      <span className="text-murekkep-silik">•</span>
                       {s}
                     </li>
                   ))}
@@ -107,7 +107,7 @@ export default function GecmisDonemdenAktar<T extends { id: number }>({
         ) : (
           <>
             <label className="block">
-              <span className="mb-1 block text-sm font-medium text-slate-700">
+              <span className="mb-1 block text-sm font-medium text-murekkep-yumusak">
                 Kaynak dönem
               </span>
               <Secim
@@ -132,7 +132,7 @@ export default function GecmisDonemdenAktar<T extends { id: number }>({
             ) : (
               <>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-slate-500">
+                  <span className="text-sm text-murekkep-silik">
                     {liste.length} kayıt · {secili.length} seçili
                   </span>
                   <Buton
@@ -143,13 +143,13 @@ export default function GecmisDonemdenAktar<T extends { id: number }>({
                   </Buton>
                 </div>
 
-                <div className="max-h-72 space-y-0.5 overflow-y-auto rounded-lg border border-slate-200 p-2">
+                <div className="max-h-72 space-y-0.5 overflow-y-auto rounded-lg border border-cizgi p-2">
                   {liste.map((k) => {
                     const { ana, alt } = satirYazisi(k);
                     return (
                       <label
                         key={k.id}
-                        className="flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm hover:bg-slate-50"
+                        className="flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm hover:bg-yuzey-alt"
                       >
                         <input
                           type="checkbox"
@@ -161,13 +161,13 @@ export default function GecmisDonemdenAktar<T extends { id: number }>({
                                 : [...s, k.id],
                             )
                           }
-                          className="h-4 w-4 shrink-0 rounded border-slate-300"
+                          className="h-4 w-4 shrink-0 rounded border-cizgi-guclu"
                         />
-                        <span className="min-w-0 flex-1 truncate font-medium text-slate-800">
+                        <span className="min-w-0 flex-1 truncate font-medium text-murekkep">
                           {ana}
                         </span>
                         {alt && (
-                          <span className="shrink-0 text-xs text-slate-500">{alt}</span>
+                          <span className="shrink-0 text-xs text-murekkep-silik">{alt}</span>
                         )}
                       </label>
                     );

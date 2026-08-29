@@ -37,11 +37,11 @@ export default function Giris() {
     <div className="flex min-h-screen items-center justify-center p-4">
       <form
         onSubmit={gonder}
-        className="w-full max-w-sm space-y-5 rounded-xl border border-slate-200 bg-white p-8 shadow-sm"
+        className="w-full max-w-sm space-y-5 rounded-xl border border-cizgi bg-yuzey p-8 shadow-sm"
       >
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Dersper</h1>
-          <p className="mt-1 text-sm text-slate-500">Yönetici girişi</p>
+          <p className="mt-1 text-sm text-murekkep-silik">Yönetici girişi</p>
         </div>
 
         {hata && <Uyari tur="hata">{hata}</Uyari>}
@@ -71,9 +71,9 @@ export default function Giris() {
         </Buton>
 
         {durum.data?.registration_open && (
-          <p className="text-center text-sm text-slate-500">
+          <p className="text-center text-sm text-murekkep-silik">
             Kurumunuz kayıtlı değil mi?{" "}
-            <Link to="/kayit" className="font-medium text-slate-900 hover:underline">
+            <Link to="/kayit" className="font-medium text-murekkep hover:underline">
               Kurum kaydı oluşturun
             </Link>
           </p>

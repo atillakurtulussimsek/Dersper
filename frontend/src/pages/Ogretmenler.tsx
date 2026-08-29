@@ -6,7 +6,8 @@ import GecmisDonemdenAktar from "../components/GecmisDonemdenAktar";
 import RenkSecici from "../components/RenkSecici";
 import MusaitlikMatrisi from "../components/MusaitlikMatrisi";
 import {
-  Alan, BosDurum, Buton, CokSatir, Girdi, Kart, Kutu, Tablo, Uyari, Yukleniyor,
+  Alan, BosDurum, Buton, CokSatir, Girdi, Kart, Kutu, SayfaBasligi, Tablo, Uyari,
+  Yukleniyor,
 } from "../components/ui";
 import { get } from "../lib/api";
 import { hataMetni, useKaynak, useListe } from "../lib/hooks";
@@ -104,22 +105,20 @@ export default function Ogretmenler() {
 
   return (
     <div className="space-y-5">
-      <header className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Öğretmenler</h1>
-          <p className="text-sm text-slate-500">
-            Öğretmen kadrosu ve her öğretmenin haftalık müsaitlik durumu.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Buton tur="ikincil" onClick={() => setAktarimAcik(true)}>
-            <Download className="h-4 w-4" /> Geçmiş dönemden aktar
-          </Buton>
-          <Buton onClick={() => ac()}>
-            <Plus className="h-4 w-4" /> Öğretmen ekle
-          </Buton>
-        </div>
-      </header>
+      <SayfaBasligi
+        baslik="Öğretmenler"
+        aciklama="Öğretmen kadrosu ve her öğretmenin haftalık müsaitlik durumu."
+        sag={
+          <>
+            <Buton tur="ikincil" onClick={() => setAktarimAcik(true)}>
+              <Download className="h-4 w-4" /> Geçmiş dönemden aktar
+            </Buton>
+            <Buton onClick={() => ac()}>
+              <Plus className="h-4 w-4" /> Öğretmen ekle
+            </Buton>
+          </>
+        }
+      />
 
       {hata && <Uyari tur="hata">{hata}</Uyari>}
 
@@ -142,7 +141,7 @@ export default function Ogretmenler() {
         ) : (
           <Tablo basliklar={["Ad soyad", "Branş", "Kısa kod", "Günlük en fazla", "Durum", ""]}>
             {liste.data.map((o) => (
-              <tr key={o.id} className="hover:bg-slate-50">
+              <tr key={o.id} className="hover:bg-yuzey-alt">
                 <td className="px-3 py-2.5">
                   <span className="flex items-center gap-2.5">
                     <span
@@ -152,12 +151,12 @@ export default function Ogretmenler() {
                     <span className="font-medium">{o.full_name}</span>
                   </span>
                 </td>
-                <td className="px-3 py-2.5 text-slate-500">{o.branch || "—"}</td>
-                <td className="px-3 py-2.5 text-slate-500">{o.short_code || "—"}</td>
-                <td className="px-3 py-2.5 text-slate-500">
+                <td className="px-3 py-2.5 text-murekkep-silik">{o.branch || "—"}</td>
+                <td className="px-3 py-2.5 font-mono text-xs text-murekkep-yumusak">{o.short_code || "—"}</td>
+                <td className="sayisal px-3 py-2.5 text-murekkep-silik">
                   {o.max_daily_hours ? `${o.max_daily_hours} saat` : "—"}
                 </td>
-                <td className="px-3 py-2.5 text-slate-500">
+                <td className="px-3 py-2.5 text-murekkep-silik">
                   {o.is_active ? "Aktif" : "Pasif"}
                 </td>
                 <td className="px-3 py-2.5 text-right">
@@ -180,7 +179,7 @@ export default function Ogretmenler() {
                       }}
                       aria-label="Sil"
                     >
-                      <Trash2 className="h-4 w-4 text-red-600" />
+                      <Trash2 className="h-4 w-4 text-hata" />
                     </Buton>
                   </div>
                 </td>
@@ -288,7 +287,7 @@ export default function Ogretmenler() {
               type="checkbox"
               checked={form.is_active}
               onChange={(e) => setForm({ ...form, is_active: e.target.checked })}
-              className="h-4 w-4 rounded border-slate-300"
+              className="h-4 w-4 rounded border-cizgi-guclu"
             />
             Aktif (pasif öğretmenler programa dahil edilmez)
           </label>

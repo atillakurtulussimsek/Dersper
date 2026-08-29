@@ -22,23 +22,23 @@ export default function GecmisCalistirmalar({ denemeler }: { denemeler: Deneme[]
     >
       <Tablo basliklar={["Başlangıç", "Durum", "Deneme", "Süre", "En iyi yerleşim"]}>
         {denemeler.map((d) => (
-          <tr key={d.id} className="hover:bg-slate-50">
-            <td className="px-3 py-2.5 text-slate-600">
+          <tr key={d.id} className="hover:bg-yuzey-alt">
+            <td className="px-3 py-2.5 text-murekkep-yumusak">
               {new Date(d.started_at + "Z").toLocaleString("tr-TR")}
             </td>
             <td className="px-3 py-2.5">
               <span className="flex items-center gap-2">
                 <Rozet tur={DURUM[d.status].tur}>{DURUM[d.status].etiket}</Rozet>
                 {d.proven_infeasible && (
-                  <span className="text-xs text-amber-700">kısıtlar çelişiyor</span>
+                  <span className="text-xs text-uyari">kısıtlar çelişiyor</span>
                 )}
               </span>
             </td>
-            <td className="px-3 py-2.5 tabular-nums text-slate-600">{d.attempts}</td>
-            <td className="px-3 py-2.5 tabular-nums text-slate-600">
+            <td className="px-3 py-2.5 tabular-nums text-murekkep-yumusak">{d.attempts}</td>
+            <td className="px-3 py-2.5 tabular-nums text-murekkep-yumusak">
               {d.seconds != null ? sureMetni(d.seconds) : "—"}
             </td>
-            <td className="px-3 py-2.5 tabular-nums text-slate-600">
+            <td className="px-3 py-2.5 tabular-nums text-murekkep-yumusak">
               {d.required ? `${d.best_placed} / ${d.required} saat` : "—"}
             </td>
           </tr>

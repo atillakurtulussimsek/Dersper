@@ -36,7 +36,7 @@ export default function Programlar() {
       <header className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Ders Programları</h1>
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-murekkep-silik">
             Birden çok program taslağı tutabilir, karşılaştırıp birini yayınlayabilirsiniz.
           </p>
         </div>
@@ -61,14 +61,14 @@ export default function Programlar() {
             {liste.data.map((p) => (
               <tr
                 key={p.id}
-                className="cursor-pointer hover:bg-slate-50"
+                className="cursor-pointer hover:bg-yuzey-alt"
                 onClick={() => navigate(`/programlar/${p.id}`)}
               >
                 <td className="px-3 py-2.5 font-medium">{p.name}</td>
                 <td className="px-3 py-2.5">
                   <Rozet tur={DURUM[p.status].tur}>{DURUM[p.status].etiket}</Rozet>
                 </td>
-                <td className="px-3 py-2.5 text-slate-500">
+                <td className="px-3 py-2.5 text-murekkep-silik">
                   {new Date(p.created_at).toLocaleString("tr-TR")}
                 </td>
                 <td className="px-3 py-2.5 text-right">
@@ -80,7 +80,7 @@ export default function Programlar() {
                       if (confirm(`"${p.name}" programı silinsin mi?`)) kaynak.sil.mutate(p.id);
                     }}
                   >
-                    <Trash2 className="h-4 w-4 text-red-600" />
+                    <Trash2 className="h-4 w-4 text-hata" />
                   </Buton>
                 </td>
               </tr>

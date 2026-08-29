@@ -1,4 +1,9 @@
-/** Küçük bileşen seti. Tailwind üzerine yazılmıştır, ek bağımlılık yoktur. */
+/** Küçük bileşen seti.
+ *
+ *  Renk kullanmaz: tüm yüzeyler ve metinler tasarım belirteçlerinden gelir
+ *  (bkz. src/index.css). Ekrandaki tek kroma kaynağı kullanıcının seçtiği ders
+ *  ve öğretmen renkleridir; arayüz kromu onlarla yarışmaz.
+ */
 import clsx from "clsx";
 import { Loader2, X } from "lucide-react";
 import type {
@@ -9,10 +14,10 @@ import type {
 type ButonTuru = "birincil" | "ikincil" | "tehlike" | "sade";
 
 const BUTON_STILLERI: Record<ButonTuru, string> = {
-  birincil: "bg-slate-900 text-white hover:bg-slate-800 disabled:bg-slate-400",
-  ikincil: "bg-white text-slate-800 border border-slate-300 hover:bg-slate-50",
-  tehlike: "bg-red-600 text-white hover:bg-red-700",
-  sade: "text-slate-600 hover:bg-slate-100",
+  birincil: "bg-murekkep text-uzeri hover:opacity-90",
+  ikincil: "border border-cizgi-guclu bg-yuzey text-murekkep hover:bg-yuzey-alt",
+  tehlike: "border border-hata/30 bg-hata-zemin text-hata hover:bg-hata/15",
+  sade: "text-murekkep-yumusak hover:bg-yuzey-alt hover:text-murekkep",
 };
 
 export function Buton({
@@ -30,9 +35,10 @@ export function Buton({
       {...rest}
       disabled={rest.disabled || yukleniyor}
       className={clsx(
-        "inline-flex items-center justify-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium",
-        "transition-colors focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-1",
-        "disabled:cursor-not-allowed disabled:opacity-70",
+        "inline-flex shrink-0 items-center justify-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium",
+        "transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2",
+        "focus-visible:ring-murekkep focus-visible:ring-offset-2 focus-visible:ring-offset-kagit",
+        "disabled:cursor-not-allowed disabled:opacity-50",
         BUTON_STILLERI[tur],
         className,
       )}
@@ -56,17 +62,26 @@ export function Alan({
 }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-sm font-medium text-slate-700">{etiket}</span>
+      <span className="mb-1.5 block text-2xs font-semibold uppercase tracking-[0.08em] text-murekkep-silik">
+        {etiket}
+      </span>
       {children}
-      {ipucu && !hata && <span className="mt-1 block text-xs text-slate-500">{ipucu}</span>}
-      {hata && <span className="mt-1 block text-xs text-red-600">{hata}</span>}
+      {ipucu && !hata && (
+        <span className="mt-1.5 block text-xs leading-relaxed text-murekkep-silik">
+          {ipucu}
+        </span>
+      )}
+      {hata && <span className="mt-1.5 block text-xs text-hata">{hata}</span>}
     </label>
   );
 }
 
-const GIRDI_STILI =
-  "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm " +
-  "placeholder:text-slate-400 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500";
+const GIRDI_STILI = clsx(
+  "w-full rounded-lg border border-cizgi-guclu bg-yuzey px-3 py-2 text-sm text-murekkep",
+  "placeholder:text-murekkep-silik/70 transition-colors",
+  "focus:border-murekkep focus:outline-none focus:ring-1 focus:ring-murekkep",
+  "disabled:bg-yuzey-alt disabled:text-murekkep-silik",
+);
 
 export function Girdi(props: InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className={clsx(GIRDI_STILI, props.className)} />;
@@ -95,16 +110,22 @@ export function Kart({
 }) {
   return (
     <section
-      className={clsx(
-        "rounded-xl border border-slate-200 bg-white shadow-sm",
-        className,
-      )}
+      className={clsx("rounded-xl border border-cizgi bg-yuzey", className)}
     >
       {(baslik || sag) && (
-        <header className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4">
-          <div>
-            {baslik && <h2 className="font-semibold text-slate-900">{baslik}</h2>}
-            {aciklama && <p className="mt-0.5 text-sm text-slate-500">{aciklama}</p>}
+        <header className="flex items-start justify-between gap-4 border-b border-cizgi px-5 py-3.5">
+          <div className="min-w-0">
+            {/* Saat rayı: başlıklar ızgaradaki ders saatleri gibi işaretlenir. */}
+            {baslik && (
+              <h2 className="ray font-baslik text-[0.95rem] font-semibold tracking-tight text-murekkep">
+                {baslik}
+              </h2>
+            )}
+            {aciklama && (
+              <p className="mt-1 pl-[1.125rem] text-sm text-murekkep-silik">
+                {aciklama}
+              </p>
+            )}
           </div>
           {sag}
         </header>
@@ -122,15 +143,15 @@ export function Rozet({
   children: ReactNode;
 }) {
   const stiller = {
-    notr: "bg-slate-100 text-slate-700",
-    iyi: "bg-emerald-100 text-emerald-800",
-    uyari: "bg-amber-100 text-amber-800",
-    kotu: "bg-red-100 text-red-800",
+    notr: "bg-yuzey-alt text-murekkep-yumusak ring-cizgi",
+    iyi: "bg-basari-zemin text-basari ring-basari/20",
+    uyari: "bg-uyari-zemin text-uyari ring-uyari/20",
+    kotu: "bg-hata-zemin text-hata ring-hata/20",
   };
   return (
     <span
       className={clsx(
-        "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium",
+        "inline-flex shrink-0 items-center rounded-md px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-[0.06em] ring-1 ring-inset",
         stiller[tur],
       )}
     >
@@ -147,12 +168,17 @@ export function Uyari({
   children: ReactNode;
 }) {
   const stiller = {
-    bilgi: "border-slate-200 bg-slate-50 text-slate-700",
-    hata: "border-red-200 bg-red-50 text-red-800",
-    basari: "border-emerald-200 bg-emerald-50 text-emerald-800",
+    bilgi: "border-cizgi bg-yuzey-alt text-murekkep-yumusak",
+    hata: "border-hata/25 bg-hata-zemin text-hata",
+    basari: "border-basari/25 bg-basari-zemin text-basari",
   };
   return (
-    <div className={clsx("rounded-lg border px-4 py-3 text-sm", stiller[tur])}>
+    <div
+      className={clsx(
+        "rounded-lg border px-4 py-2.5 text-sm leading-relaxed",
+        stiller[tur],
+      )}
+    >
       {children}
     </div>
   );
@@ -160,7 +186,7 @@ export function Uyari({
 
 export function Yukleniyor({ metin = "Yükleniyor…" }: { metin?: string }) {
   return (
-    <div className="flex items-center gap-2 py-10 text-sm text-slate-500">
+    <div className="flex items-center gap-2 py-10 text-sm text-murekkep-silik">
       <Loader2 className="h-4 w-4 animate-spin" />
       {metin}
     </div>
@@ -177,10 +203,14 @@ export function BosDurum({
   eylem?: ReactNode;
 }) {
   return (
-    <div className="rounded-lg border border-dashed border-slate-300 px-6 py-12 text-center">
-      <p className="font-medium text-slate-700">{baslik}</p>
-      {aciklama && <p className="mx-auto mt-1 max-w-md text-sm text-slate-500">{aciklama}</p>}
-      {eylem && <div className="mt-4 flex justify-center">{eylem}</div>}
+    <div className="rounded-lg border border-dashed border-cizgi-guclu px-6 py-12 text-center">
+      <p className="font-baslik font-semibold text-murekkep">{baslik}</p>
+      {aciklama && (
+        <p className="mx-auto mt-1.5 max-w-md text-sm leading-relaxed text-murekkep-silik">
+          {aciklama}
+        </p>
+      )}
+      {eylem && <div className="mt-5 flex justify-center">{eylem}</div>}
     </div>
   );
 }
@@ -199,18 +229,20 @@ export function Kutu({
   if (!acik) return null;
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/40 p-4 sm:p-10"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-murekkep/40 p-4 backdrop-blur-[2px] sm:p-10"
       onClick={kapat}
     >
       <div
-        className="w-full max-w-lg rounded-xl bg-white shadow-xl"
+        className="w-full max-w-lg rounded-xl border border-cizgi bg-yuzey shadow-2xl shadow-murekkep/10"
         onClick={(e) => e.stopPropagation()}
       >
-        <header className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
-          <h2 className="font-semibold text-slate-900">{baslik}</h2>
+        <header className="flex items-center justify-between border-b border-cizgi px-5 py-3.5">
+          <h2 className="ray font-baslik text-[0.95rem] font-semibold tracking-tight text-murekkep">
+            {baslik}
+          </h2>
           <button
             onClick={kapat}
-            className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+            className="rounded-md p-1 text-murekkep-silik transition-colors hover:bg-yuzey-alt hover:text-murekkep"
             aria-label="Kapat"
           >
             <X className="h-4 w-4" />
@@ -233,16 +265,43 @@ export function Tablo({
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-500">
-            {basliklar.map((b) => (
-              <th key={b} className="px-3 py-2 font-medium">
+          <tr className="border-b border-cizgi text-left text-2xs uppercase tracking-[0.08em] text-murekkep-silik">
+            {basliklar.map((b, i) => (
+              <th key={`${b}-${i}`} className="px-3 py-2 font-semibold">
                 {b}
               </th>
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-100">{children}</tbody>
+        <tbody className="divide-y divide-cizgi">{children}</tbody>
       </table>
     </div>
+  );
+}
+
+/** Sayfa başlığı. Ray motifi burada en belirgin hâlini alır. */
+export function SayfaBasligi({
+  baslik,
+  aciklama,
+  sag,
+}: {
+  baslik: string;
+  aciklama?: string;
+  sag?: ReactNode;
+}) {
+  return (
+    <header className="flex flex-wrap items-start justify-between gap-3">
+      <div className="ray min-w-0">
+        <h1 className="font-baslik text-2xl font-semibold tracking-tight text-murekkep">
+          {baslik}
+        </h1>
+        {aciklama && (
+          <p className="mt-1 max-w-2xl text-sm leading-relaxed text-murekkep-silik">
+            {aciklama}
+          </p>
+        )}
+      </div>
+      {sag && <div className="flex shrink-0 flex-wrap gap-2">{sag}</div>}
+    </header>
   );
 }

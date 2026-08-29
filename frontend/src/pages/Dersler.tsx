@@ -67,7 +67,7 @@ export default function Dersler() {
       <header className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Dersler</h1>
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-murekkep-silik">
             Okulda okutulan ders adları. Renkler program ızgarasında kullanılır.
           </p>
         </div>
@@ -95,7 +95,7 @@ export default function Dersler() {
         ) : (
           <Tablo basliklar={["Ders", "Kısa kod", "Durum", ""]}>
             {liste.data.map((d) => (
-              <tr key={d.id} className="hover:bg-slate-50">
+              <tr key={d.id} className="hover:bg-yuzey-alt">
                 <td className="px-3 py-2.5">
                   <span className="flex items-center gap-2.5">
                     <span
@@ -105,8 +105,8 @@ export default function Dersler() {
                     <span className="font-medium">{d.name}</span>
                   </span>
                 </td>
-                <td className="px-3 py-2.5 text-slate-500">{d.short_code || "—"}</td>
-                <td className="px-3 py-2.5 text-slate-500">
+                <td className="px-3 py-2.5 font-mono text-xs text-murekkep-yumusak">{d.short_code || "—"}</td>
+                <td className="px-3 py-2.5 text-murekkep-silik">
                   {d.is_active ? "Aktif" : "Pasif"}
                 </td>
                 <td className="px-3 py-2.5 text-right">
@@ -122,7 +122,7 @@ export default function Dersler() {
                       }}
                       aria-label="Sil"
                     >
-                      <Trash2 className="h-4 w-4 text-red-600" />
+                      <Trash2 className="h-4 w-4 text-hata" />
                     </Buton>
                   </div>
                 </td>
@@ -206,7 +206,7 @@ export default function Dersler() {
               type="checkbox"
               checked={form.is_active}
               onChange={(e) => setForm({ ...form, is_active: e.target.checked })}
-              className="h-4 w-4 rounded border-slate-300"
+              className="h-4 w-4 rounded border-cizgi-guclu"
             />
             Aktif (pasif dersler programa dahil edilmez)
           </label>

@@ -96,7 +96,7 @@ export default function ZamanIzgarasi() {
       <header className="flex items-start justify-between">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Zaman Izgarası</h1>
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-murekkep-silik">
             Hangi günlerde kaç ders saati olduğu. Teneffüs olarak işaretlenen saatlere
             ders yerleştirilmez.
           </p>
@@ -141,7 +141,7 @@ export default function ZamanIzgarasi() {
             <Uyari>Aktarılacak başka dönem yok.</Uyari>
           ) : (
             <label className="block">
-              <span className="mb-1 block text-sm font-medium text-slate-700">
+              <span className="mb-1 block text-sm font-medium text-murekkep-yumusak">
                 Kaynak dönem
               </span>
               <Secim
@@ -188,24 +188,24 @@ export default function ZamanIzgarasi() {
                 : "Bu gün kapalı"
             }
             sag={
-              <label className="flex items-center gap-2 text-sm text-slate-600">
+              <label className="flex items-center gap-2 text-sm text-murekkep-yumusak">
                 <input
                   type="checkbox"
                   checked={g.is_active}
                   onChange={(e) => gunuDegistir(g.index, { is_active: e.target.checked })}
-                  className="h-4 w-4 rounded border-slate-300"
+                  className="h-4 w-4 rounded border-cizgi-guclu"
                 />
                 Açık
               </label>
             }
           >
             {!g.is_active ? (
-              <p className="text-sm text-slate-400">Kapalı günlere ders yerleştirilmez.</p>
+              <p className="text-sm text-murekkep-silik">Kapalı günlere ders yerleştirilmez.</p>
             ) : (
               <div className="space-y-2">
                 {g.periods.map((p, i) => (
                   <div key={i} className="flex items-center gap-2">
-                    <span className="w-6 text-right text-xs text-slate-400">{i + 1}</span>
+                    <span className="w-6 text-right text-xs text-murekkep-silik">{i + 1}</span>
                     <Girdi
                       value={p.name}
                       onChange={(e) => saatiDegistir(g.index, i, { name: e.target.value })}
@@ -233,8 +233,8 @@ export default function ZamanIzgarasi() {
                       onClick={() => saatiDegistir(g.index, i, { is_break: !p.is_break })}
                       className={`rounded-lg border p-2 ${
                         p.is_break
-                          ? "border-amber-300 bg-amber-100 text-amber-700"
-                          : "border-slate-300 bg-white text-slate-400 hover:bg-slate-50"
+                          ? "border-uyari/25 bg-uyari-zemin text-uyari"
+                          : "border-cizgi-guclu bg-yuzey text-murekkep-silik hover:bg-yuzey-alt"
                       }`}
                     >
                       <Coffee className="h-4 w-4" />
