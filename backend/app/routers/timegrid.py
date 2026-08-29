@@ -8,7 +8,10 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.db import get_db
 from app.deps import aktif_donem, current_user
-from app.models import Assignment, Day, Period, Term, Timetable
+from app.models import (
+    Assignment, Day, Period, SectionAvailability, TeacherAvailability, Term,
+    Timetable,
+)
 from app.schemas import DayIn, DayOut, PeriodIn
 
 router = APIRouter(prefix="/timegrid", tags=["zaman ızgarası"],
@@ -26,21 +29,52 @@ def _gunleri_getir(db: Session, donem: Term) -> list[Day]:
     )
 
 
-def _eski_yerlesimleri_temizle(db: Session, donem: Term) -> None:
-    """Izgara değişmeden önce döneme ait tüm yerleşimleri siler.
+def _bagli_kayitlari_sil(db: Session, saatler: list[Period]) -> None:
+    """Verilen ders saatlerine bağlı müsaitlik işaretlerini ve yerleşimleri siler.
 
-    Geriye yalnızca silinmiş programların yerleşimleri kalmış olabilir (canlı
-    programı olan dönemde ızgara değiştirilemiyor). Ders saatleri yenilendiği
-    için bunlar zaten geçersizleşir. Veritabanı seviyesindeki art arda silmeye
-    güvenmiyoruz: SQLite yabancı anahtarları varsayılan olarak zorlamaz.
+    Ders saatinin kendisini silmez; çağıran ya saati tek tek siler ya da günü
+    silip ORM'in art arda silmesine bırakır. Veritabanı seviyesindeki art arda
+    silmeye güvenmiyoruz: SQLite yabancı anahtarları varsayılan olarak zorlamaz.
     """
-    for atama in db.scalars(
-        select(Assignment)
-        .join(Timetable, Timetable.id == Assignment.timetable_id)
-        .where(Timetable.term_id == donem.id)
-    ):
-        db.delete(atama)
+    kimlikler = [p.id for p in saatler]
+    if not kimlikler:
+        return
+    for model in (TeacherAvailability, SectionAvailability, Assignment):
+        for satir in db.scalars(select(model).where(model.period_id.in_(kimlikler))):
+            db.delete(satir)
     db.flush()
+
+
+def _saatleri_sil(db: Session, saatler: list[Period]) -> None:
+    """Ders saatlerini ve onlara bağlı kayıtları siler."""
+    _bagli_kayitlari_sil(db, saatler)
+    for p in saatler:
+        db.delete(p)
+    db.flush()
+
+
+def _saatleri_esitle(db: Session, gun: Day, gelen: list[PeriodIn]) -> None:
+    """Günün ders saatlerini gelen listeye göre yerinde günceller.
+
+    Eşleştirme sıraya (`index`) göre yapılır ve var olan kayıtlar korunur; bu
+    sayede ders saati kimlikleri sabit kalır ve onlara bağlı öğretmen/şube
+    müsaitlik işaretleri hayatta kalır. Baştan silip yeniden yaratmak, adı ya
+    da saati bile değişmemiş satırların müsaitliğini de silerdi.
+    """
+    mevcut = {p.index: p for p in gun.periods}
+    gelen_indexler = {p.index for p in gelen}
+
+    _saatleri_sil(db, [p for i, p in mevcut.items() if i not in gelen_indexler])
+
+    for p in gelen:
+        var_olan = mevcut.get(p.index)
+        if var_olan is None:
+            db.add(Period(day_id=gun.id, **p.model_dump()))
+            continue
+        var_olan.name = p.name
+        var_olan.start_time = p.start_time
+        var_olan.end_time = p.end_time
+        var_olan.is_break = p.is_break
 
 
 def _kaynak_donem(db: Session, term_id: int, donem: Term) -> Term:
@@ -88,13 +122,17 @@ def izgarayi_kaydet(
             "Önce programı silin.",
         )
 
-    _eski_yerlesimleri_temizle(db, donem)
     mevcut = {d.index: d for d in _gunleri_getir(db, donem)}
     gelen_indexler = {d.index for d in payload}
 
+    # Listeden tamamen çıkarılan günler. Günü pasife almak silmek değildir:
+    # pasif günün ders saatleri ve müsaitlik işaretleri olduğu gibi durur,
+    # gün yeniden açıldığında geri gelir.
     for gun in mevcut.values():
         if gun.index not in gelen_indexler:
-            db.delete(gun)
+            _bagli_kayitlari_sil(db, list(gun.periods))
+            db.delete(gun)      # ders saatlerini ORM art arda siler
+    db.flush()
 
     for gelen in payload:
         gun = mevcut.get(gelen.index)
@@ -105,11 +143,7 @@ def izgarayi_kaydet(
             db.flush()
         else:
             gun.name, gun.is_active = gelen.name, gelen.is_active
-            for p in list(gun.periods):
-                db.delete(p)
-            db.flush()
-        for p in gelen.periods:
-            db.add(Period(day_id=gun.id, **p.model_dump()))
+        _saatleri_esitle(db, gun, gelen.periods)
 
     db.commit()
     # Oturum commit'te nesneleri geçersiz kılmıyor (expire_on_commit=False);
@@ -158,9 +192,11 @@ def izgarayi_aktar(
             "Önce programı silin.",
         )
 
-    _eski_yerlesimleri_temizle(db, donem)
+    # Aktarım ızgaranın tamamını kaynak dönemden alır; eski saatler ve onlara
+    # bağlı müsaitlik işaretleri bu durumda gerçekten geçersizleşir.
     for gun in _gunleri_getir(db, donem):
-        db.delete(gun)
+        _bagli_kayitlari_sil(db, list(gun.periods))
+        db.delete(gun)          # ders saatlerini ORM art arda siler
     db.flush()
 
     for kaynak_gun in _gunleri_getir(db, kaynak):

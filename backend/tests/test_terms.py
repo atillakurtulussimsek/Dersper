@@ -320,8 +320,10 @@ def test_silinen_program_izgara_aktarimini_engellemez(yonetici: TestClient):
     assert yonetici.post(f"/api/timegrid/import/{eski}").status_code == 201
 
 
-def test_izgara_degisince_silinmis_programin_yerlesimleri_temizlenir(yonetici: TestClient):
-    """Ders saatleri silinince onlara bağlı eski yerleşimler de gider."""
+def test_izgara_degisince_yalnizca_silinen_saatlerin_yerlesimleri_gider(
+    yonetici: TestClient,
+):
+    """Veriye en az müdahale: yalnızca kaldırılan ders saatleri temizlenir."""
     from sqlalchemy import func, select
 
     from app.db import SessionLocal
@@ -333,12 +335,113 @@ def test_izgara_degisince_silinmis_programin_yerlesimleri_temizlenir(yonetici: T
     yonetici.delete(f"/api/timetables/{pid}")
 
     with SessionLocal() as oturum:
-        assert oturum.scalar(select(func.count()).select_from(Assignment)) > 0
+        onceki = oturum.scalar(select(func.count()).select_from(Assignment))
+    assert onceki > 0
+
+    # Hiçbir ders saati kaldırılmıyor: yerleşimlere dokunulmamalı.
+    izgara = yonetici.get("/api/timegrid").json()
+    izgara[0]["name"] = "Pazartesi "
+    assert yonetici.put("/api/timegrid", json=izgara).status_code == 200
+    with SessionLocal() as oturum:
+        assert oturum.scalar(select(func.count()).select_from(Assignment)) == onceki
+
+    # Tüm günlerin saatleri kaldırılınca yerleşim kalmamalı.
+    izgara = yonetici.get("/api/timegrid").json()
+    for g in izgara:
+        g["periods"] = []
+    assert yonetici.put("/api/timegrid", json=izgara).status_code == 200
+    with SessionLocal() as oturum:
+        assert oturum.scalar(select(func.count()).select_from(Assignment)) == 0
+
+
+def _sabah_kapat(c: TestClient, sube_id: int) -> set[int]:
+    """Şubenin sabah saatlerini kapatır, kapatılan ders saati kimliklerini döner."""
+    saatler = [
+        p for g in c.get("/api/timegrid").json() if g["is_active"]
+        for p in g["periods"] if p["index"] < 3
+    ]
+    c.put(f"/api/sections/{sube_id}/availability", json={
+        "cells": [{"period_id": p["id"], "state": "uygun_degil"} for p in saatler]
+    })
+    return {p["id"] for p in saatler}
+
+
+def test_gun_pasife_alinca_diger_musaitlikler_korunur(yonetici: TestClient):
+    """Cuma'yı kapatmak diğer günlerin işaretlerini silmemeli."""
+    v = _kucuk_okul(yonetici)
+    kapali = _sabah_kapat(yonetici, v["sube"])
+    assert len(yonetici.get(f"/api/sections/{v['sube']}/availability").json()) == len(kapali)
 
     izgara = yonetici.get("/api/timegrid").json()
-    izgara[0]["periods"] = izgara[0]["periods"][:4]
+    cuma = next(g for g in izgara if g["name"] == "Cuma")
+    cuma_saatleri = {p["id"] for p in cuma["periods"]}
+    cuma["is_active"] = False
     assert yonetici.put("/api/timegrid", json=izgara).status_code == 200
 
-    with SessionLocal() as oturum:
-        kalan = oturum.scalar(select(func.count()).select_from(Assignment))
-    assert kalan == 0        # ders saatleri yenilendi, eski yerleşimler düştü
+    kalan = {h["period_id"] for h in
+             yonetici.get(f"/api/sections/{v['sube']}/availability").json()}
+    # Cuma dışındaki her işaret yerinde.
+    assert kalan == kapali
+    # Pasif günün ders saatleri de silinmedi; gün yeniden açılınca geri gelir.
+    yeni = yonetici.get("/api/timegrid").json()
+    yeni_cuma = next(g for g in yeni if g["name"] == "Cuma")
+    assert yeni_cuma["is_active"] is False
+    assert {p["id"] for p in yeni_cuma["periods"]} == cuma_saatleri
+
+
+def test_ders_saati_eklemek_mevcut_isaretleri_bozmaz(yonetici: TestClient):
+    v = _kucuk_okul(yonetici)
+    kapali = _sabah_kapat(yonetici, v["sube"])
+
+    izgara = yonetici.get("/api/timegrid").json()
+    izgara[0]["periods"].append({
+        "index": 8, "name": "9. ders", "start_time": None, "end_time": None,
+        "is_break": False,
+    })
+    assert yonetici.put("/api/timegrid", json=izgara).status_code == 200
+
+    kalan = {h["period_id"] for h in
+             yonetici.get(f"/api/sections/{v['sube']}/availability").json()}
+    assert kalan == kapali
+    assert len(yonetici.get("/api/timegrid").json()[0]["periods"]) == 9
+
+
+def test_ders_saati_adini_degistirmek_isaretleri_bozmaz(yonetici: TestClient):
+    o = yonetici.post("/api/teachers", json={"full_name": "Ayşe Yılmaz"}).json()["id"]
+    saatler = [p for g in yonetici.get("/api/timegrid").json() if g["is_active"]
+               for p in g["periods"] if p["index"] == 0]
+    yonetici.put(f"/api/teachers/{o}/availability", json={
+        "cells": [{"period_id": p["id"], "state": "uygun_degil"} for p in saatler]
+    })
+    onceki = {h["period_id"] for h in
+              yonetici.get(f"/api/teachers/{o}/availability").json()}
+
+    izgara = yonetici.get("/api/timegrid").json()
+    izgara[0]["periods"][0]["name"] = "Sıfırıncı ders"
+    izgara[0]["periods"][0]["start_time"] = "08:00:00"
+    assert yonetici.put("/api/timegrid", json=izgara).status_code == 200
+
+    assert {h["period_id"] for h in
+            yonetici.get(f"/api/teachers/{o}/availability").json()} == onceki
+    guncel = yonetici.get("/api/timegrid").json()[0]["periods"][0]
+    assert guncel["name"] == "Sıfırıncı ders"
+    assert guncel["start_time"] == "08:00:00"
+
+
+def test_ders_saati_silinince_yalnizca_onun_isareti_gider(yonetici: TestClient):
+    v = _kucuk_okul(yonetici)
+    izgara = yonetici.get("/api/timegrid").json()
+    pazartesi = izgara[0]["periods"]
+    yonetici.put(f"/api/sections/{v['sube']}/availability", json={
+        "cells": [{"period_id": p["id"], "state": "uygun_degil"}
+                  for p in pazartesi[:3]]
+    })
+
+    silinen = pazartesi[2]["id"]
+    izgara[0]["periods"] = pazartesi[:2]
+    assert yonetici.put("/api/timegrid", json=izgara).status_code == 200
+
+    kalan = {h["period_id"] for h in
+             yonetici.get(f"/api/sections/{v['sube']}/availability").json()}
+    assert kalan == {pazartesi[0]["id"], pazartesi[1]["id"]}
+    assert silinen not in kalan
