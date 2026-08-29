@@ -82,19 +82,23 @@ cp .env.example .env      # DATABASE_URL, SECRET_KEY, ENCRYPTION_KEY doldurun
 docker compose up -d --build
 ```
 
-İki servis ayağa kalkar:
+Tek servis ayağa kalkar: imaj arayüzü derler, FastAPI hem `/api`'yi hem
+derlenmiş arayüzü aynı porttan sunar. Açılışta veritabanı şeması güncellenir.
+PDF için gereken pango/cairo imajda gelir.
 
-| Servis | Ne yapar |
-|---|---|
-| `backend` | FastAPI. Açılışta veritabanı şemasını günceller, `/api` sunar. PDF için gereken pango/cairo imajda gelir. |
-| `frontend` | Derlenmiş arayüzü nginx ile sunar, `/api` isteklerini backend'e yönlendirir. |
+Ayrı bir web sunucusu, konteynerler arası ağ ve ikinci alan adı gerekmez;
+arayüz ile API aynı kökeni paylaştığı için CORS ayarı da gerekmez.
 
-Arayüz ve API aynı kökeni paylaştığı için CORS ayarı gerekmez.
+`.env` dosyasındaki değişkenlerin tamamı konteynere olduğu gibi aktarılır;
+`BACKEND_HOST`, `BACKEND_PORT` ve `CORS_ORIGINS` değerlerini compose kendisi
+konteynere uygun şekilde geçersiz kılar.
+
+Veritabanı harici bir MySQL 8 sunucusudur — compose içinde veritabanı servisi
+yoktur, `DATABASE_URL` ile kendi sunucunuzu gösterirsiniz.
 
 `docker-compose.yml` ana makineye **port bağlamaz**. Dokploy, Coolify gibi
-ortamlar konteynere kendi ters vekilleriyle ulaşır; sabit port bağlamak
-sunucudaki başka bir servisle çakışır. Panelden alan adınızı `frontend`
-servisinin **80** numaralı portuna yönlendirin.
+ortamlar konteynere kendi ters vekilleriyle ulaşır. Panelden alan adınızı `app`
+servisinin **8000** numaralı portuna yönlendirin.
 
 Ters vekili olmayan düz bir sunucuda çalıştıracaksanız port yayımlayan ek
 dosyayı kullanın:
@@ -103,21 +107,21 @@ dosyayı kullanın:
 docker compose -f docker-compose.yml -f docker-compose.standalone.yml up -d
 ```
 
-Bu durumda arayüz `.env` içindeki `WEB_PORT` portundan (varsayılan `8080`)
+Bu durumda uygulama `.env` içindeki `WEB_PORT` portundan (varsayılan `8080`)
 yayınlanır.
 
-`.env` dosyasındaki değişkenlerin tamamı backend'e olduğu gibi aktarılır;
-`BACKEND_HOST`, `BACKEND_PORT` ve `CORS_ORIGINS` değerlerini compose kendisi
-konteynere uygun şekilde geçersiz kılar.
+Sorun giderme:
 
-Veritabanı harici bir MySQL 8 sunucusudur — compose içinde veritabanı servisi
-yoktur, `DATABASE_URL` ile kendi sunucunuzu gösterirsiniz.
+| Adres | Söylediği |
+|---|---|
+| `/api/health` | Uygulama süreci ayakta mı |
+| `/api/health/db` | Veritabanına ulaşılabiliyor mu (ulaşılamıyorsa 503 ve sebebi) |
 
 > **Dokploy kullanıyorsanız:** build yöntemi olarak **Docker Compose**'u seçin.
 > Nixpacks bu depoda çalışmaz: kökte iki ayrı çalışma ortamı (Python ve Node)
 > vardır ve WeasyPrint sistem kütüphaneleri ister.
 >
-> Alan adı ayarında servis olarak `frontend`, port olarak `80` girin.
+> Alan adı ayarında servis olarak `app`, port olarak `8000` girin.
 
 ## Lisans
 

@@ -1,0 +1,29 @@
+# Derleme bağlamı depo köküdür; ağır ve gereksiz olan her şey dışarıda kalsın.
+.git/
+.gitignore
+
+# Yapay zeka çalışma alanı — imaja asla girmemeli.
+CLAUDE.md
+memory-bank/
+.claude/
+
+# Sırlar
+.env
+.env.*
+!.env.example
+
+# Python
+backend/.venv/
+**/__pycache__/
+**/*.py[cod]
+backend/.pytest_cache/
+backend/tests/
+**/*.db
+
+# Node — imaj kendi bağımlılıklarını kurar
+frontend/node_modules/
+frontend/dist/
+
+# Diğer
+**/*.log
+.DS_Store

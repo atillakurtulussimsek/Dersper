@@ -1,7 +1,7 @@
 # Dersper — üretim dağıtımı (Dokploy, Coolify, düz Docker).
 #
-# İki servis: backend (FastAPI) ve frontend (nginx). Arayüz /api isteklerini
-# backend'e yönlendirir.
+# TEK servis: FastAPI hem /api'yi hem derlenmiş arayüzü sunar. Ayrı web sunucusu
+# ve konteynerler arası ağ yoktur; tek alan adı yeter, CORS ayarı gerekmez.
 #
 # Ayarların tamamı kökteki .env dosyasından okunur:
 #   cp .env.example .env   ve içini doldurun.
@@ -9,17 +9,18 @@
 # Veritabanı harici bir MySQL 8 sunucusudur; DATABASE_URL ile verilir.
 #
 # PORT YAYIMLAMA: burada bilerek ana makineye port bağlanmaz. Dokploy/Coolify
-# gibi ortamlar kendi ters vekilleriyle konteynere ulaşır; sabit port bağlamak
-# sunucudaki başka bir servisle çakışır. Panelden alan adını `frontend`
-# servisinin 80 numaralı portuna yönlendirin.
+# gibi ortamlar kendi ters vekilleriyle konteynere ulaşır. Panelden alan adınızı
+# `app` servisinin 8000 numaralı portuna yönlendirin.
 #
 # Vekilsiz, düz Docker ile çalıştıracaksanız port yayımlayan ek dosyayı kullanın:
 #   docker compose -f docker-compose.yml -f docker-compose.standalone.yml up -d
 
 services:
-  backend:
+  app:
     build:
-      context: ./backend
+      # Bağlam depo kökü: imaj hem backend'i hem frontend'i derler.
+      context: .
+      dockerfile: backend/Dockerfile
     # .env içindeki tüm değişkenler olduğu gibi aktarılır.
     env_file:
       - .env
@@ -27,15 +28,13 @@ services:
       # Konteyner içinde her arayüzü dinlemeli; .env'deki 127.0.0.1 geçersizdir.
       BACKEND_HOST: 0.0.0.0
       BACKEND_PORT: "8000"
-      # Arayüz aynı köken üzerinden proxy'lediği için CORS'a gerek yok.
+      # Arayüz aynı kökenden sunulduğu için CORS'a gerek yok.
       CORS_ORIGINS: ${CORS_ORIGINS:-}
     restart: unless-stopped
     expose:
       - "8000"
     healthcheck:
-      # Yalnızca sürecin ayakta olduğunu yoklar. Veritabanı denetimini buraya
-      # bağlamak, geçici bir veritabanı kesintisinde nginx'in her isteğe 502
-      # vermesine ve sitenin tamamen düşmesine yol açardı. Veritabanı durumu
+      # Yalnızca sürecin ayakta olduğunu yoklar. Veritabanı durumu
       # /api/health/db adresinden ayrıca sorulur; arayüz sebebi kendisi gösterir.
       test: ["CMD", "python", "-c",
              "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/api/health')"]
@@ -44,15 +43,3 @@ services:
       # Açılışta migration çalıştığı için ilk kontrol geciktirilir.
       start_period: 60s
       retries: 3
-
-  frontend:
-    build:
-      context: ./frontend
-    depends_on:
-      # Sağlıklı olmasını beklemez: backend sorunluysa bile arayüz açılmalı ve
-      # hatayı göstermeli. Aksi halde kullanıcı bomboş bir 502 sayfası görür.
-      backend:
-        condition: service_started
-    restart: unless-stopped
-    expose:
-      - "80"

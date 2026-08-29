@@ -1,4 +1,21 @@
-# Dersper backend — FastAPI + OR-Tools + WeasyPrint
+# Dersper — tek imaj: arayüz derlenir, FastAPI hem /api'yi hem arayüzü sunar.
+#
+# Tek konteyner olmasının sebebi: ayrı bir web sunucusu ve konteynerler arası ağ
+# gerektirmez. Böylece tek alan adı yeter, CORS ayarı gerekmez ve dağıtımda
+# kırılabilecek katman sayısı en aza iner.
+#
+# Derleme bağlamı deponun KÖKÜDÜR (hem backend/ hem frontend/ gerekir):
+#   docker build -f backend/Dockerfile .
+
+FROM node:20-alpine AS arayuz
+
+WORKDIR /arayuz
+COPY frontend/package.json frontend/package-lock.json* ./
+RUN npm ci
+COPY frontend/ ./
+RUN npm run build
+
+
 FROM python:3.12-slim
 
 # WeasyPrint PDF üretimi için sistem kütüphaneleri (pango/cairo) ve Türkçe
@@ -21,10 +38,13 @@ ENV PYTHONUNBUFFERED=1 \
 WORKDIR /app
 
 # Bağımlılıklar önce: kod değiştiğinde bu katman önbellekten gelir.
-COPY requirements.txt .
+COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+COPY backend/ .
+
+# Derlenmiş arayüz; uygulama burayı bulursa kendisi sunar.
+COPY --from=arayuz /arayuz/dist ./app/static
 
 # Kök olmayan kullanıcı.
 RUN useradd --system --create-home dersper && chown -R dersper:dersper /app
