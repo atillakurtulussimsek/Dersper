@@ -47,7 +47,10 @@ function HucreIcerigi({ hucre, bakis }: { hucre: Hucre; bakis: Bakis }) {
         {hucre.is_locked && <Lock className="h-2.5 w-2.5 shrink-0 text-murekkep-silik" />}
         <span className="truncate">{hucre.subject_name}</span>
       </span>
-      <span className="truncate text-[10.5px] leading-tight text-murekkep-silik">
+      {/* Alt satır (öğretmen ya da şube) `murekkep-silik` değil `yumusak`:
+        * hücre zemini kullanıcının ders rengiyle boyandığı için silik ton koyu
+        * temada 3.2:1'e kadar düşüyordu. Yumuşak ton en kötü durumda 5.7:1. */}
+      <span className="truncate text-[10.5px] leading-tight text-murekkep-yumusak">
         {altSatir(hucre, bakis)}
       </span>
     </div>

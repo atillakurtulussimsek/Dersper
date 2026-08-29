@@ -22,11 +22,15 @@
     --kagit: 252 252 253;        /* sayfa zemini */
     --yuzey: 255 255 255;        /* kart, panel */
     --yuzey-alt: 246 246 249;    /* tablo başlığı, ikincil zemin */
-    --cizgi: 227 227 235;        /* ayraç */
-    --cizgi-guclu: 205 205 217;  /* girdi kenarı */
+    --cizgi: 227 227 235;        /* ayraç — dekoratif, kontrast eşiği yok */
+    /* Girdi kenarı bir arayüz bileşenini tanımlar: WCAG 1.4.11 en az 3:1
+     * ister. 205 205 217 yalnızca 1.58:1 idi. */
+    --cizgi-guclu: 140 140 158;  /* 3.30:1 */
     --murekkep: 22 22 31;        /* birincil metin, birincil düğme */
     --murekkep-yumusak: 71 71 88;
-    --murekkep-silik: 122 122 143;
+    /* İpucu ve ikincil sütun metni küçük punto kullanır, dolayısıyla 4.5:1
+     * eşiğine tabidir. 122 122 143 ikincil zeminde 3.89:1 kalıyordu. */
+    --murekkep-silik: 102 102 122;  /* yüzeyde 5.61:1, ikincil zeminde 5.20:1 */
     --uzeri: 255 255 255;        /* mürekkep üzerindeki metin */
 
     /* Durum renkleri düşük doygunlukta: ders renkleriyle yarışmazlar. */
@@ -49,7 +53,7 @@
     --yuzey: 23 23 31;
     --yuzey-alt: 30 30 40;
     --cizgi: 42 42 55;
-    --cizgi-guclu: 58 58 74;
+    --cizgi-guclu: 104 104 126;  /* 3.28:1 — bkz. açık temadaki not */
     --murekkep: 237 237 242;
     --murekkep-yumusak: 178 178 195;
     --murekkep-silik: 132 132 152;
@@ -76,6 +80,20 @@
   body {
     @apply bg-kagit text-murekkep;
     font-feature-settings: "cv05" 1;
+  }
+
+  /* Hareketi azalt tercihi: geçişler ve dönen göstergeler neredeyse durur.
+   * Tamamen sıfırlamak yerine 1ms bırakılır; böylece geçiş biter olaylarına
+   * bağlı davranışlar (varsa) çalışmaya devam eder. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 
   /* Saatler, ders sıraları ve 2+2+1 desenleri hizalı okunsun. */
