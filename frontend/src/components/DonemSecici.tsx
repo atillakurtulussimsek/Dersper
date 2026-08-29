@@ -27,13 +27,13 @@ export default function DonemSecici() {
   const aktif = donemler.data?.find((d) => d.is_active);
 
   return (
-    <div className="relative border-b border-cizgi px-3 py-2">
+    <div className="relative border-y border-cizgi px-3 py-2.5">
       <button
         onClick={() => setAcik((a) => !a)}
-        className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-yuzey-alt"
+        className="flex w-full items-center gap-2 rounded-lg border border-cizgi bg-yuzey-alt px-2.5 py-2 text-left transition-colors hover:border-cizgi-guclu"
       >
         <span className="min-w-0 flex-1">
-          <span className="block text-[10px] font-medium uppercase tracking-wide text-murekkep-silik">
+          <span className="block text-2xs font-semibold uppercase tracking-[0.1em] text-murekkep-silik">
             Dönem
           </span>
           <span className="block truncate text-sm font-medium text-murekkep">

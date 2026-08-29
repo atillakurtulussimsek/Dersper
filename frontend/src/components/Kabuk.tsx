@@ -1,13 +1,13 @@
 /** Giriş yapmış kullanıcının gördüğü çerçeve: yan menü + içerik.
  *
- *  Yan menü bir ders programı sütunu gibi kurulur: solda çentikli bir ray,
- *  bölümler sıra numaralarıyla. Izgaradaki saat rayının aynısı, böylece
- *  gezinme ile veri aynı dili konuşur.
+ *  Menü, ekranların gerçekten ayrıldığı üç öbeği gösterir: önce programın
+ *  beslendiği tanımlar, sonra programın kendisi, en sonda kurum yönetimi.
+ *  Öbek başlıkları bilgi taşır; sıra numarası taşımazdı, o yüzden yok.
  */
 import { useQuery } from "@tanstack/react-query";
 import {
-  BookOpen, CalendarClock, CalendarRange, GraduationCap, LayoutGrid, LogOut,
-  Settings, Table2, UserCog, Users,
+  BookOpen, CalendarClock, CalendarRange, Gauge, GraduationCap, LayoutGrid,
+  LogOut, Settings, Table2, UserCog, Users,
 } from "lucide-react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import clsx from "clsx";
@@ -17,17 +17,35 @@ import TemaSecici from "./TemaSecici";
 import { get, jetonuSil } from "../lib/api";
 import type { Kurum } from "../lib/types";
 
-const MENU = [
-  { yol: "/", ad: "Özet", ikon: LayoutGrid },
-  { yol: "/ogretmenler", ad: "Öğretmenler", ikon: Users },
-  { yol: "/dersler", ad: "Dersler", ikon: BookOpen },
-  { yol: "/subeler", ad: "Şubeler", ikon: GraduationCap },
-  { yol: "/ders-atamalari", ad: "Ders Atamaları", ikon: Table2 },
-  { yol: "/zaman-izgarasi", ad: "Zaman Izgarası", ikon: CalendarClock },
-  { yol: "/programlar", ad: "Ders Programları", ikon: LayoutGrid },
-  { yol: "/donemler", ad: "Dönemler", ikon: CalendarRange },
-  { yol: "/kullanicilar", ad: "Kullanıcılar", ikon: UserCog },
-  { yol: "/ayarlar", ad: "Ayarlar", ikon: Settings },
+type Girdi = { yol: string; ad: string; ikon: typeof Gauge };
+type Obek = { baslik?: string; girdiler: Girdi[] };
+
+const MENU: Obek[] = [
+  {
+    girdiler: [{ yol: "/", ad: "Özet", ikon: Gauge }],
+  },
+  {
+    baslik: "Tanımlar",
+    girdiler: [
+      { yol: "/ogretmenler", ad: "Öğretmenler", ikon: Users },
+      { yol: "/dersler", ad: "Dersler", ikon: BookOpen },
+      { yol: "/subeler", ad: "Şubeler", ikon: GraduationCap },
+      { yol: "/ders-atamalari", ad: "Ders Atamaları", ikon: Table2 },
+      { yol: "/zaman-izgarasi", ad: "Zaman Izgarası", ikon: CalendarClock },
+    ],
+  },
+  {
+    baslik: "Program",
+    girdiler: [{ yol: "/programlar", ad: "Ders Programları", ikon: LayoutGrid }],
+  },
+  {
+    baslik: "Kurum",
+    girdiler: [
+      { yol: "/donemler", ad: "Dönemler", ikon: CalendarRange },
+      { yol: "/kullanicilar", ad: "Kullanıcılar", ikon: UserCog },
+      { yol: "/ayarlar", ad: "Ayarlar", ikon: Settings },
+    ],
+  },
 ];
 
 export default function Kabuk() {
@@ -42,57 +60,44 @@ export default function Kabuk() {
   return (
     <div className="flex min-h-screen bg-kagit">
       <aside className="sticky top-0 flex h-screen w-60 shrink-0 flex-col border-r border-cizgi bg-yuzey">
-        <div className="border-b border-cizgi px-5 py-4">
-          <p className="font-baslik text-lg font-semibold tracking-tight text-murekkep">
+        <div className="px-5 pb-3 pt-4">
+          <p className="font-baslik text-lg font-semibold leading-none tracking-tight text-murekkep">
             Dersper
           </p>
-          <p className="truncate text-xs text-murekkep-silik">
+          <p className="mt-1 truncate text-xs text-murekkep-silik">
             {kurum.data?.name ?? "—"}
           </p>
         </div>
 
         <DonemSecici />
 
-        {/* Ray: menü öğeleri ders saatleri gibi sıralanır. */}
-        <nav className="relative flex-1 overflow-y-auto py-3 pl-5 pr-3">
-          <span
-            aria-hidden
-            className="pointer-events-none absolute bottom-3 left-5 top-3 w-px bg-cizgi"
-          />
-          {MENU.map(({ yol, ad, ikon: Ikon }, i) => (
-            <NavLink
-              key={yol}
-              to={yol}
-              end={yol === "/"}
-              className={({ isActive }) =>
-                clsx(
-                  "group relative flex items-center gap-2.5 rounded-lg py-1.5 pl-4 pr-3 text-sm transition-colors",
-                  isActive
-                    ? "bg-murekkep font-medium text-uzeri"
-                    : "text-murekkep-yumusak hover:bg-yuzey-alt hover:text-murekkep",
-                )
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  {/* Çentik: aktif satırda raydan dışarı taşar. */}
-                  <span
-                    aria-hidden
-                    className={clsx(
-                      "absolute -left-0 top-1/2 h-px -translate-y-1/2 transition-all",
+        <nav className="flex-1 space-y-5 overflow-y-auto px-3 py-4">
+          {MENU.map((obek, i) => (
+            <div key={obek.baslik ?? i} className="space-y-0.5">
+              {obek.baslik && (
+                <p className="px-3 pb-1.5 text-2xs font-semibold uppercase tracking-[0.1em] text-murekkep-silik">
+                  {obek.baslik}
+                </p>
+              )}
+              {obek.girdiler.map(({ yol, ad, ikon: Ikon }) => (
+                <NavLink
+                  key={yol}
+                  to={yol}
+                  end={yol === "/"}
+                  className={({ isActive }) =>
+                    clsx(
+                      "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors",
                       isActive
-                        ? "w-3 bg-murekkep"
-                        : "w-1.5 bg-cizgi-guclu group-hover:w-2.5",
-                    )}
-                  />
-                  <span className="sayisal w-3 shrink-0 text-2xs tabular-nums opacity-50">
-                    {i + 1}
-                  </span>
+                        ? "bg-murekkep font-medium text-uzeri"
+                        : "text-murekkep-yumusak hover:bg-yuzey-alt hover:text-murekkep",
+                    )
+                  }
+                >
                   <Ikon className="h-4 w-4 shrink-0" />
                   <span className="truncate">{ad}</span>
-                </>
-              )}
-            </NavLink>
+                </NavLink>
+              ))}
+            </div>
           ))}
         </nav>
 
@@ -100,7 +105,7 @@ export default function Kabuk() {
           <TemaSecici />
           <button
             onClick={cikis}
-            className="flex w-full items-center gap-2.5 rounded-lg px-1 py-1.5 text-sm text-murekkep-silik transition-colors hover:text-murekkep"
+            className="flex w-full items-center gap-2.5 rounded-lg px-1 py-2 text-sm text-murekkep-silik transition-colors hover:text-murekkep"
           >
             <LogOut className="h-4 w-4" />
             Çıkış yap
