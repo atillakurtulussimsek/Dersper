@@ -1,0 +1,45 @@
+# Dersper — üretim dağıtımı (Dokploy, Coolify, düz Docker).
+#
+# İki servis: backend (FastAPI) ve frontend (nginx). Arayüz /api isteklerini
+# backend'e yönlendirir, dışarıya tek port açılır.
+#
+# Ayarların tamamı kökteki .env dosyasından okunur:
+#   cp .env.example .env   ve içini doldurun.
+#
+# Veritabanı harici bir MySQL 8 sunucusudur; DATABASE_URL ile verilir.
+
+services:
+  backend:
+    build:
+      context: ./backend
+    # .env içindeki tüm değişkenler olduğu gibi aktarılır.
+    env_file:
+      - .env
+    environment:
+      # Konteyner içinde her arayüzü dinlemeli; .env'deki 127.0.0.1 geçersizdir.
+      BACKEND_HOST: 0.0.0.0
+      BACKEND_PORT: "8000"
+      # Arayüz aynı köken üzerinden proxy'lediği için CORS'a gerek yok.
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+    restart: unless-stopped
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/api/health')"]
+      interval: 30s
+      timeout: 5s
+      # Açılışta migration çalıştığı için ilk kontrol geciktirilir.
+      start_period: 60s
+      retries: 3
+
+  frontend:
+    build:
+      context: ./frontend
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    ports:
+      # Dışarıya açılan tek port. Dokploy'da bu portu alan adına bağlayın.
+      - "${WEB_PORT:-8080}:80"

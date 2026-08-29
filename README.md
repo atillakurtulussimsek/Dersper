@@ -73,6 +73,37 @@ sistemde hiç kurum yoksa ilk kayda izin verilir; sonraki hesapları kurum için
 
 Silme her yerde yumuşaktır: kayıtlar gizlenir, veritabanından kaldırılmaz.
 
+## Sunucuya kurulum (Docker)
+
+Dokploy, Coolify ya da düz Docker ile:
+
+```bash
+cp .env.example .env      # DATABASE_URL, SECRET_KEY, ENCRYPTION_KEY doldurun
+docker compose up -d --build
+```
+
+İki servis ayağa kalkar:
+
+| Servis | Ne yapar |
+|---|---|
+| `backend` | FastAPI. Açılışta veritabanı şemasını günceller, `/api` sunar. PDF için gereken pango/cairo imajda gelir. |
+| `frontend` | Derlenmiş arayüzü nginx ile sunar, `/api` isteklerini backend'e yönlendirir. |
+
+Dışarıya yalnızca arayüz açılır (varsayılan `8080`, `.env` içindeki `WEB_PORT`
+ile değiştirilir). Alan adınızı bu porta bağlayın. Arayüz ve API aynı kökeni
+paylaştığı için CORS ayarı gerekmez.
+
+`.env` dosyasındaki değişkenlerin tamamı backend'e olduğu gibi aktarılır;
+`BACKEND_HOST`, `BACKEND_PORT` ve `CORS_ORIGINS` değerlerini compose kendisi
+konteynere uygun şekilde geçersiz kılar.
+
+Veritabanı harici bir MySQL 8 sunucusudur — compose içinde veritabanı servisi
+yoktur, `DATABASE_URL` ile kendi sunucunuzu gösterirsiniz.
+
+> **Dokploy kullanıyorsanız:** build yöntemi olarak **Docker Compose**'u seçin.
+> Nixpacks bu depoda çalışmaz: kökte iki ayrı çalışma ortamı (Python ve Node)
+> vardır ve WeasyPrint sistem kütüphaneleri ister.
+
 ## Lisans
 
 [GNU Affero General Public License v3.0](LICENSE) — özgür yazılım. Değiştirip
