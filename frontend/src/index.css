@@ -104,6 +104,25 @@
 }
 
 @layer components {
+  /* Tanıtım sayfasının kahraman görseli: dersler sırayla yerine oturur.
+   * Yalnızca opaklık ve dönüşüm canlandırılır (düzen hesabı tetiklenmez).
+   * Hareketi azalt tercihinde global kural süreyi durdurur ve ızgara doğrudan
+   * çözülmüş hâliyle görünür. */
+  .yerlesen {
+    animation: yerles 420ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+  }
+
+  @keyframes yerles {
+    from {
+      opacity: 0;
+      transform: translateY(-6px) scale(0.96);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
   /* İmza: saat rayı.
    * İnce dikey çizgi ve çentikler; yan menüde, kart başlıklarında ve ızgarada
    * tekrar eder. Uygulamanın tamamı tek bir sürekli ders programı gibi okunur. */

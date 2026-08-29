@@ -16,6 +16,7 @@ import Ozet from "./pages/Ozet";
 import ProgramDetay from "./pages/ProgramDetay";
 import Programlar from "./pages/Programlar";
 import Subeler from "./pages/Subeler";
+import Tanitim from "./pages/Tanitim";
 import Yayin from "./pages/Yayin";
 import ZamanIzgarasi from "./pages/ZamanIzgarasi";
 import type { OturumDurumu } from "./lib/types";
@@ -65,16 +66,20 @@ export default function App() {
       {/* Eski kurulum adresi kayda yönlendirilir. */}
       <Route path="/kurulum" element={<Navigate to="/kayit" replace />} />
       {!oturumVar ? (
-        <Route
-          path="*"
-          element={
-            <Navigate
-              // Sistemde hiç kurum yoksa doğrudan kayda götür.
-              to={durum.data?.has_institutions ? "/giris" : "/kayit"}
-              replace
-            />
-          }
-        />
+        <>
+          {/* Girişsiz ziyaretçinin ana sayfası tanıtımdır. */}
+          <Route path="/" element={<Tanitim />} />
+          <Route
+            path="*"
+            element={
+              <Navigate
+                // Sistemde hiç kurum yoksa doğrudan kayda götür.
+                to={durum.data?.has_institutions ? "/" : "/kayit"}
+                replace
+              />
+            }
+          />
+        </>
       ) : (
         <Route element={<Kabuk />}>
           <Route path="/" element={<Ozet />} />
