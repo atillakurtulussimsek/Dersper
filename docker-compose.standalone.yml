@@ -1,0 +1,12 @@
+# Ters vekili olmayan, düz Docker kurulumları için port yayımlar.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.standalone.yml up -d
+#
+# Port .env içindeki WEB_PORT ile değiştirilir (varsayılan 8080). Dokploy ya da
+# Coolify kullanıyorsanız bu dosyaya ihtiyacınız yok; onlar konteynere kendi
+# vekilleriyle ulaşır.
+
+services:
+  frontend:
+    ports:
+      - "${WEB_PORT:-8080}:80"

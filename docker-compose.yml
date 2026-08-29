@@ -1,12 +1,20 @@
 # Dersper — üretim dağıtımı (Dokploy, Coolify, düz Docker).
 #
 # İki servis: backend (FastAPI) ve frontend (nginx). Arayüz /api isteklerini
-# backend'e yönlendirir, dışarıya tek port açılır.
+# backend'e yönlendirir.
 #
 # Ayarların tamamı kökteki .env dosyasından okunur:
 #   cp .env.example .env   ve içini doldurun.
 #
 # Veritabanı harici bir MySQL 8 sunucusudur; DATABASE_URL ile verilir.
+#
+# PORT YAYIMLAMA: burada bilerek ana makineye port bağlanmaz. Dokploy/Coolify
+# gibi ortamlar kendi ters vekilleriyle konteynere ulaşır; sabit port bağlamak
+# sunucudaki başka bir servisle çakışır. Panelden alan adını `frontend`
+# servisinin 80 numaralı portuna yönlendirin.
+#
+# Vekilsiz, düz Docker ile çalıştıracaksanız port yayımlayan ek dosyayı kullanın:
+#   docker compose -f docker-compose.yml -f docker-compose.standalone.yml up -d
 
 services:
   backend:
@@ -40,6 +48,5 @@ services:
       backend:
         condition: service_healthy
     restart: unless-stopped
-    ports:
-      # Dışarıya açılan tek port. Dokploy'da bu portu alan adına bağlayın.
-      - "${WEB_PORT:-8080}:80"
+    expose:
+      - "80"

@@ -89,9 +89,22 @@ docker compose up -d --build
 | `backend` | FastAPI. Açılışta veritabanı şemasını günceller, `/api` sunar. PDF için gereken pango/cairo imajda gelir. |
 | `frontend` | Derlenmiş arayüzü nginx ile sunar, `/api` isteklerini backend'e yönlendirir. |
 
-Dışarıya yalnızca arayüz açılır (varsayılan `8080`, `.env` içindeki `WEB_PORT`
-ile değiştirilir). Alan adınızı bu porta bağlayın. Arayüz ve API aynı kökeni
-paylaştığı için CORS ayarı gerekmez.
+Arayüz ve API aynı kökeni paylaştığı için CORS ayarı gerekmez.
+
+`docker-compose.yml` ana makineye **port bağlamaz**. Dokploy, Coolify gibi
+ortamlar konteynere kendi ters vekilleriyle ulaşır; sabit port bağlamak
+sunucudaki başka bir servisle çakışır. Panelden alan adınızı `frontend`
+servisinin **80** numaralı portuna yönlendirin.
+
+Ters vekili olmayan düz bir sunucuda çalıştıracaksanız port yayımlayan ek
+dosyayı kullanın:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.standalone.yml up -d
+```
+
+Bu durumda arayüz `.env` içindeki `WEB_PORT` portundan (varsayılan `8080`)
+yayınlanır.
 
 `.env` dosyasındaki değişkenlerin tamamı backend'e olduğu gibi aktarılır;
 `BACKEND_HOST`, `BACKEND_PORT` ve `CORS_ORIGINS` değerlerini compose kendisi
@@ -103,6 +116,8 @@ yoktur, `DATABASE_URL` ile kendi sunucunuzu gösterirsiniz.
 > **Dokploy kullanıyorsanız:** build yöntemi olarak **Docker Compose**'u seçin.
 > Nixpacks bu depoda çalışmaz: kökte iki ayrı çalışma ortamı (Python ve Node)
 > vardır ve WeasyPrint sistem kütüphaneleri ister.
+>
+> Alan adı ayarında servis olarak `frontend`, port olarak `80` girin.
 
 ## Lisans
 
