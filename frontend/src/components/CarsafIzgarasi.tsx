@@ -39,7 +39,12 @@ const EN_AZ_SUTUN = 28;
 /** Bir satırın bir gündeki hücrelerinin çizim planı. */
 type Parca =
   | { tur: "ders"; hucre: Hucre; kilitli: boolean; genislik: number; anahtar: string }
-  | { tur: "bos" | "teneffus" | "kapali"; genislik: number; anahtar: string };
+  | {
+      tur: "bos" | "teneffus" | "kapali";
+      genislik: number;
+      anahtar: string;
+      ogle?: boolean;
+    };
 
 function ust(hucre: Hucre): string {
   return hucre.subject_short || hucre.subject_name;
@@ -73,7 +78,7 @@ function gunuBol(
   for (const p of saatler) {
     const anahtar = String(p.id);
     if (p.is_break) {
-      parcalar.push({ tur: "teneffus", genislik: 1, anahtar });
+      parcalar.push({ tur: "teneffus", genislik: 1, anahtar, ogle: p.is_lunch });
       continue;
     }
     const h = hucreler.get(`${gunIndex}:${p.index}`);
@@ -270,12 +275,17 @@ export default function CarsafIzgarasi({
                         return (
                           <td
                             key={parca.anahtar}
-                            title="teneffüs"
+                            title={parca.ogle ? "öğle arası" : "teneffüs"}
                             className={clsx(
-                              "h-9 border border-cizgi bg-uyari-zemin",
+                              "h-9 border border-cizgi text-center align-middle text-[9px] leading-none text-uyari",
+                              // Öğle arası günü ikiye böler: yarım gün sınırı
+                              // buradan geçer, o yüzden gözle seçilebilmeli.
+                              parca.ogle ? "bg-uyari-zemin font-medium" : "bg-uyari-zemin",
                               gunbas && "border-l-2 border-l-cizgi-guclu",
                             )}
-                          />
+                          >
+                            {parca.ogle ? "öğle" : ""}
+                          </td>
                         );
                       }
                       if (parca.tur === "kapali") {

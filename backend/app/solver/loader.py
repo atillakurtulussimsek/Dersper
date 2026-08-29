@@ -8,10 +8,33 @@ from sqlalchemy.orm import Session, selectinload
 
 from app import bloklar
 from app.models import (
-    Availability, CurriculumEntry, Day, Section, SectionAvailability,
+    Availability, CurriculumEntry, Day, Section, SectionAvailability, Teacher,
     TeacherAvailability, Term,
 )
 from app.solver.engine import Lesson, Slot
+
+
+def sabah_mi(saatler: list, ders_saati) -> bool:
+    """Bir ders saati öğle arasından önce mi?
+
+    Günde öğle arası tanımlıysa sınır odur. Tanımlı değilse gün ders saati
+    sayısına göre ortadan ikiye bölünür ve tek sayıda saat varsa fazlalık
+    sabaha yazılır — okul günü tipik olarak sabah ağırlıklıdır. Bölme noktası
+    o durumda bir varsayımdır; arayüz bunu kullanıcıya söyler.
+
+    `saatler` günün TÜM saatleridir (teneffüsler dahil); öğle arasının yerini
+    ancak böyle bilebiliriz.
+    """
+    ogle = next((p for p in saatler if p.is_lunch), None)
+    if ogle is not None:
+        return ders_saati.index < ogle.index
+
+    dersler = [p for p in saatler if not p.is_break]
+    if not dersler:
+        return True
+    sinir = -(-len(dersler) // 2)        # yukarı yuvarlama
+    sirasi = [p.id for p in dersler].index(ders_saati.id)
+    return sirasi < sinir
 
 
 def slotlari_yukle(db: Session, donem: Term) -> list[Slot]:
@@ -24,7 +47,8 @@ def slotlari_yukle(db: Session, donem: Term) -> list[Slot]:
     )
     slots: list[Slot] = []
     for gun in gunler:
-        for p in sorted(gun.periods, key=lambda x: x.index):
+        saatler = sorted(gun.periods, key=lambda x: x.index)
+        for p in saatler:
             if p.is_break:
                 continue
             slots.append(Slot(
@@ -33,8 +57,24 @@ def slotlari_yukle(db: Session, donem: Term) -> list[Slot]:
                 period_index=p.index,
                 day_name=gun.name,
                 period_name=p.name,
+                sabah=sabah_mi(saatler, p),
             ))
     return slots
+
+
+def gun_sinirlarini_yukle(db: Session, donem: Term) -> dict[int, int]:
+    """teacher_id -> haftalık yarım gün sınırı. Sınırsız öğretmenler listede yok."""
+    return {
+        t.id: t.max_half_days
+        for t in db.scalars(
+            select(Teacher).where(
+                Teacher.term_id == donem.id,
+                Teacher.deleted_at.is_(None),
+                Teacher.is_active.is_(True),
+                Teacher.max_half_days.is_not(None),
+            )
+        )
+    }
 
 
 def dersleri_yukle(

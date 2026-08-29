@@ -3,11 +3,13 @@
 Uyarılar kaydedilmez; her istendiğinde o anki yerleşimden hesaplanır. Böylece
 elle sürükle-bırak yapıldığında da doğru kalırlar.
 
-İki tür uyarı vardır:
+Üç tür uyarı vardır:
   * `gunluk_asim` — bir ders bir günde, kendi günlük sınırından fazla kez var.
     Çözücü bunu ancak kurala uyan bir program bulamadığında yapar.
   * `bitisik` — aynı dersin saatleri arka arkaya. Çözücü buna izin vermez;
     yalnızca elle taşımayla oluşabilir.
+  * `gun_siniri` — öğretmen anlaştığından fazla gün okulda. Yine ancak program
+    başka türlü tamamlanamadığında oluşur.
 
 Kullanıcı bir uyarıyı "görmezden gel" diyerek o program için kalıcı olarak
 gizleyebilir.
@@ -20,20 +22,89 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models import Assignment, CurriculumEntry, Day, Period, Timetable
+from app.solver.loader import sabah_mi
 
 
-def _saat_bilgisi(db: Session) -> dict[int, tuple[int, int, str]]:
-    """period_id -> (gün sırası, ders saati sırası, gün adı)"""
-    return {
-        p.id: (g.index, p.index, g.name)
-        for g in db.scalars(select(Day).options(selectinload(Day.periods)))
-        for p in g.periods
-    }
+def _saat_bilgisi(db: Session) -> dict[int, tuple[int, int, str, bool]]:
+    """period_id -> (gün sırası, ders saati sırası, gün adı, sabah mı)"""
+    bilgi: dict[int, tuple[int, int, str, bool]] = {}
+    for g in db.scalars(select(Day).options(selectinload(Day.periods))):
+        saatler = sorted(g.periods, key=lambda x: x.index)
+        for p in saatler:
+            bilgi[p.id] = (g.index, p.index, g.name, sabah_mi(saatler, p))
+    return bilgi
+
+
+def _gun_metni(yarim_gun: int) -> str:
+    """9 -> '4,5'. Kullanıcı gün konuşur, veritabanı yarım gün tutar."""
+    return f"{yarim_gun / 2:g}".replace(".", ",")
+
+
+def _gun_siniri_uyarilari(
+    program: Timetable, atamalar: list, saatler: dict, gizlenen: set[str]
+) -> list[dict]:
+    """Gün sınırı aşılan öğretmenler.
+
+    Sınır esnetilebilir olduğu için program yine üretilir; aşım burada
+    görünür. Yerleşimden hesaplandığı için elle taşımadan sonra da doğrudur.
+    """
+    # teacher_id -> {(gün, sabah mı)}
+    yarimlar: dict[int, set[tuple[int, bool]]] = defaultdict(set)
+    ogretmenler: dict[int, object] = {}
+    gun_adlari: dict[int, str] = {}
+    for a in atamalar:
+        konum = saatler.get(a.period_id)
+        if konum is None:
+            continue
+        gun, _, gun_adi, sabah = konum
+        yarimlar[a.entry.teacher_id].add((gun, sabah))
+        ogretmenler[a.entry.teacher_id] = a.entry.teacher
+        gun_adlari[gun] = gun_adi
+
+    uyarilar: list[dict] = []
+    for tid, kullanilan in sorted(yarimlar.items()):
+        ogretmen = ogretmenler[tid]
+        sinir = ogretmen.max_half_days
+        if sinir is None:
+            continue
+        gunler = {gun for gun, _ in kullanilan}
+        gun_tavani = -(-sinir // 2)
+        if len(kullanilan) <= sinir and len(gunler) <= gun_tavani:
+            continue
+
+        parcalar = []
+        for gun in sorted(gunler):
+            tam = (gun, True) in kullanilan and (gun, False) in kullanilan
+            parcalar.append(gun_adlari[gun] + ("" if tam else " (yarım)"))
+
+        anahtar = f"gunsinir:{tid}"
+        uyarilar.append({
+            "key": anahtar,
+            "tur": "gun_siniri",
+            "baslik": (
+                f"{ogretmen.full_name}: {_gun_metni(len(kullanilan))} gün okulda, "
+                f"sınır {_gun_metni(sinir)} gün"
+            ),
+            "detay": (
+                f"Program {', '.join(parcalar)} günlerine yayıldı. Başka türlü "
+                f"tamamlanamadığı için gün sınırı esnetildi. Öğretmenin haftalık "
+                f"yükünü azaltmak ya da müsaitlik matrisinden bazı günleri "
+                f"kapatmak sınırın içinde kalmayı kolaylaştırır."
+            ),
+            "sube": "",
+            "ders": "",
+            "ogretmen": ogretmen.full_name,
+            "gun": "",
+            "konan": len(kullanilan),
+            "sinir": sinir,
+            "ignored": anahtar in gizlenen,
+        })
+    return uyarilar
 
 
 def uyarilari_hesapla(db: Session, program: Timetable) -> list[dict]:
     saatler = _saat_bilgisi(db)
-    atamalar = db.scalars(
+    atamalar = list(db.scalars(
         select(Assignment)
         .options(
             selectinload(Assignment.entry).selectinload(CurriculumEntry.section),
@@ -41,7 +112,7 @@ def uyarilari_hesapla(db: Session, program: Timetable) -> list[dict]:
             selectinload(Assignment.entry).selectinload(CurriculumEntry.teacher),
         )
         .where(Assignment.timetable_id == program.id)
-    )
+    ))
 
     # (müfredat satırı, gün) -> ders saati sıraları
     gunluk: dict[tuple[int, int], list[int]] = defaultdict(list)
@@ -51,13 +122,13 @@ def uyarilari_hesapla(db: Session, program: Timetable) -> list[dict]:
         konum = saatler.get(a.period_id)
         if konum is None:
             continue
-        gun, saat, gun_adi = konum
+        gun, saat, gun_adi, _ = konum
         gunluk[(a.curriculum_entry_id, gun)].append(saat)
         satirlar[a.curriculum_entry_id] = a.entry
         gun_adlari[gun] = gun_adi
 
     gizlenen = set(program.ignored_warnings or [])
-    uyarilar: list[dict] = []
+    uyarilar: list[dict] = _gun_siniri_uyarilari(program, atamalar, saatler, gizlenen)
 
     for (entry_id, gun), saatler_listesi in sorted(gunluk.items()):
         e = satirlar[entry_id]

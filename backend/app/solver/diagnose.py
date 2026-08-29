@@ -38,7 +38,51 @@ def _en_uzun_ardisik(
     return en_uzun
 
 
-def on_kontrol(slots: list[Slot], lessons: list[Lesson]) -> list[dict]:
+def _gun_siniri_kapasitesi(
+    slots: list[Slot], gunler: dict[int, list[int]], kapali: frozenset[int],
+    yarim_gun_siniri: int,
+) -> int:
+    """Öğretmenin gün sınırı içinde verebileceği EN FAZLA ders saati.
+
+    Her gün için dört seçenek var: uğrama, yalnız sabah, yalnız öğleden sonra,
+    tam gün. Seçim iki bütçeyle sınırlı — ayrı gün sayısı ve toplam yarım gün.
+    Küçük bir dinamik programlama tam sonucu verir (en çok 7 gün), böylece
+    "sığmıyor" dediğimizde gerçekten sığmıyordur.
+    """
+    gun_tavani = -(-yarim_gun_siniri // 2)
+
+    # (kullanilan_gun, kullanilan_yarim) -> en çok saat
+    durumlar: dict[tuple[int, int], int] = {(0, 0): 0}
+    for gun_slotlari in gunler.values():
+        musait = [si for si in gun_slotlari if slots[si].period_id not in kapali]
+        sabah = sum(1 for si in musait if slots[si].sabah)
+        oglenden = len(musait) - sabah
+
+        yeni: dict[tuple[int, int], int] = {}
+        for (g, y), saat in durumlar.items():
+            secenekler = [(0, 0, 0)]                      # uğrama
+            if sabah:
+                secenekler.append((1, 1, sabah))
+            if oglenden:
+                secenekler.append((1, 1, oglenden))
+            if sabah or oglenden:
+                secenekler.append((1, 2, sabah + oglenden))
+            for dg, dy, ds in secenekler:
+                anahtar = (g + dg, y + dy)
+                if anahtar[0] > gun_tavani or anahtar[1] > yarim_gun_siniri:
+                    continue
+                if yeni.get(anahtar, -1) < saat + ds:
+                    yeni[anahtar] = saat + ds
+        durumlar = yeni
+
+    return max(durumlar.values(), default=0)
+
+
+def on_kontrol(
+    slots: list[Slot],
+    lessons: list[Lesson],
+    gun_sinirlari: dict[int, int] | None = None,
+) -> list[dict]:
     """Çözücüden önce yapılan kapasite kontrolleri. Bulgu listesi döner."""
     bulgular: list[dict] = []
     if not slots:
@@ -171,6 +215,34 @@ def on_kontrol(slots: list[Slot], lessons: list[Lesson]) -> list[dict]:
                 "ders": l.subject_name,
             })
 
+    # --- Gün sınırı haftalık yükü taşıyor mu ---
+    for tid, yarim_gun in (gun_sinirlari or {}).items():
+        yuk = ogretmen_yuku.get(tid, 0)
+        if not yuk:
+            continue
+        tavan = _gun_siniri_kapasitesi(
+            slots, gunler, ogretmen_kapali.get(tid, frozenset()), yarim_gun
+        )
+        if yuk <= tavan:
+            continue
+        gun_metni = f"{yarim_gun / 2:g}".replace(".", ",")
+        bulgular.append({
+            "kod": "ogretmen_gun_siniri",
+            "baslik": f"{ogretmen_adi[tid]} öğretmenin yükü {gun_metni} güne sığmıyor",
+            "detay": (
+                f"Haftada {yuk} saat ders veriyor, ama {gun_metni} günlük sınırla "
+                f"ve müsait saatleriyle en çok {tavan} saat yerleşebilir. "
+                f"{yuk - tavan} saat fazla. Gün sınırı yükseltilmezse program "
+                f"kurulurken bu sınır aşılacak."
+            ),
+            # Sınır esnetilebilir olduğu için bu bir engel değil: program yine
+            # çıkar, ama anlaşmanın dışına taşarak.
+            "onem": "uyari",
+            "ogretmen": ogretmen_adi[tid],
+            "gereken": yuk,
+            "mevcut": tavan,
+        })
+
     # --- Öğretmen bazında gün gün darboğaz ---
     for tid, kapali in ogretmen_kapali.items():
         yuk = ogretmen_yuku[tid]
@@ -201,9 +273,10 @@ def rapor_olustur(
     unplaced: dict[int, int],
     status_name: str,
     seconds: float,
+    gun_sinirlari: dict[int, int] | None = None,
 ) -> dict:
     """Ön kontrolleri ve çözücü sonucunu tek yapılandırılmış rapora toplar."""
-    bulgular = on_kontrol(slots, lessons)
+    bulgular = on_kontrol(slots, lessons, gun_sinirlari)
     ders_by_id = {l.entry_id: l for l in lessons}
 
     yerlesmeyenler = []

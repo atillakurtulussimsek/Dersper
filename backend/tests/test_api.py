@@ -857,3 +857,138 @@ def test_ayri_sayfa_ciktisi_birlestirmez(yonetici: TestClient):
         f"/api/timetables/{pid}/export/html?bakis=sube&duzen=ayri"
     ).text
     assert "colspan" not in html
+
+
+# --- Öğle arası ve öğretmenin gün sınırı ---
+
+def _ogle_arasi_ekle(c: TestClient, sira: int = 4) -> list[dict]:
+    """Izgaradaki bir saati öğle arasına çevirir; sonrası öğleden sonra olur."""
+    gunler = c.get("/api/timegrid").json()
+    for g in gunler:
+        for p in g["periods"]:
+            p["is_lunch"] = p["index"] == sira
+    r = c.put("/api/timegrid", json=gunler)
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+def test_ogle_arasi_kaydedilir_ve_teneffus_olur(yonetici: TestClient):
+    gunler = _ogle_arasi_ekle(yonetici)
+    ogle = [p for g in gunler for p in g["periods"] if p["is_lunch"]]
+    assert len(ogle) == len([g for g in gunler if g["periods"]])
+    # Öğle arasına ders konmaz: işaretlenince teneffüs de olur.
+    assert all(p["is_break"] for p in ogle)
+
+
+def test_gunde_iki_ogle_arasi_reddedilir(yonetici: TestClient):
+    gunler = yonetici.get("/api/timegrid").json()
+    for p in gunler[0]["periods"][:2]:
+        p["is_lunch"] = True
+    r = yonetici.put("/api/timegrid", json=gunler)
+    assert r.status_code == 422
+    assert "öğle arası" in r.text
+
+
+def test_gun_siniri_yarim_kabul_eder(yonetici: TestClient):
+    r = yonetici.post("/api/teachers", json={
+        "full_name": "Yarım Günlü", "max_days": 4.5,
+    })
+    assert r.status_code == 201, r.text
+    assert r.json()["max_days"] == 4.5
+    assert yonetici.get("/api/teachers").json()[0]["max_days"] == 4.5
+
+
+def test_gun_siniri_ceyrek_kabul_etmez(yonetici: TestClient):
+    r = yonetici.post("/api/teachers", json={
+        "full_name": "Çeyrek Günlü", "max_days": 4.25,
+    })
+    assert r.status_code == 422
+    assert "yarım" in r.text
+
+
+def test_gun_siniri_bos_birakilabilir(yonetici: TestClient):
+    r = yonetici.post("/api/teachers", json={"full_name": "Sınırsız"})
+    assert r.status_code == 201
+    assert r.json()["max_days"] is None
+
+
+def test_gun_siniri_programa_uygulanir(yonetici: TestClient):
+    """4 gün anlaşması olan öğretmen 5 güne yayılmaz."""
+    _ogle_arasi_ekle(yonetici)
+    d = yonetici.post("/api/subjects", json={"name": "Matematik"}).json()["id"]
+    o = yonetici.post("/api/teachers", json={
+        "full_name": "Dört Günlü", "max_days": 4,
+    }).json()["id"]
+    s = yonetici.post("/api/sections", json={"name": "9-A"}).json()["id"]
+    yonetici.post("/api/curriculum", json={
+        "section_id": s, "subject_id": d, "teacher_id": o,
+        "weekly_hours": 8, "max_per_day": 2,
+    })
+
+    pid = yonetici.post("/api/timetables", json={"name": "Gün sınırı"}).json()["id"]
+    deneme = uret_ve_bekle(yonetici, pid)
+    assert deneme["status"] == "basarili", deneme["report"]
+
+    hucreler = yonetici.get(f"/api/timetables/{pid}/grid").json()["cells"]
+    assert len({h["day_index"] for h in hucreler}) <= 4
+
+
+def test_gun_siniri_asilirsa_uyari_cikar(yonetici: TestClient):
+    """Sınıra sığmayan yük: program üretilir, aşım uyarı olarak listelenir."""
+    d = yonetici.post("/api/subjects", json={"name": "Yoğun"}).json()["id"]
+    o = yonetici.post("/api/teachers", json={
+        "full_name": "İki Günlü", "max_days": 2,
+    }).json()["id"]
+    s = yonetici.post("/api/sections", json={"name": "9-Y"}).json()["id"]
+    # 2 günde en çok 16 saat var; 24 saat isteniyor. Desen günü dolduran
+    # bloklar verir: desensiz 24 saat tek saatlere açılır ve kural 7 (aynı
+    # dersin saatleri bitişik olamaz) yükü hiçbir sınırla yerleştiremez.
+    yonetici.post("/api/curriculum", json={
+        "section_id": s, "subject_id": d, "teacher_id": o,
+        "weekly_hours": 24, "block_pattern": "8+8+8", "max_per_day": 8,
+    })
+
+    pid = yonetici.post("/api/timetables", json={"name": "Aşım"}).json()["id"]
+    uret_ve_bekle(yonetici, pid, saniye=120.0)
+
+    uyarilar = yonetici.get(f"/api/timetables/{pid}/warnings").json()
+    gun = [u for u in uyarilar if u["tur"] == "gun_siniri"]
+    assert gun, uyarilar
+    assert gun[0]["ogretmen"] == "İki Günlü"
+    assert gun[0]["sinir"] == 4          # yarım gün biriminde: 2 gün
+    assert gun[0]["konan"] > 4
+
+
+def test_gun_siniri_uyarisi_gizlenebilir(yonetici: TestClient):
+    d = yonetici.post("/api/subjects", json={"name": "Yoğun2"}).json()["id"]
+    o = yonetici.post("/api/teachers", json={
+        "full_name": "Tek Günlü", "max_days": 1,
+    }).json()["id"]
+    s = yonetici.post("/api/sections", json={"name": "9-Z"}).json()["id"]
+    yonetici.post("/api/curriculum", json={
+        "section_id": s, "subject_id": d, "teacher_id": o,
+        "weekly_hours": 16, "block_pattern": "8+8", "max_per_day": 8,
+    })
+    pid = yonetici.post("/api/timetables", json={"name": "Gizle"}).json()["id"]
+    uret_ve_bekle(yonetici, pid, saniye=120.0)
+
+    uyari = next(u for u in yonetici.get(f"/api/timetables/{pid}/warnings").json()
+                 if u["tur"] == "gun_siniri")
+    sonra = yonetici.post(f"/api/timetables/{pid}/warnings/ignore",
+                          json={"key": uyari["key"]}).json()
+    assert next(u for u in sonra if u["key"] == uyari["key"])["ignored"] is True
+
+
+def test_gun_siniri_baska_doneme_aktarilir(yonetici: TestClient):
+    yonetici.post("/api/teachers", json={"full_name": "Taşınan", "max_days": 3.5})
+    ilk = yonetici.get("/api/terms").json()[0]["id"]
+    yeni = yonetici.post("/api/terms", json={"name": "Sonraki"}).json()["id"]
+    yonetici.post(f"/api/terms/{yeni}/activate")
+
+    aday = yonetici.get(f"/api/teachers/import/{ilk}").json()
+    hedef = next(t for t in aday if t["full_name"] == "Taşınan")
+    yonetici.post("/api/teachers/import", json={"term_id": ilk, "ids": [hedef["id"]]})
+
+    tasinan = next(t for t in yonetici.get("/api/teachers").json()
+                   if t["full_name"] == "Taşınan")
+    assert tasinan["max_days"] == 3.5

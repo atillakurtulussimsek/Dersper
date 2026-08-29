@@ -16,10 +16,15 @@ Sert kısıtlar (v1):
      (Yoksa "2+2" deseni gün içinde 4 saatlik tek bloğa dönüşürdü.)
   8. Teneffüslere ders konmaz.
   9. Kilitli yerleşimler yerinde kalır.
+ 10. Öğretmen haftada sınırından fazla gün okulda bulunmaz. Sınır yarım gün
+     biriminde verilir (9 = 4,5 gün); günü sabah/öğleden sonra diye bölen şey
+     ızgaradaki öğle arasıdır. Hangi günlerin kullanılacağına çözücü karar
+     verir — sabit bir günü kapatmak programı gereksiz sıkıştırırdı.
 
-Günlük sınır gerektiğinde esnetilebilir (`esnek_gunluk`): bu kipte sınır aşımı
-yasak değil, cezalıdır ve çözücü aşımı en aza indirir. Kural 7 esnek kipte de
-sert kalır, böylece esnetme "aynı ders gün içinde iki kez, arada başka ders"
+Günlük sınır ve gün sınırı gerektiğinde esnetilebilir (`esnek_gunluk`): bu
+kipte aşım yasak değil, cezalıdır ve çözücü toplam cezayı en aza indirir; gün
+sınırını bozmak günlük sınırı bozmaktan pahalıdır. Kural 7 esnek kipte de sert
+kalır, böylece esnetme "aynı ders gün içinde iki kez, arada başka ders"
 biçiminde olur.
 
 Hiçbiri yetmezse model tamamen gevşetilir: yerleşemeyen saatler raporlanır.
@@ -35,6 +40,10 @@ from ortools.sat.python import cp_model
 CEZA_YERLESMEYEN = 1000
 # Esnek kipte günlük sınırın her bir saatlik aşımının bedeli.
 CEZA_GUNLUK_ASIM = 10
+# Esnek kipte öğretmenin gün sınırını her yarım günlük aşmasının bedeli.
+# Günlük tekrar sınırından ağır: o pedagojik bir tercih, bu ise öğretmenle
+# yapılmış bir anlaşma. Çözücü zorunlu kalmadıkça bu sınırı bozmamalı.
+CEZA_GUN_SINIRI = 40
 VARSAYILAN_SURE_SN = 30.0
 
 
@@ -46,6 +55,9 @@ class Slot:
     period_index: int
     day_name: str
     period_name: str
+    # Öğle arasından önce mi? Öğretmenlerin yarım gün sınırı buna dayanır.
+    # Sınırı olan öğretmen yoksa değeri hiçbir şeyi etkilemez.
+    sabah: bool = True
 
 
 @dataclass(frozen=True)
@@ -78,10 +90,14 @@ class SolveInput:
     lessons: list[Lesson]
     # entry_id -> yerinde kalması gereken period_id listesi
     locked: dict[int, list[int]] = field(default_factory=dict)
+    # teacher_id -> haftada okulda bulunabileceği en fazla YARIM GÜN sayısı.
+    # 9 = 4,5 gün. Listede olmayan öğretmenin sınırı yoktur.
+    ogretmen_yarim_gun: dict[int, int] = field(default_factory=dict)
     time_limit_seconds: float = VARSAYILAN_SURE_SN
     # Her denemede farklı bir arama yolu izlemek için.
     seed: int = 0
-    # Günlük ders tekrar sınırı aşılabilsin mi? Aşım cezalandırılır, yasak değildir.
+    # Günlük ders tekrar sınırı ve öğretmen gün sınırı aşılabilsin mi?
+    # Aşım cezalandırılır, yasak değildir.
     esnek_gunluk: bool = False
 
 
@@ -239,6 +255,12 @@ def _calistir(
     # (3) Öğretmen çakışması
     _tekil_kaynak(model, data.lessons, dolu, len(slots), lambda l: l.teacher_id)
 
+    # (10) Öğretmen gün sınırı. Günlük sınır (kural 6) gibi gevşek modelde de
+    # sert kalır: orada gevşetilen tek şey "her saat yerleşmeli" kuralıdır.
+    # Aksi hâlde son çare model sınırı tamamen yok sayar ve anlaşmayı sessizce
+    # bozan bir programı başarılı diye döndürürdü.
+    gun_asimlari = _gun_siniri(model, data, dolu, gunler, slots, esnek=esnek_gunluk)
+
     # (8) Kilitli yerleşimler
     for li, lesson in enumerate(data.lessons):
         for period_id in data.locked.get(lesson.entry_id, []):
@@ -248,8 +270,13 @@ def _calistir(
 
     if gevsek:
         model.Minimize(sum(CEZA_YERLESMEYEN * v for v in yerlesmeyen.values()))
-    elif asimlar:
-        model.Minimize(sum(CEZA_GUNLUK_ASIM * v for v in asimlar.values()))
+    elif asimlar or gun_asimlari:
+        # Tek amaç işlevi: çözücü hangi kuralı bozacağını bedele göre seçer,
+        # ikisini birden gerekmedikçe bozmaz.
+        model.Minimize(
+            sum(CEZA_GUNLUK_ASIM * v for v in asimlar.values())
+            + sum(CEZA_GUN_SINIRI * v for v in gun_asimlari.values())
+        )
 
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = data.time_limit_seconds
@@ -294,6 +321,90 @@ def _calistir(
         status_name=solver.StatusName(status),
         relaxations=sorted(esnetmeler),
     )
+
+
+def _gun_siniri(
+    model, data: SolveInput, dolu: dict, gunler: dict[int, list[int]],
+    slots: list[Slot], *, esnek: bool,
+) -> dict[int, cp_model.IntVar]:
+    """Öğretmenin haftada okulda bulunacağı süreyi sınırlar.
+
+    Sınır yarım gün birimindedir (9 = 4,5 gün) ve iki kuralı birden gerektirir:
+
+      * Toplam yarım gün ≤ sınır. Yalnız bu olsaydı "4 gün" diyen öğretmen
+        3 tam + 2 yarım gün çalışıp 5 gün okula gelirdi — sayı tutar, anlaşma
+        tutmaz.
+      * Uğradığı ayrı gün sayısı ≤ tavan (yukarı yuvarlanmış sınır). Yalnız bu
+        olsaydı 4,5 günün yarımı hiç uygulanmazdı.
+
+    Yarım gün değişkenleri yalnızca aşağı doğru bağlanır (ders varsa yarım gün
+    dolu). Ters yön gereksiz: her iki kipte de çözücünün bu değişkenleri küçük
+    tutmakta çıkarı var, boş yere doldurmaz.
+
+    Esnek kipte sınır yasak değil cezalıdır; aşım miktarları döner.
+    """
+    if not data.ogretmen_yarim_gun:
+        return {}
+
+    ogretmen_dersleri: dict[int, list[int]] = {}
+    for li, lesson in enumerate(data.lessons):
+        ogretmen_dersleri.setdefault(lesson.teacher_id, []).append(li)
+
+    gun_sayisi = len(gunler)
+    asimlar: dict[int, cp_model.IntVar] = {}
+
+    for tid, sinir in data.ogretmen_yarim_gun.items():
+        dersler = ogretmen_dersleri.get(tid)
+        if not dersler:
+            continue
+        gun_tavani = -(-sinir // 2)      # yukarı yuvarlama
+        # Haftanın tamamı zaten sınırın altındaysa kısıt hiçbir zaman bağlamaz.
+        if gun_tavani >= gun_sayisi and sinir >= 2 * gun_sayisi:
+            continue
+
+        yarimlar: list[cp_model.IntVar] = []
+        gun_degiskenleri: list[cp_model.IntVar] = []
+
+        for gi, gun_slotlari in gunler.items():
+            gun_yarimlari: list[cp_model.IntVar] = []
+            for sabahtir in (True, False):
+                hucreler = [
+                    dolu[(li, si)]
+                    for si in gun_slotlari
+                    if slots[si].sabah == sabahtir
+                    for li in dersler
+                    if (li, si) in dolu
+                ]
+                if not hucreler:
+                    continue
+                yarim = model.NewBoolVar(
+                    f"yarim_{tid}_{gi}_{'s' if sabahtir else 'o'}"
+                )
+                for h in hucreler:
+                    model.AddImplication(h, yarim)
+                gun_yarimlari.append(yarim)
+
+            if not gun_yarimlari:
+                continue
+            yarimlar.extend(gun_yarimlari)
+            gun = model.NewBoolVar(f"gun_{tid}_{gi}")
+            for y in gun_yarimlari:
+                model.AddImplication(y, gun)
+            gun_degiskenleri.append(gun)
+
+        if not yarimlar:
+            continue
+
+        if esnek:
+            asim = model.NewIntVar(0, 2 * gun_sayisi, f"gunasim_{tid}")
+            model.Add(asim >= sum(yarimlar) - sinir)
+            model.Add(asim >= sum(gun_degiskenleri) - gun_tavani)
+            asimlar[tid] = asim
+        else:
+            model.Add(sum(yarimlar) <= sinir)
+            model.Add(sum(gun_degiskenleri) <= gun_tavani)
+
+    return asimlar
 
 
 def _tekil_kaynak(model, lessons, dolu, slot_sayisi, anahtar) -> None:

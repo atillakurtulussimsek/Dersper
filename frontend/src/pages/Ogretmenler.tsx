@@ -6,8 +6,8 @@ import GecmisDonemdenAktar from "../components/GecmisDonemdenAktar";
 import RenkSecici from "../components/RenkSecici";
 import MusaitlikMatrisi from "../components/MusaitlikMatrisi";
 import {
-  Alan, BosDurum, Buton, CokSatir, Girdi, Kart, Kutu, SayfaBasligi, Tablo, Uyari,
-  Yukleniyor,
+  Alan, BosDurum, Buton, CokSatir, Girdi, Kart, Kutu, SayfaBasligi, Secim, Tablo,
+  Uyari, Yukleniyor,
 } from "../components/ui";
 import { get } from "../lib/api";
 import { hataMetni, useKaynak, useListe } from "../lib/hooks";
@@ -20,10 +20,23 @@ const BOS = {
   short_code: "",
   branch: "",
   max_daily_hours: "" as number | "",
+  max_days: "" as number | "",
   notes: "",
   color: VARSAYILAN_RENK,
   is_active: true,
 };
+
+/** 4.5 -> "4,5". Kullanıcı gün sayısını virgüllü okur. */
+function gunMetni(gun: number): string {
+  return String(gun).replace(".", ",");
+}
+
+/** Sınır olarak seçilebilecek gün sayıları: yarım adımlarla, hafta boyunca. */
+function gunSecenekleri(gunSayisi: number): number[] {
+  const secenekler: number[] = [];
+  for (let g = 0.5; g <= gunSayisi; g += 0.5) secenekler.push(g);
+  return secenekler;
+}
 
 export default function Ogretmenler() {
   const liste = useListe<Ogretmen>("ogretmenler", "/teachers");
@@ -39,6 +52,10 @@ export default function Ogretmenler() {
   const [kodElle, setKodElle] = useState(false);
   // Yeni kayıtta renk rastgele atanır; kullanıcı isterse elle seçer.
   const [renkRastgele, setRenkRastgele] = useState(true);
+
+  const acikGunler = (izgara.data ?? []).filter((g) => g.is_active);
+  const acikGunSayisi = acikGunler.length || 5;
+  const ogleArasiVar = acikGunler.some((g) => g.periods.some((p) => p.is_lunch));
 
   /** Düzenlenen öğretmen dışındaki kayıtlı kodlar — çakışmayı önlemek için. */
   function baskaKodlar(): string[] {
@@ -76,6 +93,7 @@ export default function Ogretmenler() {
             short_code: o.short_code ?? "",
             branch: o.branch ?? "",
             max_daily_hours: o.max_daily_hours ?? "",
+            max_days: o.max_days ?? "",
             notes: o.notes ?? "",
             color: o.color,
             is_active: o.is_active,
@@ -92,6 +110,7 @@ export default function Ogretmenler() {
       short_code: form.short_code || null,
       branch: form.branch || null,
       max_daily_hours: form.max_daily_hours === "" ? null : Number(form.max_daily_hours),
+      max_days: form.max_days === "" ? null : Number(form.max_days),
       notes: form.notes || null,
       color: form.color,
       is_active: form.is_active,
@@ -139,7 +158,7 @@ export default function Ogretmenler() {
             }
           />
         ) : (
-          <Tablo basliklar={["Ad soyad", "Branş", "Kısa kod", "Günlük en fazla", "Durum", ""]}>
+          <Tablo basliklar={["Ad soyad", "Branş", "Kısa kod", "Günlük en fazla", "Haftalık gün", "Durum", ""]}>
             {liste.data.map((o) => (
               <tr key={o.id} className="hover:bg-yuzey-alt">
                 <td className="px-3 py-2.5">
@@ -155,6 +174,9 @@ export default function Ogretmenler() {
                 <td className="px-3 py-2.5 font-mono text-xs text-murekkep-yumusak">{o.short_code || "—"}</td>
                 <td className="sayisal px-3 py-2.5 text-murekkep-silik">
                   {o.max_daily_hours ? `${o.max_daily_hours} saat` : "—"}
+                </td>
+                <td className="sayisal px-3 py-2.5 text-murekkep-silik">
+                  {o.max_days ? `${gunMetni(o.max_days)} gün` : "—"}
                 </td>
                 <td className="px-3 py-2.5 text-murekkep-silik">
                   {o.is_active ? "Aktif" : "Pasif"}
@@ -258,6 +280,32 @@ export default function Ogretmenler() {
               }
             />
           </Alan>
+          <Alan
+            etiket="Haftada en fazla gün"
+            ipucu={
+              ogleArasiVar
+                ? "Boş bırakılırsa sınır yok. Hangi günlerin kullanılacağına program karar verir; yarım gün ızgaradaki öğle arasına göre belirlenir."
+                : "Boş bırakılırsa sınır yok. Izgarada öğle arası tanımlı olmadığı için yarım günler gün ortasından bölünür — gerçek öğle arasını Zaman Izgarası'nda işaretleyebilirsiniz."
+            }
+          >
+            <Secim
+              value={form.max_days}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  max_days: e.target.value === "" ? "" : Number(e.target.value),
+                })
+              }
+            >
+              <option value="">Sınır yok</option>
+              {gunSecenekleri(acikGunSayisi).map((g) => (
+                <option key={g} value={g}>
+                  {gunMetni(g)} gün
+                </option>
+              ))}
+            </Secim>
+          </Alan>
+
           <Alan
             etiket="Renk"
             ipucu={

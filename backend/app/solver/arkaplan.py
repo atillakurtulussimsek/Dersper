@@ -23,7 +23,9 @@ from app.db import SessionLocal
 from app.models import Assignment, SolveRun, SolveStatus, Term, Timetable, TimetableStatus
 from app.solver.diagnose import rapor_olustur
 from app.solver.engine import SolveInput, solve
-from app.solver.loader import dersleri_yukle, slotlari_yukle
+from app.solver.loader import (
+    dersleri_yukle, gun_sinirlarini_yukle, slotlari_yukle,
+)
 
 log = logging.getLogger("dersper.arkaplan")
 
@@ -81,6 +83,7 @@ def _dongu(run_id: int, term_id: int, dur: threading.Event) -> None:
             program = db.get(Timetable, run.timetable_id)
             slots = slotlari_yukle(db, donem)
             lessons = dersleri_yukle(db, donem, program.section_ids)
+            gun_sinirlari = gun_sinirlarini_yukle(db, donem)
             gereken = sum(l.weekly_hours for l in lessons)
 
             kilitli: dict[int, list[int]] = {}
@@ -99,7 +102,8 @@ def _dongu(run_id: int, term_id: int, dur: threading.Event) -> None:
 
             if not slots or not lessons:
                 _bitir(db, run_id, SolveStatus.HATA,
-                       rapor_olustur(slots, lessons, {}, "VERI_YOK", 0.0))
+                       rapor_olustur(slots, lessons, {}, "VERI_YOK", 0.0,
+                                     gun_sinirlari))
                 return
 
             en_iyi: list[tuple[int, int]] = []
@@ -120,6 +124,7 @@ def _dongu(run_id: int, term_id: int, dur: threading.Event) -> None:
                     esnek = True
                 sonuc = solve(SolveInput(
                     slots=slots, lessons=lessons, locked=kilitli,
+                    ogretmen_yarim_gun=gun_sinirlari,
                     time_limit_seconds=sure, seed=deneme, esnek_gunluk=esnek,
                 ))
                 if sonuc.proven_infeasible:
@@ -131,7 +136,8 @@ def _dongu(run_id: int, term_id: int, dur: threading.Event) -> None:
                     en_iyi_eksik = sonuc.unplaced
 
                 son_rapor = rapor_olustur(slots, lessons, sonuc.unplaced,
-                                          sonuc.status_name, sonuc.seconds)
+                                          sonuc.status_name, sonuc.seconds,
+                                          gun_sinirlari)
 
                 _ilerlemeyi_yaz(run_id, deneme, en_iyi_yerlesen, gereken,
                                 sonuc.proven_infeasible, son_rapor, baslangic)
@@ -156,7 +162,8 @@ def _dongu(run_id: int, term_id: int, dur: threading.Event) -> None:
             if en_iyi:
                 _yerlesimleri_yaz(run_id, en_iyi, kilitli)
             if son_rapor is None:
-                son_rapor = rapor_olustur(slots, lessons, en_iyi_eksik, "DURDURULDU", 0.0)
+                son_rapor = rapor_olustur(slots, lessons, en_iyi_eksik, "DURDURULDU",
+                                          0.0, gun_sinirlari)
             _bitir(db, run_id, SolveStatus.DURDURULDU, son_rapor, baslangic)
     except Exception:  # iş parçacığı sessizce ölmesin
         log.exception("Arka plan çözümü hata verdi (run_id=%s)", run_id)

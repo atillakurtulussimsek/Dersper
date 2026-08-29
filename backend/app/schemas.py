@@ -114,6 +114,14 @@ class PeriodIn(BaseModel):
     start_time: time | None = None
     end_time: time | None = None
     is_break: bool = False
+    is_lunch: bool = False
+
+    @model_validator(mode="after")
+    def _ogle_arasi_teneffustur(self) -> "PeriodIn":
+        """Öğle arasına ders konmaz; işaretlendiğinde teneffüs de olur."""
+        if self.is_lunch:
+            self.is_break = True
+        return self
 
 
 class PeriodOut(ORMModel):
@@ -124,6 +132,7 @@ class PeriodOut(ORMModel):
     start_time: time | None
     end_time: time | None
     is_break: bool
+    is_lunch: bool
 
 
 class DayIn(BaseModel):
@@ -131,6 +140,16 @@ class DayIn(BaseModel):
     name: str = Field(max_length=20)
     is_active: bool = True
     periods: list[PeriodIn] = []
+
+    @model_validator(mode="after")
+    def _tek_ogle_arasi(self) -> "DayIn":
+        """Gün ikiye bölünür; ikinci bir öğle arası bölmeyi belirsizleştirirdi."""
+        if sum(1 for p in self.periods if p.is_lunch) > 1:
+            raise ValueError(
+                f"{self.name} gününde birden fazla öğle arası var. "
+                f"Bir günde yalnızca bir öğle arası olabilir."
+            )
+        return self
 
 
 class DayOut(ORMModel):
@@ -148,9 +167,28 @@ class TeacherIn(BaseModel):
     short_code: str | None = Field(default=None, max_length=20)
     branch: str | None = Field(default=None, max_length=100)
     max_daily_hours: int | None = Field(default=None, ge=1, le=20)
+    # Haftada okulda bulunabileceği en fazla gün. Yarım gün kabul edilir
+    # (örn. 4.5); başka kesir yoktur. NULL = sınır yok.
+    max_days: float | None = Field(default=None, gt=0, le=7)
     notes: str | None = None
     color: str = Field(default="#94a3b8", pattern=r"^#[0-9a-fA-F]{6}$")
     is_active: bool = True
+
+    @model_validator(mode="after")
+    def _yarim_gun_kontrolu(self) -> "TeacherIn":
+        """Kesir yalnızca yarım olabilir: yarım gün öğle arasıyla tanımlıdır,
+        çeyrek günün ızgarada bir karşılığı yok."""
+        if self.max_days is not None and (self.max_days * 2) % 1 != 0:
+            raise ValueError(
+                "Gün sınırı tam ya da yarım olmalı (örn. 4 veya 4,5). "
+                f"{self.max_days} kabul edilmiyor."
+            )
+        return self
+
+    @property
+    def max_half_days(self) -> int | None:
+        """Veritabanının sakladığı birim: yarım gün."""
+        return None if self.max_days is None else round(self.max_days * 2)
 
 
 class TeacherOut(ORMModel):
@@ -159,6 +197,7 @@ class TeacherOut(ORMModel):
     short_code: str | None
     branch: str | None
     max_daily_hours: int | None
+    max_days: float | None
     notes: str | None
     color: str
     is_active: bool

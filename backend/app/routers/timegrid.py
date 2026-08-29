@@ -75,6 +75,7 @@ def _saatleri_esitle(db: Session, gun: Day, gelen: list[PeriodIn]) -> None:
         var_olan.start_time = p.start_time
         var_olan.end_time = p.end_time
         var_olan.is_break = p.is_break
+        var_olan.is_lunch = p.is_lunch
 
 
 def _kaynak_donem(db: Session, term_id: int, donem: Term) -> Term:
@@ -207,7 +208,7 @@ def izgarayi_aktar(
         for p in sorted(kaynak_gun.periods, key=lambda x: x.index):
             db.add(Period(day_id=gun.id, index=p.index, name=p.name,
                           start_time=p.start_time, end_time=p.end_time,
-                          is_break=p.is_break))
+                          is_break=p.is_break, is_lunch=p.is_lunch))
     db.commit()
     db.expire_all()
     return _gunleri_getir(db, donem)

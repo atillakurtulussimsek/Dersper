@@ -1,7 +1,7 @@
 /** Günler ve ders saatleri. Ders saati sayısı güne göre değişebilir. */
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Coffee, Download, Minus, Plus } from "lucide-react";
+import { Coffee, Download, Minus, Plus, UtensilsCrossed } from "lucide-react";
 
 import {
   Buton, Girdi, Kart, Kutu, SayfaBasligi, Secim, Uyari, Yukleniyor,
@@ -13,7 +13,10 @@ type TaslakSaat = Omit<DersSaati, "id" | "day_id">;
 type TaslakGun = { index: number; name: string; is_active: boolean; periods: TaslakSaat[] };
 
 function yeniSaat(index: number): TaslakSaat {
-  return { index, name: `${index + 1}. ders`, start_time: null, end_time: null, is_break: false };
+  return {
+    index, name: `${index + 1}. ders`, start_time: null, end_time: null,
+    is_break: false, is_lunch: false,
+  };
 }
 
 export default function ZamanIzgarasi() {
@@ -44,8 +47,8 @@ export default function ZamanIzgarasi() {
         periods: g.periods
           .slice()
           .sort((a, b) => a.index - b.index)
-          .map(({ index, name, start_time, end_time, is_break }) => ({
-            index, name, start_time, end_time, is_break,
+          .map(({ index, name, start_time, end_time, is_break, is_lunch }) => ({
+            index, name, start_time, end_time, is_break, is_lunch,
           })),
       })),
     );
@@ -87,6 +90,25 @@ export default function ZamanIzgarasi() {
     );
   }
 
+  /** Öğle arası günde tek olabilir: yenisi işaretlenince eskisi bırakılır.
+   *  Öğle arasına ders konmadığı için teneffüs de olur. */
+  function ogleArasiniDegistir(gunIndex: number, saatIndex: number) {
+    setTaslak((t) =>
+      t.map((g) => {
+        if (g.index !== gunIndex) return g;
+        const acilacak = !g.periods[saatIndex].is_lunch;
+        return {
+          ...g,
+          periods: g.periods.map((p, i) =>
+            i === saatIndex
+              ? { ...p, is_lunch: acilacak, is_break: acilacak ? true : p.is_break }
+              : { ...p, is_lunch: false },
+          ),
+        };
+      }),
+    );
+  }
+
   const toplam = taslak
     .filter((g) => g.is_active)
     .reduce((t, g) => t + g.periods.filter((p) => !p.is_break).length, 0);
@@ -97,7 +119,7 @@ export default function ZamanIzgarasi() {
     <div className="space-y-5">
       <SayfaBasligi
         baslik="Zaman Izgarası"
-        aciklama="Hangi günlerde kaç ders saati olduğu. Teneffüs olarak işaretlenen saatlere ders yerleştirilmez."
+        aciklama="Hangi günlerde kaç ders saati olduğu. Teneffüse ders yerleştirilmez; öğle arası ayrıca günü sabah ve öğleden sonra diye böler."
         sag={
           <>
     <Buton
@@ -183,7 +205,7 @@ export default function ZamanIzgarasi() {
               g.is_active
                 ? `${g.periods.filter((p) => !p.is_break).length} ders · ${
                     g.periods.filter((p) => p.is_break).length
-                  } teneffüs`
+                  } teneffüs${g.periods.some((p) => p.is_lunch) ? " · öğle arası var" : ""}`
                 : "Bu gün kapalı"
             }
             sag={
@@ -228,8 +250,15 @@ export default function ZamanIzgarasi() {
                     />
                     <button
                       type="button"
-                      title={p.is_break ? "Teneffüs" : "Ders saati"}
-                      onClick={() => saatiDegistir(g.index, i, { is_break: !p.is_break })}
+                      title={p.is_break ? "Teneffüs — ders konmaz" : "Ders saati"}
+                      onClick={() =>
+                        saatiDegistir(g.index, i, {
+                          is_break: !p.is_break,
+                          // Öğle arası zaten teneffüstür; teneffüsü kapatmak
+                          // öğle arasını da kaldırır.
+                          is_lunch: p.is_break ? false : p.is_lunch,
+                        })
+                      }
                       className={`rounded-lg border p-2 ${
                         p.is_break
                           ? "border-uyari/25 bg-uyari-zemin text-uyari"
@@ -237,6 +266,22 @@ export default function ZamanIzgarasi() {
                       }`}
                     >
                       <Coffee className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      title={
+                        p.is_lunch
+                          ? "Öğle arası — günü sabah ve öğleden sonra diye böler"
+                          : "Öğle arası yap"
+                      }
+                      onClick={() => ogleArasiniDegistir(g.index, i)}
+                      className={`rounded-lg border p-2 ${
+                        p.is_lunch
+                          ? "border-cizgi-guclu bg-murekkep text-uzeri"
+                          : "border-cizgi-guclu bg-yuzey text-murekkep-silik hover:bg-yuzey-alt"
+                      }`}
+                    >
+                      <UtensilsCrossed className="h-4 w-4" />
                     </button>
                   </div>
                 ))}

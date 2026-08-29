@@ -53,6 +53,8 @@ export interface DersSaati {
   start_time: string | null;
   end_time: string | null;
   is_break: boolean;
+  /** Öğle arası: teneffüsün, günü sabah ve öğleden sonra diye bölen hâli. */
+  is_lunch: boolean;
 }
 
 export interface Gun {
@@ -69,6 +71,8 @@ export interface Ogretmen {
   short_code: string | null;
   branch: string | null;
   max_daily_hours: number | null;
+  /** Haftada okulda bulunabileceği en fazla gün. Yarım kabul edilir (4.5). */
+  max_days: number | null;
   notes: string | null;
   color: string;
   is_active: boolean;
@@ -138,7 +142,7 @@ export interface Hucre {
 
 export interface ProgramUyarisi {
   key: string;
-  tur: "gunluk_asim" | "bitisik";
+  tur: "gunluk_asim" | "bitisik" | "gun_siniri";
   baslik: string;
   detay: string;
   sube: string;

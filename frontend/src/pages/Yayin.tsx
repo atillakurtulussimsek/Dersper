@@ -65,6 +65,7 @@ export default function Yayin() {
             start_time: null,
             end_time: null,
             is_break: false,
+            is_lunch: false,
           })),
       }));
 

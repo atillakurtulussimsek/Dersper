@@ -214,7 +214,7 @@ export default function ProgramIzgarasi({
                       key={g.id}
                       className="h-14 border border-cizgi bg-uyari-zemin text-center text-[10px] font-medium text-uyari"
                     >
-                      teneffüs
+                      {p.is_lunch ? "öğle arası" : "teneffüs"}
                     </td>
                   );
                 }

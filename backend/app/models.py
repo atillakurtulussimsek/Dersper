@@ -143,6 +143,10 @@ class Period(Base):
     start_time: Mapped[time | None] = mapped_column(Time)
     end_time: Mapped[time | None] = mapped_column(Time)
     is_break: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Öğle arası. Teneffüsün özel hâli: ders konmaz, ayrıca günü sabah ve
+    # öğleden sonra diye ikiye böler — öğretmenlerin yarım gün sınırı buna
+    # dayanır. Günde en çok bir tane olabilir (uygulama katmanında denetlenir).
+    is_lunch: Mapped[bool] = mapped_column(Boolean, default=False)
 
     day: Mapped[Day] = relationship(back_populates="periods")
 
@@ -156,6 +160,11 @@ class Teacher(Base, SoftDelete):
     short_code: Mapped[str | None] = mapped_column(String(20))
     branch: Mapped[str | None] = mapped_column(String(100))
     max_daily_hours: Mapped[int | None] = mapped_column(Integer)
+    # Haftada okulda bulunabileceği en fazla süre, YARIM GÜN olarak.
+    # 9 = 4,5 gün. Yarım günler tam sayıyla tutulur: kesirli gün yalnızca
+    # yarımı kabul ettiği için ikiye katlamak tam ve kesin bir birim verir.
+    # NULL = sınır yok.
+    max_half_days: Mapped[int | None] = mapped_column(Integer)
     notes: Mapped[str | None] = mapped_column(Text)
     color: Mapped[str] = mapped_column(String(7), default="#94a3b8")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -163,6 +172,11 @@ class Teacher(Base, SoftDelete):
     availability: Mapped[list[TeacherAvailability]] = relationship(
         back_populates="teacher", cascade="all, delete-orphan"
     )
+
+    @property
+    def max_days(self) -> float | None:
+        """Gün sınırı, kullanıcının konuştuğu birimde. Arayüz bunu okur."""
+        return None if self.max_half_days is None else self.max_half_days / 2
 
 
 class TeacherAvailability(Base):

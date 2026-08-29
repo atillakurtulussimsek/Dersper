@@ -2,15 +2,19 @@
 from app.bloklar import coz
 from app.solver.diagnose import on_kontrol, rapor_olustur
 from app.solver.engine import Lesson, Slot, SolveInput, solve
+from app.solver.loader import sabah_mi
 
 GUNLER = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma"]
 
 
 def izgara(gun_sayisi: int = 5, ders_sayisi: int = 8) -> list[Slot]:
+    """Öğle arası tanımlanmamış bir ızgara: gün ortadan ikiye bölünür."""
+    sabah_siniri = -(-ders_sayisi // 2)
     slots, pid = [], 1
     for g in range(gun_sayisi):
         for p in range(ders_sayisi):
-            slots.append(Slot(pid, g, p, GUNLER[g], f"{p + 1}. ders"))
+            slots.append(Slot(pid, g, p, GUNLER[g], f"{p + 1}. ders",
+                              sabah=p < sabah_siniri))
             pid += 1
     return slots
 
@@ -297,3 +301,173 @@ def test_esnek_kip_asimi_en_aza_indirir():
     assert sonuc.ok
     toplam_asim = sum(konan - sinir for _, _, konan, sinir in sonuc.relaxations)
     assert toplam_asim == 2      # 6 saat, 2 günde 4 saat sınır → en az 2 aşım
+
+
+# --- Öğretmenin haftalık gün sınırı ---
+
+def _ogretmen_gunleri(slots, placements, dersler, ogretmen_id) -> set[int]:
+    """Öğretmenin ders verdiği ayrı günler."""
+    konum = {s.period_id: s for s in slots}
+    benim = {d.entry_id for d in dersler if d.teacher_id == ogretmen_id}
+    return {konum[pid].day_index for eid, pid in placements if eid in benim}
+
+
+def _ogretmen_yarimlari(slots, placements, dersler, ogretmen_id) -> set[tuple[int, bool]]:
+    """Öğretmenin bulunduğu (gün, sabah mı) yarım günleri."""
+    konum = {s.period_id: s for s in slots}
+    benim = {d.entry_id for d in dersler if d.teacher_id == ogretmen_id}
+    return {
+        (konum[pid].day_index, konum[pid].sabah)
+        for eid, pid in placements
+        if eid in benim
+    }
+
+
+def test_gun_siniri_ogretmene_bos_gun_birakir():
+    """4 gün sınırı olan öğretmen 5 güne yayılmaz."""
+    slots = izgara()
+    dersler = [
+        ders(1, 1, 10, "Matematik", 8, gunluk=2),
+        ders(2, 2, 11, "Türkçe", 10, gunluk=2),
+    ]
+    sonuc = solve(SolveInput(
+        slots=slots, lessons=dersler, ogretmen_yarim_gun={10: 8},
+        time_limit_seconds=20,
+    ))
+    assert sonuc.ok, sonuc.status_name
+    assert len(_ogretmen_gunleri(slots, sonuc.placements, dersler, 10)) <= 4
+    # Sınırı olmayan öğretmen etkilenmez.
+    assert len(_ogretmen_gunleri(slots, sonuc.placements, dersler, 11)) == 5
+
+
+def test_yarim_gun_siniri_uygulanir():
+    """4,5 gün = 9 yarım gün: 5 güne yayılsa bile biri yarım kalır."""
+    slots = izgara()
+    # Günde en fazla 2 saat × 10 saat → en az 5 gün gerekiyor.
+    dersler = [ders(1, 1, 10, "Matematik", 10, gunluk=2)]
+    sonuc = solve(SolveInput(
+        slots=slots, lessons=dersler, ogretmen_yarim_gun={10: 9},
+        time_limit_seconds=20,
+    ))
+    assert sonuc.ok, sonuc.status_name
+    yarimlar = _ogretmen_yarimlari(slots, sonuc.placements, dersler, 10)
+    assert len(_ogretmen_gunleri(slots, sonuc.placements, dersler, 10)) == 5
+    assert len(yarimlar) <= 9
+
+
+def test_gun_siniri_ogle_arasina_gore_bolunur():
+    """Öğle arası erkene alınırsa yarım gün sınırı da oraya göre kayar."""
+    # 6 ders saati; öğle arası 2. dersten sonra → sabah 2 saat, öğleden sonra 4.
+    slots = []
+    pid = 1
+    for g in range(5):
+        for p in range(6):
+            slots.append(Slot(pid, g, p, GUNLER[g], f"{p + 1}. ders", sabah=p < 2))
+            pid += 1
+    dersler = [ders(1, 1, 10, "Matematik", 10, gunluk=2)]
+    sonuc = solve(SolveInput(
+        slots=slots, lessons=dersler, ogretmen_yarim_gun={10: 9},
+        time_limit_seconds=20,
+    ))
+    assert sonuc.ok, sonuc.status_name
+    yarimlar = _ogretmen_yarimlari(slots, sonuc.placements, dersler, 10)
+    assert len(yarimlar) <= 9
+    # Yarım kalan günde saatlerin hepsi tek dilimde olmalı.
+    gunler = _ogretmen_gunleri(slots, sonuc.placements, dersler, 10)
+    yarim_gunler = [g for g in gunler if sum(1 for y in yarimlar if y[0] == g) == 1]
+    assert yarim_gunler, "en az bir gün yarım olmalıydı"
+
+
+def test_gun_siniri_sigmiyorsa_esnetilir():
+    """Yük sınıra sığmıyorsa program yine kurulur, sınır aşılarak."""
+    # 2 gün (4 yarım) sınırı; 2 günde en çok 16 saat var, 20 saat isteniyor.
+    slots = izgara()
+    dersler = [ders(1, 1, 10, "Matematik", 20, gunluk=4)]
+    kati = solve(SolveInput(
+        slots=slots, lessons=dersler, ogretmen_yarim_gun={10: 4},
+        time_limit_seconds=20,
+    ))
+    assert not kati.ok
+
+    esnek = solve(SolveInput(
+        slots=slots, lessons=dersler, ogretmen_yarim_gun={10: 4},
+        time_limit_seconds=20, esnek_gunluk=True,
+    ))
+    assert esnek.ok, esnek.status_name
+    assert len(esnek.placements) == 20
+    assert len(_ogretmen_gunleri(slots, esnek.placements, dersler, 10)) > 2
+
+
+def test_gun_siniri_gereksizse_programi_bozmaz():
+    """Sınır haftadan genişse hiçbir şeyi değiştirmez."""
+    slots = izgara()
+    dersler = [
+        ders(1, 1, 10, "Matematik", 5),
+        ders(2, 1, 11, "Türkçe", 5),
+    ]
+    sonuc = solve(SolveInput(
+        slots=slots, lessons=dersler, ogretmen_yarim_gun={10: 10, 11: 10},
+        time_limit_seconds=20,
+    ))
+    assert sonuc.ok
+    assert len(sonuc.placements) == 10
+
+
+def test_gun_siniri_tani_raporunda_gorunur():
+    slots = izgara()
+    dersler = [ders(1, 1, 10, "Matematik", 20, gunluk=4)]
+    bulgular = on_kontrol(slots, dersler, {10: 4})
+    kodlar = [b["kod"] for b in bulgular]
+    assert "ogretmen_gun_siniri" in kodlar
+    bulgu = next(b for b in bulgular if b["kod"] == "ogretmen_gun_siniri")
+    assert bulgu["mevcut"] == 16      # 2 gün × 8 saat
+    assert bulgu["gereken"] == 20
+    assert "2 gün" in bulgu["baslik"]
+
+
+def test_gun_siniri_yetiyorsa_tani_sessiz():
+    slots = izgara()
+    dersler = [ders(1, 1, 10, "Matematik", 8, gunluk=2)]
+    bulgular = on_kontrol(slots, dersler, {10: 8})
+    assert not [b for b in bulgular if b["kod"] == "ogretmen_gun_siniri"]
+
+
+# --- Sabah / öğleden sonra ayrımı ---
+
+class _SahteSaat:
+    """`sabah_mi` yalnızca bu dört alanı okur."""
+
+    def __init__(self, pid, index, is_break=False, is_lunch=False):
+        self.id, self.index = pid, index
+        self.is_break, self.is_lunch = is_break, is_lunch
+
+
+def test_ogle_arasi_gunu_boler():
+    saatler = [
+        _SahteSaat(1, 0), _SahteSaat(2, 1), _SahteSaat(3, 2, is_lunch=True),
+        _SahteSaat(4, 3), _SahteSaat(5, 4),
+    ]
+    # Yalnızca ders saatleri sorulur: öğle arasının kendisi slot olmadığı için
+    # onun değeri hiçbir yerde kullanılmaz.
+    dersler = [p for p in saatler if not p.is_break and not p.is_lunch]
+    assert [sabah_mi(saatler, p) for p in dersler] == [True, True, False, False]
+
+
+def test_ogle_arasi_yoksa_ortadan_bolunur():
+    saatler = [_SahteSaat(i + 1, i) for i in range(8)]
+    assert [sabah_mi(saatler, p) for p in saatler] == [True] * 4 + [False] * 4
+
+
+def test_tek_sayida_saatte_fazlalik_sabaha_yazilir():
+    saatler = [_SahteSaat(i + 1, i) for i in range(7)]
+    assert [sabah_mi(saatler, p) for p in saatler] == [True] * 4 + [False] * 3
+
+
+def test_teneffusler_bolmede_sayilmaz():
+    """Ortadan bölme ders saatlerine göre yapılır; teneffüs sayıyı kaydırmaz."""
+    saatler = [
+        _SahteSaat(1, 0), _SahteSaat(2, 1), _SahteSaat(3, 2, is_break=True),
+        _SahteSaat(4, 3), _SahteSaat(5, 4),
+    ]
+    dersler = [p for p in saatler if not p.is_break]
+    assert [sabah_mi(saatler, p) for p in dersler] == [True, True, False, False]

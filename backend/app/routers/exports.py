@@ -141,7 +141,7 @@ def _carsaf_satiri(
     parcalar: list[list] = []
     for p in saatler:
         if p.is_break:
-            parcalar.append(["teneffus", None, 1])
+            parcalar.append(["ogle" if p.is_lunch else "teneffus", None, 1])
             continue
         h = hucre_map.get((gun_index, p.index))
         if h is None:
@@ -198,6 +198,7 @@ def _carsaf_html(db: Session, timetable_id: int, bakis: str, donem: Term) -> str
         "td.ad{text-align:left;padding-left:4px;font-weight:600;background:#f8fafc}",
         "td.tnf{background:#e2e8f0}",
         "td.kpl{background:#f1f5f9;color:#94a3b8}",
+        "td.ogl{background:#e2e8f0;color:#475569;font-weight:600}",
         "th.gun{border-left:2px solid #64748b}",
         "td.gunbas,th.gunbas{border-left:2px solid #64748b}",
         ".ders{font-weight:600;display:block;line-height:1.15}",
@@ -231,6 +232,8 @@ def _carsaf_html(db: Session, timetable_id: int, bakis: str, donem: Term) -> str
                 genis = f' colspan="{genislik}"' if genislik > 1 else ""
                 if tur == "teneffus":
                     p.append(f'<td class="tnf {sinif}"{genis}></td>')
+                elif tur == "ogle":
+                    p.append(f'<td class="ogl {sinif}"{genis}>öğle</td>')
                 elif tur == "kapali":
                     p.append(f'<td class="kpl {sinif}"{genis}>×</td>')
                 elif tur == "bos":

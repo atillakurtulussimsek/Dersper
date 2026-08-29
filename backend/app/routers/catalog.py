@@ -63,6 +63,13 @@ def _kaynak_donem(db: Session, term_id: int, donem: Term) -> Term:
 
 # --- Öğretmenler ---
 
+def _ogretmen_alanlari(payload: TeacherIn) -> dict:
+    """Şemanın gün sınırını (4,5) veritabanının birimine (9 yarım gün) çevirir."""
+    alanlar = payload.model_dump(exclude={"max_days"})
+    alanlar["max_half_days"] = payload.max_half_days
+    return alanlar
+
+
 @router.get("/teachers", response_model=list[TeacherOut])
 def ogretmenler(
     db: Session = Depends(get_db), donem: Term = Depends(aktif_donem)
@@ -76,7 +83,7 @@ def ogretmen_ekle(
     db: Session = Depends(get_db),
     donem: Term = Depends(aktif_donem),
 ) -> Teacher:
-    t = Teacher(term_id=donem.id, **payload.model_dump())
+    t = Teacher(term_id=donem.id, **_ogretmen_alanlari(payload))
     db.add(t)
     db.commit()
     db.refresh(t)
@@ -91,7 +98,7 @@ def ogretmen_guncelle(
     donem: Term = Depends(aktif_donem),
 ) -> Teacher:
     t = _getir(db, Teacher, teacher_id, "Öğretmen", donem)
-    for alan, deger in payload.model_dump().items():
+    for alan, deger in _ogretmen_alanlari(payload).items():
         setattr(t, alan, deger)
     db.commit()
     db.refresh(t)
@@ -156,6 +163,7 @@ def ogretmen_aktar(
             short_code=kaynak_t.short_code,
             branch=kaynak_t.branch,
             max_daily_hours=kaynak_t.max_daily_hours,
+            max_half_days=kaynak_t.max_half_days,
             notes=kaynak_t.notes,
             color=kaynak_t.color,
             is_active=kaynak_t.is_active,
