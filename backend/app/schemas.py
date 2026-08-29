@@ -109,6 +109,10 @@ class InstitutionUpdate(BaseModel):
 # --- Zaman ızgarası ---
 
 class PeriodIn(BaseModel):
+    # Var olan bir ders saatinin kimliği. Gönderilirse satır SIRAYA göre değil
+    # kimliğe göre eşleştirilir; sıralama değiştiğinde müsaitlik işaretleri
+    # taşınan satırın peşinden gider. Yeni satırlarda boş bırakılır.
+    id: int | None = None
     index: int
     name: str = Field(max_length=40)
     start_time: time | None = None
@@ -149,6 +153,22 @@ class DayIn(BaseModel):
                 f"{self.name} gününde birden fazla öğle arası var. "
                 f"Bir günde yalnızca bir öğle arası olabilir."
             )
+        return self
+
+    @model_validator(mode="after")
+    def _sira_ve_kimlik_tekil(self) -> "DayIn":
+        """Sıra ve kimlik gün içinde tekil olmalı.
+
+        Yinelenen sıra veritabanındaki benzersizlik kısıtına takılır, yinelenen
+        kimlik ise aynı satırı iki yere koymaya çalışmak demektir. İkisi de
+        veritabanı hatasına düşmeden burada yakalanır.
+        """
+        siralar = [p.index for p in self.periods]
+        if len(set(siralar)) != len(siralar):
+            raise ValueError(f"{self.name} gününde aynı sıra numarası birden fazla kez var.")
+        kimlikler = [p.id for p in self.periods if p.id is not None]
+        if len(set(kimlikler)) != len(kimlikler):
+            raise ValueError(f"{self.name} gününde aynı ders saati birden fazla kez gönderildi.")
         return self
 
 

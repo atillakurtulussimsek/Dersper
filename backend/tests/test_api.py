@@ -992,3 +992,114 @@ def test_gun_siniri_baska_doneme_aktarilir(yonetici: TestClient):
     tasinan = next(t for t in yonetici.get("/api/teachers").json()
                    if t["full_name"] == "Taşınan")
     assert tasinan["max_days"] == 3.5
+
+
+# --- Ders saatlerini yeniden sıralama ---
+
+def _gun_ve_saatler(c: TestClient) -> tuple[dict, list[dict]]:
+    gun = c.get("/api/timegrid").json()[0]
+    return gun, sorted(gun["periods"], key=lambda p: p["index"])
+
+
+def test_saatler_yeniden_siralanabilir(yonetici: TestClient):
+    """Son satır başa çekilince sıra değişir, kimlikler korunur."""
+    gunler = yonetici.get("/api/timegrid").json()
+    saatler = sorted(gunler[0]["periods"], key=lambda p: p["index"])
+    tasinan = saatler[-1]
+
+    yeni_sira = [tasinan] + saatler[:-1]
+    gunler[0]["periods"] = [
+        {**p, "index": i} for i, p in enumerate(yeni_sira)
+    ]
+    r = yonetici.put("/api/timegrid", json=gunler)
+    assert r.status_code == 200, r.text
+
+    _, sonra = _gun_ve_saatler(yonetici)
+    assert sonra[0]["id"] == tasinan["id"]
+    assert [p["id"] for p in sonra] == [p["id"] for p in yeni_sira]
+
+
+def test_siralama_musaitligi_tasinan_satirla_gotur(yonetici: TestClient):
+    """Araya teneffüs eklenince işaret, kaydığı satırın peşinden gitmeli.
+
+    Sıraya göre eşleştirilseydi "3. ders"in kapalı işareti yerinde kalır,
+    araya giren teneffüsün üstüne yapışırdı.
+    """
+    ogretmen = yonetici.post("/api/teachers", json={"full_name": "Sıra Testi"}).json()
+    gunler = yonetici.get("/api/timegrid").json()
+    saatler = sorted(gunler[0]["periods"], key=lambda p: p["index"])
+    ucuncu = saatler[2]
+    yonetici.put(f"/api/teachers/{ogretmen['id']}/availability", json={
+        "cells": [{"period_id": ucuncu["id"], "state": "uygun_degil"}]
+    })
+
+    # 1. dersten sonra bir teneffüs; sonraki satırların hepsi bir kayıyor.
+    yeni = {"id": None, "index": 0, "name": "Teneffüs", "start_time": None,
+            "end_time": None, "is_break": True, "is_lunch": False}
+    yeni_sira = saatler[:1] + [yeni] + saatler[1:]
+    gunler[0]["periods"] = [{**p, "index": i} for i, p in enumerate(yeni_sira)]
+    assert yonetici.put("/api/timegrid", json=gunler).status_code == 200
+
+    _, sonra = _gun_ve_saatler(yonetici)
+    assert sonra[1]["is_break"] is True          # araya teneffüs girdi
+    assert sonra[3]["id"] == ucuncu["id"]        # "3. ders" bir aşağı kaydı
+
+    kapali = yonetici.get(f"/api/teachers/{ogretmen['id']}/availability").json()
+    assert [h["period_id"] for h in kapali] == [ucuncu["id"]]
+
+
+def test_ortadaki_saat_silinebilir(yonetici: TestClient):
+    """Gönderilmeyen satır, müsaitlik işaretleriyle birlikte silinir."""
+    ogretmen = yonetici.post("/api/teachers", json={"full_name": "Silme Testi"}).json()
+    gunler = yonetici.get("/api/timegrid").json()
+    saatler = sorted(gunler[0]["periods"], key=lambda p: p["index"])
+    silinecek = saatler[1]
+    yonetici.put(f"/api/teachers/{ogretmen['id']}/availability", json={
+        "cells": [{"period_id": silinecek["id"], "state": "uygun_degil"}]
+    })
+
+    kalan = [p for p in saatler if p["id"] != silinecek["id"]]
+    gunler[0]["periods"] = [{**p, "index": i} for i, p in enumerate(kalan)]
+    assert yonetici.put("/api/timegrid", json=gunler).status_code == 200
+
+    _, sonra = _gun_ve_saatler(yonetici)
+    assert silinecek["id"] not in [p["id"] for p in sonra]
+    assert yonetici.get(f"/api/teachers/{ogretmen['id']}/availability").json() == []
+
+
+def test_baska_gunun_saati_gonderilemez(yonetici: TestClient):
+    gunler = yonetici.get("/api/timegrid").json()
+    yabanci = sorted(gunler[1]["periods"], key=lambda p: p["index"])[0]
+    gunler[0]["periods"] = [
+        {**p, "id": yabanci["id"] if i == 0 else p["id"]}
+        for i, p in enumerate(sorted(gunler[0]["periods"], key=lambda p: p["index"]))
+    ]
+    r = yonetici.put("/api/timegrid", json=gunler)
+    assert r.status_code == 422
+    assert "ait olmayan" in r.text
+
+
+def test_ayni_sira_iki_kez_gonderilemez(yonetici: TestClient):
+    gunler = yonetici.get("/api/timegrid").json()
+    saatler = sorted(gunler[0]["periods"], key=lambda p: p["index"])
+    gunler[0]["periods"] = [{**saatler[0], "index": 0}, {**saatler[1], "index": 0}]
+    r = yonetici.put("/api/timegrid", json=gunler)
+    assert r.status_code == 422
+    assert "sıra numarası" in r.text
+
+
+def test_kimliksiz_gonderim_eskisi_gibi_calisir(yonetici: TestClient):
+    """Kimlik göndermeyen istemci sıraya göre eşleştirilmeye devam eder."""
+    gunler = yonetici.get("/api/timegrid").json()
+    saatler = sorted(gunler[0]["periods"], key=lambda p: p["index"])
+    kimlikler = [p["id"] for p in saatler]
+    gunler[0]["periods"] = [
+        {"index": p["index"], "name": f"Ders {p['index'] + 1}", "start_time": None,
+         "end_time": None, "is_break": False, "is_lunch": False}
+        for p in saatler
+    ]
+    assert yonetici.put("/api/timegrid", json=gunler).status_code == 200
+
+    _, sonra = _gun_ve_saatler(yonetici)
+    assert [p["id"] for p in sonra] == kimlikler      # kayıtlar korundu
+    assert sonra[0]["name"] == "Ders 1"

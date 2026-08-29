@@ -56,26 +56,67 @@ def _saatleri_sil(db: Session, saatler: list[Period]) -> None:
 def _saatleri_esitle(db: Session, gun: Day, gelen: list[PeriodIn]) -> None:
     """Günün ders saatlerini gelen listeye göre yerinde günceller.
 
-    Eşleştirme sıraya (`index`) göre yapılır ve var olan kayıtlar korunur; bu
-    sayede ders saati kimlikleri sabit kalır ve onlara bağlı öğretmen/şube
-    müsaitlik işaretleri hayatta kalır. Baştan silip yeniden yaratmak, adı ya
-    da saati bile değişmemiş satırların müsaitliğini de silerdi.
+    Var olan kayıtlar korunur; bu sayede ders saati kimlikleri sabit kalır ve
+    onlara bağlı öğretmen/şube müsaitlik işaretleri hayatta kalır. Baştan silip
+    yeniden yaratmak, adı ya da saati bile değişmemiş satırların müsaitliğini
+    de silerdi.
+
+    Eşleştirme, gönderildiyse KİMLİĞE göre yapılır. Sıraya göre eşleştirmek
+    satırlar yeniden sıralandığında müsaitliği yanlış satıra bağlardı: araya
+    teneffüs eklendiğinde "2. ders"in işaretleri teneffüsün üstünde kalırdı.
+    Kimlik göndermeyen istemciler için sıraya göre eşleştirme sürüyor.
     """
-    mevcut = {p.index: p for p in gun.periods}
-    gelen_indexler = {p.index for p in gelen}
+    kimlige_gore = {p.id: p for p in gun.periods}
+    siraya_gore = {p.index: p for p in gun.periods}
 
-    _saatleri_sil(db, [p for i, p in mevcut.items() if i not in gelen_indexler])
+    # İki geçiş: kimlik eşleşmesi sıradan ÖNCE bağlanır. Tek geçişte, araya
+    # eklenen kimliksiz satır kendi sırasındaki kaydı kapar ve o kaydı kimliğiyle
+    # isteyen asıl satıra bir şey kalmazdı.
+    eslesme: list[tuple[PeriodIn, Period | None]] = [(p, None) for p in gelen]
+    kullanilan: set[int] = set()
 
-    for p in gelen:
-        var_olan = mevcut.get(p.index)
-        if var_olan is None:
-            db.add(Period(day_id=gun.id, **p.model_dump()))
+    for i, gelen_saat in enumerate(gelen):
+        if gelen_saat.id is None:
             continue
-        var_olan.name = p.name
-        var_olan.start_time = p.start_time
-        var_olan.end_time = p.end_time
-        var_olan.is_break = p.is_break
-        var_olan.is_lunch = p.is_lunch
+        var_olan = kimlige_gore.get(gelen_saat.id)
+        if var_olan is None:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                f"{gun.name} gününe ait olmayan bir ders saati gönderildi.",
+            )
+        kullanilan.add(var_olan.id)
+        eslesme[i] = (gelen_saat, var_olan)
+
+    for i, gelen_saat in enumerate(gelen):
+        if gelen_saat.id is not None:
+            continue
+        var_olan = siraya_gore.get(gelen_saat.index)
+        if var_olan is None or var_olan.id in kullanilan:
+            continue                # gerçekten yeni satır
+        kullanilan.add(var_olan.id)
+        eslesme[i] = (gelen_saat, var_olan)
+
+    _saatleri_sil(db, [p for p in gun.periods if p.id not in kullanilan])
+
+    # Sıralama değişmiş olabilir. (day_id, index) benzersiz olduğu için önce
+    # geçici negatif sıralar yazılır; yoksa 3. satırı 1'e taşırken oradaki
+    # satırla çakışılırdı.
+    for gecici, (_, var_olan) in enumerate(eslesme, start=1):
+        if var_olan is not None:
+            var_olan.index = -gecici
+    db.flush()
+
+    for gelen_saat, var_olan in eslesme:
+        if var_olan is None:
+            db.add(Period(day_id=gun.id, **gelen_saat.model_dump(exclude={"id"})))
+            continue
+        var_olan.index = gelen_saat.index
+        var_olan.name = gelen_saat.name
+        var_olan.start_time = gelen_saat.start_time
+        var_olan.end_time = gelen_saat.end_time
+        var_olan.is_break = gelen_saat.is_break
+        var_olan.is_lunch = gelen_saat.is_lunch
+    db.flush()
 
 
 def _kaynak_donem(db: Session, term_id: int, donem: Term) -> Term:
@@ -164,7 +205,7 @@ def ders_saati_ekle(
     gun = db.get(Day, day_id)
     if gun is None or gun.term_id != donem.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Gün bulunamadı.")
-    db.add(Period(day_id=day_id, **payload.model_dump()))
+    db.add(Period(day_id=day_id, **payload.model_dump(exclude={"id"})))
     db.commit()
     db.expire_all()
     return db.get(Day, day_id)
