@@ -109,6 +109,8 @@ export interface Program {
   name: string;
   status: ProgramDurumu;
   public_token: string | null;
+  /** Programa dahil şubeler; null = dönemin tüm şubeleri. */
+  section_ids: number[] | null;
   created_at: string;
 }
 

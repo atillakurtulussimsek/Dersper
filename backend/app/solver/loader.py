@@ -37,7 +37,10 @@ def slotlari_yukle(db: Session, donem: Term) -> list[Slot]:
     return slots
 
 
-def dersleri_yukle(db: Session, donem: Term) -> list[Lesson]:
+def dersleri_yukle(
+    db: Session, donem: Term, section_ids: list[int] | None = None
+) -> list[Lesson]:
+    """Dönemin dersleri. `section_ids` verilirse yalnızca o şubelerinkiler."""
     ogretmen_kapali: dict[int, set[int]] = defaultdict(set)
     for row in db.scalars(
         select(TeacherAvailability).where(
@@ -54,11 +57,15 @@ def dersleri_yukle(db: Session, donem: Term) -> list[Lesson]:
     ):
         sube_kapali[row.section_id].add(row.period_id)
 
-    entries = db.scalars(
+    sorgu = (
         select(CurriculumEntry)
         .join(Section, Section.id == CurriculumEntry.section_id)
         .where(Section.term_id == donem.id, CurriculumEntry.deleted_at.is_(None))
-        .options(
+    )
+    if section_ids is not None:
+        sorgu = sorgu.where(CurriculumEntry.section_id.in_(section_ids))
+    entries = db.scalars(
+        sorgu.options(
             selectinload(CurriculumEntry.section),
             selectinload(CurriculumEntry.subject),
             selectinload(CurriculumEntry.teacher),

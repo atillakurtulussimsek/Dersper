@@ -265,6 +265,8 @@ class CurriculumCopyOut(BaseModel):
 
 class TimetableIn(BaseModel):
     name: str = Field(min_length=1, max_length=150)
+    # None = dönemin tüm şubeleri.
+    section_ids: list[int] | None = None
 
 
 class TimetableOut(ORMModel):
@@ -272,6 +274,7 @@ class TimetableOut(ORMModel):
     name: str
     status: TimetableStatus
     public_token: str | None
+    section_ids: list[int] | None
     created_at: datetime
 
 

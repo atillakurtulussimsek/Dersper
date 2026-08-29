@@ -11,8 +11,8 @@ from sqlalchemy.orm import Session, selectinload
 from app.db import get_db
 from app.deps import aktif_donem, current_user
 from app.models import (
-    Assignment, CurriculumEntry, Day, Period, SolveRun, SolveStatus, Term, Timetable,
-    TimetableStatus,
+    Assignment, CurriculumEntry, Day, Period, Section, SolveRun, SolveStatus, Term,
+    Timetable, TimetableStatus,
 )
 from app.schemas import (
     AssignmentMove, GridCell, SolveRunOut, TimetableGrid, TimetableIn, TimetableOut,
@@ -90,7 +90,27 @@ def program_olustur(
     db: Session = Depends(get_db),
     donem: Term = Depends(aktif_donem),
 ) -> Timetable:
-    t = Timetable(term_id=donem.id, name=payload.name)
+    secilenler: list[int] | None = None
+    if payload.section_ids is not None:
+        # Sıra korunarak tekilleştir, dönemin şubeleriyle doğrula.
+        istenen = list(dict.fromkeys(payload.section_ids))
+        if not istenen:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY,
+                                "En az bir şube seçilmeli.")
+        gecerli = set(db.scalars(
+            select(Section.id).where(
+                Section.term_id == donem.id, Section.deleted_at.is_(None)
+            )
+        ))
+        bilinmeyen = [i for i in istenen if i not in gecerli]
+        if bilinmeyen:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY,
+                                "Seçilen şubelerden bazıları bu dönemde yok.")
+        # Tüm şubeler seçildiyse kayıt "hepsi" olarak tutulur; sonradan
+        # eklenen şubeler de programa girer.
+        secilenler = None if len(istenen) == len(gecerli) else istenen
+
+    t = Timetable(term_id=donem.id, name=payload.name, section_ids=secilenler)
     db.add(t)
     db.commit()
     db.refresh(t)

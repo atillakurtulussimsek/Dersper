@@ -150,3 +150,44 @@ def test_yeniden_baslatma_yarim_kalanlari_kapatir(yonetici: TestClient):
 def test_bilinmeyen_calistirma_durdurulamaz(yonetici: TestClient):
     pid = _cozulebilir_okul(yonetici)
     assert yonetici.post(f"/api/timetables/{pid}/runs/9999/stop").status_code == 404
+
+
+def test_sube_secimi_ile_uretim(yonetici: TestClient):
+    """Yalnızca seçilen şubelerin dersleri yerleşir."""
+    d = yonetici.post("/api/subjects", json={"name": "Türkçe"}).json()["id"]
+    o1 = yonetici.post("/api/teachers", json={"full_name": "Ali Vural"}).json()["id"]
+    o2 = yonetici.post("/api/teachers", json={"full_name": "Ece Kaya"}).json()["id"]
+    s1 = yonetici.post("/api/sections", json={"name": "6-A"}).json()["id"]
+    s2 = yonetici.post("/api/sections", json={"name": "6-B"}).json()["id"]
+    for sube, ogr in ((s1, o1), (s2, o2)):
+        yonetici.post("/api/curriculum", json={
+            "section_id": sube, "subject_id": d, "teacher_id": ogr, "weekly_hours": 4,
+        })
+
+    r = yonetici.post("/api/timetables",
+                      json={"name": "Yalnız 6-A", "section_ids": [s1]})
+    assert r.status_code == 201
+    assert r.json()["section_ids"] == [s1]
+    pid = r.json()["id"]
+
+    uret_ve_bekle(yonetici, pid)
+    hucreler = yonetici.get(f"/api/timetables/{pid}/grid").json()["cells"]
+    assert len(hucreler) == 4
+    assert {h["section_id"] for h in hucreler} == {s1}
+
+
+def test_tum_subeler_secilirse_hepsi_olarak_kaydedilir(yonetici: TestClient):
+    s1 = yonetici.post("/api/sections", json={"name": "7-A"}).json()["id"]
+    s2 = yonetici.post("/api/sections", json={"name": "7-B"}).json()["id"]
+    r = yonetici.post("/api/timetables",
+                      json={"name": "Hepsi", "section_ids": [s2, s1, s2]})
+    assert r.status_code == 201
+    assert r.json()["section_ids"] is None
+
+
+def test_sube_secimi_dogrulanir(yonetici: TestClient):
+    yonetici.post("/api/sections", json={"name": "8-A"})
+    bos = yonetici.post("/api/timetables", json={"name": "Boş", "section_ids": []})
+    assert bos.status_code == 422
+    yok = yonetici.post("/api/timetables", json={"name": "Yok", "section_ids": [9999]})
+    assert yok.status_code == 422

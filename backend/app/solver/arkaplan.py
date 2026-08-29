@@ -77,12 +77,13 @@ def _dongu(run_id: int, term_id: int, dur: threading.Event) -> None:
     try:
         with SessionLocal() as db:
             donem = db.get(Term, term_id)
+            run = db.get(SolveRun, run_id)
+            program = db.get(Timetable, run.timetable_id)
             slots = slotlari_yukle(db, donem)
-            lessons = dersleri_yukle(db, donem)
+            lessons = dersleri_yukle(db, donem, program.section_ids)
             gereken = sum(l.weekly_hours for l in lessons)
 
             kilitli: dict[int, list[int]] = {}
-            run = db.get(SolveRun, run_id)
             for a in db.scalars(
                 select(Assignment).where(
                     Assignment.timetable_id == run.timetable_id,

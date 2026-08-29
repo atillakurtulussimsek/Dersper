@@ -12,7 +12,7 @@ import TaniRaporu from "../components/TaniRaporu";
 import UretimIzleme from "../components/UretimIzleme";
 import { Buton, Kart, Rozet, Uyari, Yukleniyor } from "../components/ui";
 import { get, jetonuAl, patch, post } from "../lib/api";
-import type { Deneme, Gun, Hucre, Izgara, Program } from "../lib/types";
+import type { Deneme, Gun, Hucre, Izgara, Program, Sube } from "../lib/types";
 
 const DURUM = {
   taslak: { etiket: "Taslak", tur: "notr" },
@@ -63,6 +63,7 @@ export default function ProgramDetay() {
     queryFn: () => get<Izgara>(`/timetables/${id}/grid`),
   });
   const gunler = useQuery({ queryKey: ["timegrid"], queryFn: () => get<Gun[]>("/timegrid") });
+  const subeler = useQuery({ queryKey: ["subeler"], queryFn: () => get<Sube[]>("/sections") });
   const denemeler = useQuery({
     queryKey: ["denemeler", id],
     queryFn: () => get<Deneme[]>(`/timetables/${id}/runs`),
@@ -193,7 +194,21 @@ export default function ProgramDetay() {
           </h1>
           <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-murekkep-silik">
             <Rozet tur={DURUM[program.status].tur}>{DURUM[program.status].etiket}</Rozet>
-            <span className="sayisal">{hucreler.length} ders saati yerleşmiş</span>
+            <span
+              title={
+                program.section_ids
+                  ? program.section_ids
+                      .map((id) => subeler.data?.find((s) => s.id === id)?.name)
+                      .filter(Boolean)
+                      .join(", ")
+                  : undefined
+              }
+            >
+              {program.section_ids
+                ? `${program.section_ids.length} şube dahil`
+                : "Tüm şubeler"}
+            </span>
+            <span className="sayisal">· {hucreler.length} ders saati yerleşmiş</span>
             {surenUretim && (
               <span className="sayisal text-murekkep-silik">
                 · {surenUretim.attempts}. deneme sürüyor
