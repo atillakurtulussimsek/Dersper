@@ -89,9 +89,9 @@ PDF için gereken pango/cairo imajda gelir.
 Ayrı bir web sunucusu, konteynerler arası ağ ve ikinci alan adı gerekmez;
 arayüz ile API aynı kökeni paylaştığı için CORS ayarı da gerekmez.
 
-`.env` dosyasındaki değişkenlerin tamamı konteynere olduğu gibi aktarılır;
-`BACKEND_HOST`, `BACKEND_PORT` ve `CORS_ORIGINS` değerlerini compose kendisi
-konteynere uygun şekilde geçersiz kılar.
+`.env` dosyasındaki değişkenlerin tamamı konteynere olduğu gibi aktarılır.
+Doldurmanız gereken üç değer var: `DATABASE_URL`, `SECRET_KEY`, `ENCRYPTION_KEY`.
+Gerisi olduğu gibi bırakılabilir.
 
 Veritabanı harici bir MySQL 8 sunucusudur — compose içinde veritabanı servisi
 yoktur, `DATABASE_URL` ile kendi sunucunuzu gösterirsiniz.

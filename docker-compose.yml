@@ -25,11 +25,10 @@ services:
     env_file:
       - .env
     environment:
-      # Konteyner içinde her arayüzü dinlemeli; .env'deki 127.0.0.1 geçersizdir.
-      BACKEND_HOST: 0.0.0.0
-      BACKEND_PORT: "8000"
-      # Arayüz aynı kökenden sunulduğu için CORS'a gerek yok.
-      CORS_ORIGINS: ${CORS_ORIGINS:-}
+      # Arayüz aynı kökenden sunulduğu için CORS'a gerek yok. Boş bırakmak,
+      # geliştirme için .env'de duran localhost değerinin üretime sızmasını da
+      # önler. API'yi başka bir kökenden çağıracaksanız burayı doldurun.
+      CORS_ORIGINS: ""
     restart: unless-stopped
     expose:
       - "8000"

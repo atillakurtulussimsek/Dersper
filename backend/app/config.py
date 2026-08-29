@@ -22,9 +22,11 @@ class Settings(BaseSettings):
     # (ilk kurulum) kayıt yapılabilir.
     allow_registration: bool = True
 
-    backend_host: str = "127.0.0.1"
-    backend_port: int = 8000
-    cors_origins: str = "http://localhost:5173"
+    # Arayüz üretimde aynı kökenden sunulur, bu yüzden CORS'a gerek yoktur ve
+    # varsayılan boştur. Yalnızca API'yi başka bir kökenden çağıracaksanız
+    # (örneğin ayrı bir alan adındaki istemci) virgülle ayırıp doldurun.
+    # Geliştirmede Vite /api'yi kendisi proxy'lediği için yine gerekmez.
+    cors_origins: str = ""
 
     @property
     def cors_origin_list(self) -> list[str]:
