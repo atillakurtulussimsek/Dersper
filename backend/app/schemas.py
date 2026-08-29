@@ -173,6 +173,12 @@ class AvailabilityUpdate(BaseModel):
     cells: list[AvailabilityCell]
 
 
+class ClosedAvailabilityOut(BaseModel):
+    """Dönemin kapalı saatleri: kayıt kimliği -> ders saati kimlikleri."""
+    teachers: dict[int, list[int]]
+    sections: dict[int, list[int]]
+
+
 class AvailabilityCopyIn(BaseModel):
     """Bir şubenin müsaitlik tablosunu başka şubelere kopyalar."""
     section_ids: list[int] = Field(min_length=1)

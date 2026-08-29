@@ -21,8 +21,9 @@ from app.models import (
 )
 from app.schemas import (
     AvailabilityCell, AvailabilityCopyIn, AvailabilityCopyOut, AvailabilityUpdate,
-    CurriculumCopyIn, CurriculumCopyOut, CurriculumIn, CurriculumOut, ImportIn,
-    ImportOut, SectionIn, SectionOut, SubjectIn, SubjectOut, TeacherIn, TeacherOut,
+    ClosedAvailabilityOut, CurriculumCopyIn, CurriculumCopyOut, CurriculumIn,
+    CurriculumOut, ImportIn, ImportOut, SectionIn, SectionOut, SubjectIn, SubjectOut,
+    TeacherIn, TeacherOut,
 )
 
 router = APIRouter(tags=["tanımlar"], dependencies=[Depends(current_user)])
@@ -199,6 +200,39 @@ def _donem_saatleri(db: Session, donem: Term) -> set[int]:
                 Day.term_id == donem.id
             )
         )
+    )
+
+
+@router.get("/availability/closed", response_model=ClosedAvailabilityOut)
+def kapali_saatler(
+    db: Session = Depends(get_db), donem: Term = Depends(aktif_donem)
+) -> ClosedAvailabilityOut:
+    """Dönemdeki bütün kapalı saatler, kayıt kimliğine göre gruplanmış.
+
+    Çarşaf görünümü boş bir hücrenin neden boş olduğunu ayırt etmek için
+    kullanır: doldurulmamış saat mi, yoksa o şubeye/öğretmene kapalı saat mi.
+    Tek uçta toplanır; satır başına ayrı istek atmak çarşafta onlarca çağrı
+    demek olurdu.
+    """
+    donem_saatleri = _donem_saatleri(db, donem)
+
+    def topla(model, alan, sahip) -> dict[int, list[int]]:
+        sonuc: dict[int, list[int]] = {}
+        rows = db.scalars(
+            select(model)
+            .join(sahip, sahip.id == alan)
+            .where(sahip.term_id == donem.id,
+                   sahip.deleted_at.is_(None),
+                   model.state == Availability.UYGUN_DEGIL)
+        )
+        for r in rows:
+            if r.period_id in donem_saatleri:
+                sonuc.setdefault(getattr(r, alan.key), []).append(r.period_id)
+        return sonuc
+
+    return ClosedAvailabilityOut(
+        teachers=topla(TeacherAvailability, TeacherAvailability.teacher_id, Teacher),
+        sections=topla(SectionAvailability, SectionAvailability.section_id, Section),
     )
 
 

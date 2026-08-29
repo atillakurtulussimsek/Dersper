@@ -15,3 +15,18 @@ export function rastgeleRenk(kullanilanlar: string[] = []): string {
   const havuz = bos.length ? bos : PALET;
   return havuz[Math.floor(Math.random() * havuz.length)];
 }
+
+/** Program hücresinin ders rengi kompozisyonu.
+ *
+ *  Renk kullanıcıya aittir ve her iki temada okunur kalmalıdır. Sabit bir
+ *  saydamlık işe yaramaz: açık temada yeterli olan %14, koyu zeminde kaybolur.
+ *  Zemin payı temaya göre belirteçten gelir; rengin kendisi solda katı bir
+ *  barda durur, orada her koşulda görünür. Çarşafta hücre dar olduğu için bar
+ *  inceltilir.
+ */
+export function dersZemini(renk: string, bar = 3): React.CSSProperties {
+  return {
+    background: `color-mix(in srgb, ${renk} calc(var(--ders-zemin-alfa) * 100%), transparent)`,
+    boxShadow: `inset ${bar}px 0 0 ${renk}`,
+  };
+}

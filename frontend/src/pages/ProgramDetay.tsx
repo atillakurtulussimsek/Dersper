@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "react-router-dom";
 import { Copy, Globe, Play } from "lucide-react";
 
+import CarsafIzgarasi from "../components/CarsafIzgarasi";
 import GecmisCalistirmalar from "../components/GecmisCalistirmalar";
 import ProgramAracCubugu, { type Duzen } from "../components/ProgramAracCubugu";
 import ProgramIzgarasi, { type Bakis } from "../components/ProgramIzgarasi";
@@ -12,7 +13,9 @@ import TaniRaporu from "../components/TaniRaporu";
 import UretimIzleme from "../components/UretimIzleme";
 import { Buton, Kart, Rozet, Uyari, Yukleniyor } from "../components/ui";
 import { get, jetonuAl, patch, post } from "../lib/api";
-import type { Deneme, Gun, Hucre, Izgara, Program, Sube } from "../lib/types";
+import type {
+  Deneme, Gun, Hucre, Izgara, KapaliSaatler, Program, Sube,
+} from "../lib/types";
 
 const DURUM = {
   taslak: { etiket: "Taslak", tur: "notr" },
@@ -64,6 +67,11 @@ export default function ProgramDetay() {
   });
   const gunler = useQuery({ queryKey: ["timegrid"], queryFn: () => get<Gun[]>("/timegrid") });
   const subeler = useQuery({ queryKey: ["subeler"], queryFn: () => get<Sube[]>("/sections") });
+  // Çarşafta boş hücreyle kapalı saati ayırt etmek için; tek istekte gelir.
+  const kapali = useQuery({
+    queryKey: ["kapali-saatler"],
+    queryFn: () => get<KapaliSaatler>("/availability/closed"),
+  });
   const denemeler = useQuery({
     queryKey: ["denemeler", id],
     queryFn: () => get<Deneme[]>(`/timetables/${id}/runs`),
@@ -138,6 +146,17 @@ export default function ProgramDetay() {
     () => ozetCikar(seciliHucreler, gunler.data ?? []),
     [seciliHucreler, gunler.data],
   );
+  /** Çarşafta tek kayıt değil, tablonun tamamı özetlenir. */
+  const carsafOzeti = useMemo(() => {
+    let bosluk = 0;
+    for (const a of anahtarlar) {
+      const kendi = hucreler.filter((h) =>
+        bakis === "sube" ? h.section_name === a : h.teacher_name === a,
+      );
+      bosluk += ozetCikar(kendi, gunler.data ?? []).bosluk;
+    }
+    return { satir: anahtarlar.length, dolu: hucreler.length, bosluk };
+  }, [anahtarlar, hucreler, bakis, gunler.data]);
 
   const sonDeneme = denemeler.data?.[0];
   const gosterRapor =
@@ -256,7 +275,7 @@ export default function ProgramDetay() {
             }}
             duzen={duzen}
             duzenDegistir={setDuzen}
-            anahtarlar={anahtarlar}
+            anahtarlar={duzen === "ayri" ? anahtarlar : []}
             seciliAnahtar={seciliAnahtar}
             anahtarDegistir={setAnahtar}
             yazdir={yazdir}
@@ -264,14 +283,25 @@ export default function ProgramDetay() {
           />
 
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-base font-semibold text-murekkep">{seciliAnahtar}</h2>
+            <h2 className="text-base font-semibold text-murekkep">
+              {duzen === "carsaf"
+                ? `Tüm ${bakis === "sube" ? "şubeler" : "öğretmenler"}`
+                : seciliAnahtar}
+            </h2>
             <div className="flex flex-wrap gap-1.5 text-xs">
-              {[
-                ["dolu", `${ozet.dolu} saat dolu`],
-                ["bos", `${ozet.bos} saat boş`],
-                ["bosluk", `${ozet.bosluk} boşluk`],
-                ["yogun", `en yoğun: ${ozet.enYogun.gun} (${ozet.enYogun.saat})`],
-              ].map(([k, metin]) => (
+              {(duzen === "carsaf"
+                ? [
+                    ["satir", `${carsafOzeti.satir} ${bakis === "sube" ? "şube" : "öğretmen"}`],
+                    ["dolu", `${carsafOzeti.dolu} saat dolu`],
+                    ["bosluk", `${carsafOzeti.bosluk} boşluk`],
+                  ]
+                : [
+                    ["dolu", `${ozet.dolu} saat dolu`],
+                    ["bos", `${ozet.bos} saat boş`],
+                    ["bosluk", `${ozet.bosluk} boşluk`],
+                    ["yogun", `en yoğun: ${ozet.enYogun.gun} (${ozet.enYogun.saat})`],
+                  ]
+              ).map(([k, metin]) => (
                 <span
                   key={k}
                   className="rounded-md bg-yuzey-alt px-2 py-1 font-medium text-murekkep-yumusak"
@@ -282,31 +312,44 @@ export default function ProgramDetay() {
             </div>
           </div>
 
-          {duzen === "carsaf" && (
-            <div className="mb-3">
-              <Uyari>
-                Çıktı düzeni <b>çarşaf</b>: yazdırma, PDF ve Excel'de tüm{" "}
-                {bakis === "sube" ? "şubeler" : "öğretmenler"} tek sayfada gelir. Aşağıdaki
-                ekran görünümü tek tek gösterir.
-              </Uyari>
-            </div>
+          {duzen === "carsaf" ? (
+            <>
+              <CarsafIzgarasi
+                gunler={gunler.data ?? []}
+                hucreler={hucreler}
+                bakis={bakis}
+                kapali={
+                  bakis === "sube" ? kapali.data?.sections : kapali.data?.teachers
+                }
+                ac={(a) => {
+                  setAnahtar(a);
+                  setDuzen("ayri");
+                }}
+              />
+              <p className="mt-3 text-xs text-murekkep-silik">
+                Ardışık saatler tek hücrede birleşir; <span className="font-mono">×</span>{" "}
+                o kaydın kapalı saatidir. Çarşaf inceleme içindir — düzenlemek için satır
+                adına tıklayıp ayrı sayfa görünümüne geçin.
+              </p>
+            </>
+          ) : (
+            <>
+              {seciliAnahtar && (
+                <ProgramIzgarasi
+                  gunler={gunler.data ?? []}
+                  hucreler={hucreler}
+                  bakis={bakis}
+                  anahtar={seciliAnahtar}
+                  tasi={(atama, saat) => tasi.mutate({ atama, saat })}
+                  kilitle={(atama) => kilitle.mutate(atama)}
+                />
+              )}
+              <p className="mt-3 text-xs text-murekkep-silik">
+                Hücreyi sürükleyerek taşıyın, çift tıklayarak kilitleyin. Kilitli dersler
+                yeniden üretimde yerinde kalır.
+              </p>
+            </>
           )}
-
-          {seciliAnahtar && (
-            <ProgramIzgarasi
-              gunler={gunler.data ?? []}
-              hucreler={hucreler}
-              bakis={bakis}
-              anahtar={seciliAnahtar}
-              tasi={(atama, saat) => tasi.mutate({ atama, saat })}
-              kilitle={(atama) => kilitle.mutate(atama)}
-            />
-          )}
-
-          <p className="mt-3 text-xs text-murekkep-silik">
-            Hücreyi sürükleyerek taşıyın, çift tıklayarak kilitleyin. Kilitli dersler
-            yeniden üretimde yerinde kalır.
-          </p>
         </Kart>
       )}
 

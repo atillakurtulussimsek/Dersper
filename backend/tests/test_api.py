@@ -749,3 +749,111 @@ def test_veritabani_erisilemezse_503(istemci: TestClient, monkeypatch):
     assert r.status_code == 503
     assert "Veritabanına ulaşılamıyor" in r.text
     assert main is not None
+
+
+def test_kapali_saatler_toplu_okunur(yonetici: TestClient):
+    """Çarşaf görünümü kapalı saatleri tek istekte alır."""
+    sube = yonetici.post("/api/sections", json={"name": "10-K"}).json()["id"]
+    ogr = yonetici.post("/api/teachers", json={"full_name": "Kapalı Öğretmen"}).json()["id"]
+    gunler = [g for g in yonetici.get("/api/timegrid").json() if g["is_active"]]
+    sabah = [p["id"] for g in gunler for p in g["periods"] if p["index"] < 2]
+    ilk = [p["id"] for g in gunler[:1] for p in g["periods"] if p["index"] == 0]
+
+    yonetici.put(f"/api/sections/{sube}/availability", json={
+        "cells": [{"period_id": pid, "state": "uygun_degil"} for pid in sabah]
+    })
+    yonetici.put(f"/api/teachers/{ogr}/availability", json={
+        "cells": [{"period_id": pid, "state": "uygun_degil"} for pid in ilk]
+    })
+
+    kapali = yonetici.get("/api/availability/closed").json()
+    assert sorted(kapali["sections"][str(sube)]) == sorted(sabah)
+    assert sorted(kapali["teachers"][str(ogr)]) == sorted(ilk)
+
+
+def test_kapali_saatler_baska_kuruma_sizmaz(yonetici: TestClient, istemci: TestClient):
+    """Başka kurumun kapalı saatleri listeye karışmamalı."""
+    sube = yonetici.post("/api/sections", json={"name": "11-K"}).json()["id"]
+    gunler = [g for g in yonetici.get("/api/timegrid").json() if g["is_active"]]
+    saat = [p["id"] for g in gunler[:1] for p in g["periods"] if p["index"] == 0]
+    yonetici.put(f"/api/sections/{sube}/availability", json={
+        "cells": [{"period_id": pid, "state": "uygun_degil"} for pid in saat]
+    })
+
+    istemci.post("/api/auth/register", json={
+        "institution_name": "Öteki Okul", "term_name": "2026",
+        "full_name": "Öteki Yönetici", "email": "oteki@ornek.com", "password": "sifre1234",
+    })
+    jeton = istemci.post("/api/auth/login", json={
+        "email": "oteki@ornek.com", "password": "sifre1234",
+    }).json()["access_token"]
+    istemci.headers["Authorization"] = f"Bearer {jeton}"
+
+    assert istemci.get("/api/availability/closed").json() == {
+        "teachers": {}, "sections": {},
+    }
+
+
+def test_silinen_sube_kapali_saatleri_listelenmez(yonetici: TestClient):
+    sube = yonetici.post("/api/sections", json={"name": "12-K"}).json()["id"]
+    gunler = [g for g in yonetici.get("/api/timegrid").json() if g["is_active"]]
+    saat = [p["id"] for g in gunler[:1] for p in g["periods"] if p["index"] == 0]
+    yonetici.put(f"/api/sections/{sube}/availability", json={
+        "cells": [{"period_id": pid, "state": "uygun_degil"} for pid in saat]
+    })
+    assert str(sube) in yonetici.get("/api/availability/closed").json()["sections"]
+
+    yonetici.delete(f"/api/sections/{sube}")
+    assert str(sube) not in yonetici.get("/api/availability/closed").json()["sections"]
+
+
+def _carsaf_okul(c: TestClient) -> tuple[int, int]:
+    """2 saatlik blok dersi ve sabahları kapalı bir şubesi olan küçük okul."""
+    d = c.post("/api/subjects", json={
+        "name": "Matematik", "short_code": "MAT",
+    }).json()["id"]
+    o = c.post("/api/teachers", json={
+        "full_name": "Ayşe Yılmaz", "short_code": "AY",
+    }).json()["id"]
+    s = c.post("/api/sections", json={"name": "9-A"}).json()["id"]
+
+    gunler = [g for g in c.get("/api/timegrid").json() if g["is_active"]]
+    sabah = [p["id"] for p in gunler[0]["periods"] if p["index"] < 2]
+    c.put(f"/api/sections/{s}/availability", json={
+        "cells": [{"period_id": pid, "state": "uygun_degil"} for pid in sabah]
+    })
+    c.post("/api/curriculum", json={
+        "section_id": s, "subject_id": d, "teacher_id": o,
+        "weekly_hours": 2, "block_pattern": "2", "max_per_day": 2,
+    })
+    pid = c.post("/api/timetables", json={"name": "Çarşaf"}).json()["id"]
+    uret_ve_bekle(c, pid)
+    return pid, len(sabah)
+
+
+def test_carsaf_ciktisi_ardisik_saatleri_birlestirir(yonetici: TestClient):
+    """İki saatlik blok tek hücrede çıkmalı — ekrandaki çarşafla aynı düzen."""
+    pid, _ = _carsaf_okul(yonetici)
+    html = yonetici.get(
+        f"/api/timetables/{pid}/export/html?bakis=sube&duzen=carsaf"
+    ).text
+    assert 'colspan="2"' in html
+    # Blok tek hücrede olduğu için kısaltma bir kez yazılır.
+    assert html.count('<span class="ders">MAT</span>') == 1
+
+
+def test_carsaf_ciktisi_kapali_saatleri_isaretler(yonetici: TestClient):
+    pid, kapali_sayisi = _carsaf_okul(yonetici)
+    html = yonetici.get(
+        f"/api/timetables/{pid}/export/html?bakis=sube&duzen=carsaf"
+    ).text
+    assert html.count('class="kpl') == kapali_sayisi
+
+
+def test_ayri_sayfa_ciktisi_birlestirmez(yonetici: TestClient):
+    """Ayrı sayfa düzeni saat saat okunur; orada birleştirme yapılmaz."""
+    pid, _ = _carsaf_okul(yonetici)
+    html = yonetici.get(
+        f"/api/timetables/{pid}/export/html?bakis=sube&duzen=ayri"
+    ).text
+    assert "colspan" not in html

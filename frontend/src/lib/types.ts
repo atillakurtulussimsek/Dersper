@@ -114,6 +114,12 @@ export interface Program {
   created_at: string;
 }
 
+/** Dönemin kapalı saatleri: kayıt kimliği -> ders saati kimlikleri. */
+export interface KapaliSaatler {
+  teachers: Record<number, number[]>;
+  sections: Record<number, number[]>;
+}
+
 export interface Hucre {
   assignment_id: number;
   period_id: number;

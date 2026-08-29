@@ -1,5 +1,9 @@
-/** Ders programı ekranının araç çubuğu: bakış, kayıt seçimi ve çıktılar.
- *  Tek satırda toplanır, tabloyla birlikte kaydırılmasın diye yapışkandır. */
+/** Ders programı ekranının araç çubuğu: bakış, düzen, kayıt seçimi ve çıktılar.
+ *  Tek satırda toplanır, tabloyla birlikte kaydırılmasın diye yapışkandır.
+ *
+ *  Düzen seçimi hem ekranı hem çıktıyı belirler: ne görüyorsanız onu
+ *  yazdırırsınız. Kayıt şeritleri yalnızca ayrı sayfa düzeninde anlamlıdır,
+ *  çarşafta zaten hepsi görünür — o durumda çağıran boş liste geçirir. */
 import { Download, FileSpreadsheet, Printer } from "lucide-react";
 import clsx from "clsx";
 
@@ -69,13 +73,21 @@ export default function ProgramAracCubugu({
           ]}
         />
 
-        <span className="text-xs text-murekkep-silik">Çıktı:</span>
+        <span className="text-xs text-murekkep-silik">Düzen:</span>
         <Segment
           deger={duzen}
           degistir={duzenDegistir}
           secenekler={[
-            { id: "ayri", etiket: "Ayrı sayfa", ipucu: "Her kayıt için ayrı sayfa" },
-            { id: "carsaf", etiket: "Çarşaf", ipucu: "Hepsi tek sayfada, toplu liste" },
+            {
+              id: "ayri",
+              etiket: "Ayrı sayfa",
+              ipucu: "Her kayıt ayrı tabloda — sürükle-bırak ile düzenlenir",
+            },
+            {
+              id: "carsaf",
+              etiket: "Çarşaf",
+              ipucu: "Hepsi tek tabloda — toplu inceleme",
+            },
           ]}
         />
 

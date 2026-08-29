@@ -10,7 +10,10 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.db import get_db
 from app.deps import aktif_donem, current_user
-from app.models import Day, Institution, Term, Timetable
+from app.models import (
+    Availability, Day, Institution, Section, SectionAvailability, Teacher,
+    TeacherAvailability, Term, Timetable,
+)
 from app.routers.timetables import izgara_hucreleri
 
 router = APIRouter(prefix="/timetables/{timetable_id}/export", tags=["çıktı"],
@@ -101,15 +104,73 @@ def _html(db: Session, timetable_id: int, bakis: str, donem: Term) -> str:
     return "".join(parcalar)
 
 
+def _kapali_saatler(db: Session, donem: Term, bakis: str) -> dict[str, set[int]]:
+    """Kayıt adı -> kapalı ders saati kimlikleri.
+
+    Çarşafta boş bir hücrenin neden boş olduğunu ayırt etmek için: yerleşmemiş
+    saat mi, yoksa o şubeye/öğretmene kapalı saat mi. Ekrandaki çarşaf da aynı
+    ayrımı yapar; basılan sayfa ondan farklı okunmasın.
+    """
+    if bakis == "sube":
+        model, alan, sahip = SectionAvailability, SectionAvailability.section_id, Section
+        ad = Section.name
+    else:
+        model, alan, sahip = TeacherAvailability, TeacherAvailability.teacher_id, Teacher
+        ad = Teacher.full_name
+
+    sonuc: dict[str, set[int]] = defaultdict(set)
+    for isim, period_id in db.execute(
+        select(ad, model.period_id)
+        .join(sahip, sahip.id == alan)
+        .where(sahip.term_id == donem.id,
+               sahip.deleted_at.is_(None),
+               model.state == Availability.UYGUN_DEGIL)
+    ):
+        sonuc[isim].add(period_id)
+    return sonuc
+
+
+def _carsaf_satiri(
+    saatler: list, hucre_map: dict, gun_index: int, kapali: set[int]
+) -> list[tuple[str, object, int]]:
+    """Bir günün hücrelerini (tür, içerik, genişlik) olarak böler.
+
+    Aynı dersin ardışık saatleri tek hücrede birleşir: aynı kısaltmayı iki kez
+    okumak yerine bloğun uzunluğu doğrudan görünür.
+    """
+    parcalar: list[list] = []
+    for p in saatler:
+        if p.is_break:
+            parcalar.append(["teneffus", None, 1])
+            continue
+        h = hucre_map.get((gun_index, p.index))
+        if h is None:
+            parcalar.append(["kapali" if p.id in kapali else "bos", None, 1])
+            continue
+        onceki = parcalar[-1] if parcalar else None
+        if (
+            onceki is not None and onceki[0] == "ders"
+            and onceki[1].section_id == h.section_id
+            and onceki[1].teacher_id == h.teacher_id
+            and onceki[1].subject_name == h.subject_name
+        ):
+            onceki[2] += 1
+            continue
+        parcalar.append(["ders", h, 1])
+    return [(a, b, c) for a, b, c in parcalar]
+
+
 def _carsaf_html(db: Session, timetable_id: int, bakis: str, donem: Term) -> str:
     """Tüm şubeleri (ya da öğretmenleri) tek sayfada gösteren toplu liste.
 
     Satırlar şube/öğretmen, sütunlar gün × ders saati. Hücrelerde yer dar
-    olduğu için tanımlıysa kısa kodlar kullanılır.
+    olduğu için tanımlıysa kısa kodlar kullanılır. Düzen ekrandaki çarşafın
+    aynısıdır: ardışık saatler birleşir, kapalı saatler `×` ile işaretlenir.
     """
     t, kurum_adi = _baslik(db, timetable_id, donem)
     gunler, _ = _izgara_yapisi(db, donem)
     gruplar = _tablolar(db, timetable_id, bakis)
+    kapali_map = _kapali_saatler(db, donem, bakis)
 
     # Her günün kendi ders saati dizini listesi — günler farklı uzunlukta olabilir.
     gun_saatleri = [
@@ -136,6 +197,7 @@ def _carsaf_html(db: Session, timetable_id: int, bakis: str, donem: Term) -> str
         "th.ad{width:70px;text-align:left;padding-left:4px}",
         "td.ad{text-align:left;padding-left:4px;font-weight:600;background:#f8fafc}",
         "td.tnf{background:#e2e8f0}",
+        "td.kpl{background:#f1f5f9;color:#94a3b8}",
         "th.gun{border-left:2px solid #64748b}",
         "td.gunbas,th.gunbas{border-left:2px solid #64748b}",
         ".ders{font-weight:600;display:block;line-height:1.15}",
@@ -158,28 +220,34 @@ def _carsaf_html(db: Session, timetable_id: int, bakis: str, donem: Term) -> str
 
     for anahtar, hucre_map in gruplar.items():
         p.append(f'<tr><td class="ad">{_kacis(anahtar)}</td>')
+        kapali = kapali_map.get(anahtar, set())
         for g, idx in gun_saatleri:
-            for konum, di in enumerate(idx):
+            saatler = [x for x in sorted(g.periods, key=lambda y: y.index)
+                       if x.index in set(idx)]
+            for konum, (tur, h, genislik) in enumerate(
+                _carsaf_satiri(saatler, hucre_map, g.index, kapali)
+            ):
                 sinif = "gunbas" if konum == 0 else ""
-                period = next((x for x in g.periods if x.index == di), None)
-                if period is not None and period.is_break:
-                    p.append(f'<td class="tnf {sinif}"></td>')
-                    continue
-                h = hucre_map.get((g.index, di))
-                if h is None:
-                    p.append(f'<td class="{sinif}"></td>')
-                    continue
-                ders = h.subject_short or h.subject_name
-                alt = (
-                    (h.teacher_short or h.teacher_name)
-                    if bakis == "sube"
-                    else h.section_name
-                )
-                p.append(
-                    f'<td class="{sinif}" style="background:{h.subject_color}1f">'
-                    f'<span class="ders">{_kacis(ders)}</span>'
-                    f'<span class="alt">{_kacis(alt)}</span></td>'
-                )
+                genis = f' colspan="{genislik}"' if genislik > 1 else ""
+                if tur == "teneffus":
+                    p.append(f'<td class="tnf {sinif}"{genis}></td>')
+                elif tur == "kapali":
+                    p.append(f'<td class="kpl {sinif}"{genis}>×</td>')
+                elif tur == "bos":
+                    p.append(f'<td class="{sinif}"{genis}></td>')
+                else:
+                    ders = h.subject_short or h.subject_name
+                    alt = (
+                        (h.teacher_short or h.teacher_name)
+                        if bakis == "sube"
+                        else h.section_name
+                    )
+                    p.append(
+                        f'<td class="{sinif}"{genis} '
+                        f'style="background:{h.subject_color}1f">'
+                        f'<span class="ders">{_kacis(ders)}</span>'
+                        f'<span class="alt">{_kacis(alt)}</span></td>'
+                    )
         p.append("</tr>")
 
     p.append("</tbody></table>")

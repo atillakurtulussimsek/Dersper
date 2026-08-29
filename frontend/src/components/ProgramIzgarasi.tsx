@@ -14,6 +14,7 @@ import { useState } from "react";
 import { Lock } from "lucide-react";
 import clsx from "clsx";
 
+import { dersZemini } from "../lib/renkler";
 import type { DersSaati, Gun, Hucre } from "../lib/types";
 
 export type Bakis = "sube" | "ogretmen";
@@ -21,20 +22,6 @@ export type Bakis = "sube" | "ogretmen";
 /** Hücrenin alt satırı: şube bakışında öğretmen, öğretmen bakışında şube. */
 function altSatir(hucre: Hucre, bakis: Bakis): string {
   return bakis === "sube" ? hucre.teacher_name : hucre.section_name;
-}
-
-/** Ders renginin hücre kompozisyonu.
- *
- *  Renk kullanıcıya aittir ve her iki temada okunur kalmalıdır. Sabit bir
- *  saydamlık işe yaramaz: açık temada yeterli olan %12, koyu zeminde kaybolur.
- *  Zemin payı temaya göre belirteçten gelir; rengin kendisi solda katı bir
- *  barda durur, orada her koşulda görünür.
- */
-function dersZemini(renk: string): React.CSSProperties {
-  return {
-    background: `color-mix(in srgb, ${renk} calc(var(--ders-zemin-alfa) * 100%), transparent)`,
-    boxShadow: `inset 3px 0 0 ${renk}`,
-  };
 }
 
 function HucreIcerigi({ hucre, bakis }: { hucre: Hucre; bakis: Bakis }) {
