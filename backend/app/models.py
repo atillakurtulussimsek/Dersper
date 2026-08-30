@@ -285,6 +285,10 @@ class Timetable(Base, SoftDelete):
     section_ids: Mapped[list | None] = mapped_column(JSON)
     # Kullanıcının "görmezden gel" dediği uyarı anahtarları.
     ignored_warnings: Mapped[list | None] = mapped_column(JSON)
+    # Elle düzenlemenin geri/ileri alma yığınları. Her adım, dokunulan ders
+    # saatlerinin o andaki içeriğidir; geri alma onu geri yazar.
+    edit_undo: Mapped[list | None] = mapped_column(JSON)
+    edit_redo: Mapped[list | None] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     assignments: Mapped[list[Assignment]] = relationship(

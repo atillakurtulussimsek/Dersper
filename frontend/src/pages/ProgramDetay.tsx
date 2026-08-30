@@ -1,20 +1,33 @@
-/** Tek bir ders programı: üretim, ızgara, elle düzenleme, çıktı, yayın. */
+/** Tek bir ders programı: üretim, ızgara, elle düzenleme, çıktı, yayın.
+ *
+ *  Sürükleme bağlamı (DndContext) burada durur, ızgaranın içinde değil:
+ *  bekleyenler rafı da aynı bağlamı paylaşmalı ki ders ızgaradan rafa, raftan
+ *  ızgaraya sürüklenebilsin.
+ */
 import { useMemo, useState } from "react";
+import {
+  DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
+  type DragEndEvent, type DragStartEvent,
+} from "@dnd-kit/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "react-router-dom";
-import { Copy, Globe, Play } from "lucide-react";
+import { Copy, Globe, Play, Redo2, Undo2 } from "lucide-react";
 
+import BekleyenDersler from "../components/BekleyenDersler";
 import CarsafIzgarasi from "../components/CarsafIzgarasi";
 import GecmisCalistirmalar from "../components/GecmisCalistirmalar";
 import ProgramAracCubugu, { type Duzen } from "../components/ProgramAracCubugu";
-import ProgramIzgarasi, { type Bakis } from "../components/ProgramIzgarasi";
+import ProgramIzgarasi, { HucreIcerigi, type Bakis } from "../components/ProgramIzgarasi";
 import ProgramUyarilari from "../components/ProgramUyarilari";
 import TaniRaporu from "../components/TaniRaporu";
 import UretimIzleme from "../components/UretimIzleme";
 import { Buton, Kart, Rozet, Uyari, Yukleniyor } from "../components/ui";
 import { get, jetonuAl, patch, post } from "../lib/api";
+import { bloklariCikar } from "../lib/hucreler";
+import { dersZemini } from "../lib/renkler";
 import type {
-  Deneme, Gun, Hucre, Izgara, KapaliSaatler, Program, Sube,
+  BekleyenBlok, Deneme, Gun, Hedef, Hucre, Izgara, KapaliSaatler, Program,
+  Suruklenen, Sube,
 } from "../lib/types";
 
 const DURUM = {
@@ -60,6 +73,7 @@ export default function ProgramDetay() {
   const [duzen, setDuzen] = useState<Duzen>("ayri");
   const [anahtar, setAnahtar] = useState<string | null>(null);
   const [hata, setHata] = useState<string | null>(null);
+  const [suruklenen, setSuruklenen] = useState<Suruklenen | null>(null);
 
   const izgaraSorgu = useQuery({
     queryKey: ["izgara", id],
@@ -71,6 +85,10 @@ export default function ProgramDetay() {
   const kapali = useQuery({
     queryKey: ["kapali-saatler"],
     queryFn: () => get<KapaliSaatler>("/availability/closed"),
+  });
+  const bekleyenler = useQuery({
+    queryKey: ["bekleyenler", id],
+    queryFn: () => get<BekleyenBlok[]>(`/timetables/${id}/pending`),
   });
   const denemeler = useQuery({
     queryKey: ["denemeler", id],
@@ -92,14 +110,43 @@ export default function ProgramDetay() {
     onError: (e: Error) => setHata(e.message),
   });
 
+  /** Elle yapılan her düzenleme aynı sonucu doğurur: ızgara tazelenir,
+   *  uyarılar ve bekleyenler yeniden hesaplanır. */
+  function duzenlemeSonucu(veri: Izgara) {
+    setHata(null);
+    qc.setQueryData(["izgara", id], veri);
+    qc.invalidateQueries({ queryKey: ["uyarilar", id] });
+    qc.invalidateQueries({ queryKey: ["bekleyenler", id] });
+    // Hedef değerlendirmeleri artık eskidi.
+    qc.removeQueries({ queryKey: ["hedefler", id] });
+  }
+
   const tasi = useMutation({
     mutationFn: ({ atama, saat }: { atama: number; saat: number }) =>
       patch<Izgara>(`/timetables/${id}/assignments/${atama}`, { period_id: saat }),
-    onSuccess: (veri) => {
-      setHata(null);
-      qc.setQueryData(["izgara", id], veri);
-      qc.invalidateQueries({ queryKey: ["uyarilar", id] });
-    },
+    onSuccess: duzenlemeSonucu,
+    onError: (e: Error) => setHata(e.message),
+  });
+
+  const izgaradanAl = useMutation({
+    mutationFn: (atama: number) =>
+      post<Izgara>(`/timetables/${id}/assignments/${atama}/unplace`),
+    onSuccess: duzenlemeSonucu,
+    onError: (e: Error) => setHata(e.message),
+  });
+
+  const yerlestir = useMutation({
+    mutationFn: (v: { entryId: number; saat: number; uzunluk: number }) =>
+      post<Izgara>(`/timetables/${id}/place`, {
+        curriculum_entry_id: v.entryId, period_id: v.saat, uzunluk: v.uzunluk,
+      }),
+    onSuccess: duzenlemeSonucu,
+    onError: (e: Error) => setHata(e.message),
+  });
+
+  const geriAl = useMutation({
+    mutationFn: (yon: "undo" | "redo") => post<Izgara>(`/timetables/${id}/${yon}`),
+    onSuccess: duzenlemeSonucu,
     onError: (e: Error) => setHata(e.message),
   });
 
@@ -158,6 +205,81 @@ export default function ProgramDetay() {
     return { satir: anahtarlar.length, dolu: hucreler.length, bosluk };
   }, [anahtarlar, hucreler, bakis, gunler.data]);
 
+
+  // --- Elle düzenleme: sürükleme ---
+
+  // Küçük eşik: hücreye tıklayıp kilitlemek sürükleme sayılmasın.
+  const sensorler = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+  );
+  const bloklar = useMemo(() => bloklariCikar(hucreler), [hucreler]);
+
+  /** Sürüklenen öğeyi tanımlayan sorgu dizesi; hedefleri sunucuya bu sorar. */
+  const hedefSorgusu =
+    suruklenen === null
+      ? null
+      : suruklenen.tur === "hucre"
+        ? `assignment_id=${suruklenen.assignmentId}`
+        : `curriculum_entry_id=${suruklenen.entryId}&uzunluk=${suruklenen.uzunluk}`;
+
+  const hedefSorgu = useQuery({
+    queryKey: ["hedefler", id, hedefSorgusu],
+    queryFn: () => get<Hedef[]>(`/timetables/${id}/targets?${hedefSorgusu}`),
+    enabled: hedefSorgusu !== null,
+    // Kurallar sunucuda tek yerde; aynı dersi tekrar sürüklerken yeniden
+    // sormamak için kısa süre saklanır, her düzenlemede temizlenir.
+    staleTime: 60_000,
+  });
+  const hedefler = useMemo(() => {
+    const harita = new Map<number, Hedef>();
+    for (const h of hedefSorgu.data ?? []) harita.set(h.period_id, h);
+    return harita;
+  }, [hedefSorgu.data]);
+
+  function suruklemeBasladi(e: DragStartEvent) {
+    const kimlik = String(e.active.id);
+    if (kimlik.startsWith("h:")) {
+      const atama = Number(kimlik.slice(2));
+      const blok = bloklar.get(atama) ?? [];
+      setSuruklenen({ tur: "hucre", assignmentId: atama, hucreler: blok });
+      return;
+    }
+    const [, entryId, uzunluk] = kimlik.split(":");
+    const blok = (bekleyenler.data ?? []).find(
+      (b) => b.curriculum_entry_id === Number(entryId) && b.uzunluk === Number(uzunluk),
+    );
+    if (!blok) return;
+    setSuruklenen({
+      tur: "bekleyen",
+      entryId: Number(entryId),
+      uzunluk: Number(uzunluk),
+      etiket: `${blok.subject_name} · ${blok.section_name}`,
+      renk: blok.subject_color,
+    });
+  }
+
+  function suruklemeBitti(e: DragEndEvent) {
+    const kaynak = suruklenen;
+    setSuruklenen(null);
+    if (!kaynak || !e.over) return;
+    const hedef = String(e.over.id);
+
+    if (hedef === "raf") {
+      if (kaynak.tur === "hucre") izgaradanAl.mutate(kaynak.assignmentId);
+      return;
+    }
+    if (!hedef.startsWith("s:")) return;
+    const saat = Number(hedef.slice(2));
+    if (kaynak.tur === "hucre") {
+      tasi.mutate({ atama: kaynak.assignmentId, saat });
+    } else {
+      yerlestir.mutate({ entryId: kaynak.entryId, saat, uzunluk: kaynak.uzunluk });
+    }
+  }
+
+  const duzenlemeSuruyor =
+    tasi.isPending || izgaradanAl.isPending || yerlestir.isPending || geriAl.isPending;
+
   const sonDeneme = denemeler.data?.[0];
   const gosterRapor =
     sonDeneme && sonDeneme.status !== "basarili" && sonDeneme.report !== null;
@@ -205,7 +327,13 @@ export default function ProgramDetay() {
   }
 
   return (
-    <div className="space-y-4">
+    <DndContext
+      sensors={sensorler}
+      onDragStart={suruklemeBasladi}
+      onDragEnd={suruklemeBitti}
+      onDragCancel={() => setSuruklenen(null)}
+    >
+      <div className="space-y-4">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="ray min-w-0">
           <h1 className="truncate font-baslik text-2xl font-semibold tracking-tight text-murekkep">
@@ -240,6 +368,30 @@ export default function ProgramDetay() {
             )}
           </p>
         </div>
+        <div className="flex shrink-0 items-center gap-1.5">
+        {hucreler.length > 0 && (
+          <>
+            <Buton
+              tur="ikincil"
+              title="Son elle düzenlemeyi geri al"
+              aria-label="Geri al"
+              disabled={!izgaraSorgu.data?.can_undo || duzenlemeSuruyor}
+              onClick={() => geriAl.mutate("undo")}
+            >
+              <Undo2 className="h-4 w-4" />
+              <span className="hidden sm:inline">Geri al</span>
+            </Buton>
+            <Buton
+              tur="ikincil"
+              title="Geri alınanı yeniden uygula"
+              aria-label="İleri al"
+              disabled={!izgaraSorgu.data?.can_redo || duzenlemeSuruyor}
+              onClick={() => geriAl.mutate("redo")}
+            >
+              <Redo2 className="h-4 w-4" />
+            </Buton>
+          </>
+        )}
         <Buton
           onClick={() => uret.mutate()}
           yukleniyor={uret.isPending}
@@ -252,6 +404,7 @@ export default function ProgramDetay() {
               ? "Yeniden üret"
               : "Programı üret"}
         </Buton>
+        </div>
       </header>
 
       {hata && <Uyari tur="hata">{hata}</Uyari>}
@@ -340,17 +493,28 @@ export default function ProgramDetay() {
                   hucreler={hucreler}
                   bakis={bakis}
                   anahtar={seciliAnahtar}
-                  tasi={(atama, saat) => tasi.mutate({ atama, saat })}
+                  duzenlenebilir
+                  hedefler={hedefler}
+                  suruklenen={suruklenen}
                   kilitle={(atama) => kilitle.mutate(atama)}
                 />
               )}
               <p className="mt-3 text-xs text-murekkep-silik">
-                Hücreyi sürükleyerek taşıyın, çift tıklayarak kilitleyin. Kilitli dersler
-                yeniden üretimde yerinde kalır.
+                Hücreyi sürükleyerek taşıyın — blok bütün taşınır. Dolu bir hücreye
+                bırakmak iki dersi yer değiştirir. Aşağıdaki rafa bırakmak dersi
+                programdan çıkarır. Çift tıklamak kilitler; kilitli dersler yeniden
+                üretimde yerinde kalır.
               </p>
             </>
           )}
         </Kart>
+      )}
+
+      {duzen === "ayri" && (hucreler.length > 0 || (bekleyenler.data ?? []).length > 0) && (
+        <BekleyenDersler
+          bloklar={bekleyenler.data ?? []}
+          suruklenen={suruklenen}
+        />
       )}
 
       {hucreler.length > 0 && id && <ProgramUyarilari timetableId={id} />}
@@ -387,6 +551,34 @@ export default function ProgramDetay() {
           )}
         </Kart>
       )}
-    </div>
+      </div>
+
+      {/* Sürüklenen şey imlecin peşinde: hangi dersin taşındığı hep görünür. */}
+      <DragOverlay dropAnimation={null}>
+        {suruklenen?.tur === "hucre" && suruklenen.hucreler[0] && (
+          <div className="h-14 w-36 rounded-md shadow-lg">
+            <HucreIcerigi hucre={suruklenen.hucreler[0]} bakis={bakis} />
+            {suruklenen.hucreler.length > 1 && (
+              <span className="sayisal mt-1 block rounded bg-murekkep px-1.5 py-0.5 text-center font-mono text-[10px] text-uzeri">
+                {suruklenen.hucreler.length} saatlik blok
+              </span>
+            )}
+          </div>
+        )}
+        {suruklenen?.tur === "bekleyen" && (
+          <div
+            className="w-40 rounded-md px-2 py-1.5 shadow-lg"
+            style={dersZemini(suruklenen.renk)}
+          >
+            <span className="block truncate text-[12px] font-semibold text-murekkep">
+              {suruklenen.etiket}
+            </span>
+            <span className="sayisal font-mono text-[10px] text-murekkep-yumusak">
+              {suruklenen.uzunluk} saat
+            </span>
+          </div>
+        )}
+      </DragOverlay>
+    </DndContext>
   );
 }

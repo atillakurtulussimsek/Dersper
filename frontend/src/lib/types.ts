@@ -157,6 +157,31 @@ export interface ProgramUyarisi {
 export interface Izgara {
   timetable: Program;
   cells: Hucre[];
+  /** Geri/ileri alınacak adım var mı. */
+  can_undo: boolean;
+  can_redo: boolean;
+}
+
+/** Sürüklenen ders için tek bir saatin değerlendirmesi. */
+export interface Hedef {
+  period_id: number;
+  uygun: boolean;
+  neden: string | null;
+}
+
+/** Sürüklenmekte olan şey: ızgaradaki bir blok ya da raftaki bekleyen blok. */
+export type Suruklenen =
+  | { tur: "hucre"; assignmentId: number; hucreler: Hucre[] }
+  | { tur: "bekleyen"; entryId: number; uzunluk: number; etiket: string; renk: string };
+
+/** Bekleyenler rafındaki tek bir blok. */
+export interface BekleyenBlok {
+  curriculum_entry_id: number;
+  uzunluk: number;
+  section_name: string;
+  subject_name: string;
+  subject_color: string;
+  teacher_name: string;
 }
 
 export interface Bulgu {

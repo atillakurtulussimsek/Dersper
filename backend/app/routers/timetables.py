@@ -14,9 +14,10 @@ from app.models import (
     Assignment, CurriculumEntry, Day, Period, Section, SolveRun, SolveStatus, Term,
     Timetable, TimetableStatus,
 )
+from app.duzenle import Duzenleyici
 from app.schemas import (
-    AssignmentMove, GridCell, SolveRunOut, TimetableGrid, TimetableIn, TimetableOut,
-    WarningIgnoreIn, WarningOut,
+    AssignmentMove, GridCell, PendingOut, PlaceIn, SolveRunOut, TargetOut,
+    TimetableGrid, TimetableIn, TimetableOut, WarningIgnoreIn, WarningOut,
 )
 from app.uyarilar import uyarilari_hesapla
 from app.solver import arkaplan
@@ -133,8 +134,7 @@ def izgara(
     timetable_id: int, db: Session = Depends(get_db), donem: Term = Depends(aktif_donem)
 ) -> TimetableGrid:
     t = _programi_getir(db, timetable_id, donem)
-    return TimetableGrid(timetable=TimetableOut.model_validate(t),
-                         cells=izgara_hucreleri(db, timetable_id))
+    return _izgara(db, t)
 
 
 @router.post("/{timetable_id}/solve", response_model=SolveRunOut,
@@ -226,6 +226,15 @@ def denemeler(
     ))
 
 
+def _izgara(db: Session, t: Timetable) -> TimetableGrid:
+    return TimetableGrid(
+        timetable=TimetableOut.model_validate(t),
+        cells=izgara_hucreleri(db, t.id),
+        can_undo=bool(t.edit_undo),
+        can_redo=bool(t.edit_redo),
+    )
+
+
 @router.patch("/{timetable_id}/assignments/{assignment_id}", response_model=TimetableGrid)
 def dersi_tasi(
     timetable_id: int,
@@ -234,40 +243,99 @@ def dersi_tasi(
     db: Session = Depends(get_db),
     donem: Term = Depends(aktif_donem),
 ) -> TimetableGrid:
-    """Elle sürükle-bırak. Çakışma oluşturacak taşımalar reddedilir."""
+    """Elle sürükle-bırak.
+
+    Blok bütün taşınır; hedefte eşit uzunlukta tek blok varsa yer değiştirirler.
+    Kurallar `app.duzenle` içinde, çözücüyle aynı yerde tanımlı.
+    """
     t = _programi_getir(db, timetable_id, donem)
-    a = db.get(Assignment, assignment_id)
-    if a is None or a.timetable_id != t.id:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Yerleşim bulunamadı.")
-    hedef = db.get(Period, payload.period_id)
-    if hedef is None or hedef.is_break:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY,
-                            "Hedef ders saati geçersiz.")
+    Duzenleyici(db, t, donem).tasi(assignment_id, payload.period_id)
+    return _izgara(db, t)
 
-    entry = db.get(CurriculumEntry, a.curriculum_entry_id)
-    cakisan = db.scalars(
-        select(Assignment)
-        .options(selectinload(Assignment.entry))
-        .where(Assignment.timetable_id == t.id,
-               Assignment.period_id == payload.period_id,
-               Assignment.id != a.id)
+
+@router.post("/{timetable_id}/assignments/{assignment_id}/unplace",
+             response_model=TimetableGrid)
+def izgaradan_al(
+    timetable_id: int,
+    assignment_id: int,
+    db: Session = Depends(get_db),
+    donem: Term = Depends(aktif_donem),
+) -> TimetableGrid:
+    """Bloğu ızgaradan çıkarır; saatleri bekleyenler rafına düşer."""
+    t = _programi_getir(db, timetable_id, donem)
+    Duzenleyici(db, t, donem).izgaradan_al(assignment_id)
+    return _izgara(db, t)
+
+
+@router.post("/{timetable_id}/place", response_model=TimetableGrid)
+def yerlestir(
+    timetable_id: int,
+    payload: PlaceIn,
+    db: Session = Depends(get_db),
+    donem: Term = Depends(aktif_donem),
+) -> TimetableGrid:
+    """Bekleyen bir bloğu ızgaraya koyar."""
+    t = _programi_getir(db, timetable_id, donem)
+    Duzenleyici(db, t, donem).yerlestir(
+        payload.curriculum_entry_id, payload.period_id, payload.uzunluk
     )
-    for diger in cakisan:
-        if diger.entry.section_id == entry.section_id:
-            raise HTTPException(
-                status.HTTP_409_CONFLICT,
-                f"{entry.section.name} şubesinin o saatte zaten dersi var.",
-            )
-        if diger.entry.teacher_id == entry.teacher_id:
-            raise HTTPException(
-                status.HTTP_409_CONFLICT,
-                f"{entry.teacher.full_name} öğretmenin o saatte zaten dersi var.",
-            )
+    return _izgara(db, t)
 
-    a.period_id = payload.period_id
-    db.commit()
-    return TimetableGrid(timetable=TimetableOut.model_validate(t),
-                         cells=izgara_hucreleri(db, t.id))
+
+@router.get("/{timetable_id}/pending", response_model=list[PendingOut])
+def bekleyenler(
+    timetable_id: int, db: Session = Depends(get_db), donem: Term = Depends(aktif_donem)
+) -> list[dict]:
+    """Yerleşmemiş ders blokları — çözücünün koyamadıkları ve elle alınanlar."""
+    t = _programi_getir(db, timetable_id, donem)
+    return Duzenleyici(db, t, donem).bekleyen_listesi()
+
+
+@router.get("/{timetable_id}/targets", response_model=list[TargetOut])
+def hedefler(
+    timetable_id: int,
+    assignment_id: int | None = None,
+    curriculum_entry_id: int | None = None,
+    uzunluk: int = 1,
+    db: Session = Depends(get_db),
+    donem: Term = Depends(aktif_donem),
+) -> list[dict]:
+    """Sürüklenen ders nereye konabilir? Arayüz sürükleme başlarken sorar.
+
+    Ya taşınan bir yerleşim (`assignment_id`) ya da raftan gelen bir blok
+    (`curriculum_entry_id` + `uzunluk`) sorulur.
+    """
+    t = _programi_getir(db, timetable_id, donem)
+    d = Duzenleyici(db, t, donem)
+    if assignment_id is not None:
+        atama = d._atama(assignment_id)
+        blok = d.bloklar[atama.id]
+        return d.hedefleri_degerlendir(
+            atama.entry, len(blok), {a.id for a in blok}
+        )
+    if curriculum_entry_id is not None:
+        entry = d._mufredat_satiri(curriculum_entry_id)
+        return d.hedefleri_degerlendir(entry, uzunluk, set())
+    raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY,
+                        "assignment_id ya da curriculum_entry_id gerekli.")
+
+
+@router.post("/{timetable_id}/undo", response_model=TimetableGrid)
+def geri_al(
+    timetable_id: int, db: Session = Depends(get_db), donem: Term = Depends(aktif_donem)
+) -> TimetableGrid:
+    t = _programi_getir(db, timetable_id, donem)
+    Duzenleyici(db, t, donem).geri_al()
+    return _izgara(db, t)
+
+
+@router.post("/{timetable_id}/redo", response_model=TimetableGrid)
+def ileri_al(
+    timetable_id: int, db: Session = Depends(get_db), donem: Term = Depends(aktif_donem)
+) -> TimetableGrid:
+    t = _programi_getir(db, timetable_id, donem)
+    Duzenleyici(db, t, donem).ileri_al()
+    return _izgara(db, t)
 
 
 @router.post("/{timetable_id}/assignments/{assignment_id}/lock",
@@ -284,8 +352,7 @@ def kilidi_degistir(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Yerleşim bulunamadı.")
     a.is_locked = not a.is_locked
     db.commit()
-    return TimetableGrid(timetable=TimetableOut.model_validate(t),
-                         cells=izgara_hucreleri(db, t.id))
+    return _izgara(db, t)
 
 
 @router.get("/{timetable_id}/warnings", response_model=list[WarningOut])

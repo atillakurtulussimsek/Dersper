@@ -162,13 +162,11 @@ def test_program_uretilir_ve_yayinlanir(yonetici: TestClient):
     izgara = yonetici.get(f"/api/timetables/{pid}/grid").json()
     assert len(izgara["cells"]) == 36           # 2 şube × 18 saat
 
-    # Dolu bir saate taşımak reddedilir.
+    # Başka bir döneme/kuruma ait ders saatine taşımak reddedilir.
     h = izgara["cells"][0]
-    diger = next(x for x in izgara["cells"]
-                 if x["section_id"] == h["section_id"] and x["period_id"] != h["period_id"])
     r = yonetici.patch(f"/api/timetables/{pid}/assignments/{h['assignment_id']}",
-                       json={"period_id": diger["period_id"]})
-    assert r.status_code == 409
+                       json={"period_id": 999999})
+    assert r.status_code == 404
 
     yayin = yonetici.post(f"/api/timetables/{pid}/publish").json()
     assert yayin["public_token"]

@@ -354,6 +354,30 @@ class AssignmentMove(BaseModel):
     period_id: int
 
 
+class PlaceIn(BaseModel):
+    """Bekleyen bir bloğu ızgaraya koyar."""
+    curriculum_entry_id: int
+    period_id: int
+    uzunluk: int = Field(ge=1, le=20)
+
+
+class TargetOut(BaseModel):
+    """Sürüklenen ders için tek bir saatin değerlendirmesi."""
+    period_id: int
+    uygun: bool
+    neden: str | None
+
+
+class PendingOut(BaseModel):
+    """Bekleyenler rafındaki tek bir blok."""
+    curriculum_entry_id: int
+    uzunluk: int
+    section_name: str
+    subject_name: str
+    subject_color: str
+    teacher_name: str
+
+
 class GridCell(BaseModel):
     """Arayüzün ızgarada gösterdiği hazır hücre."""
     assignment_id: int
@@ -374,6 +398,9 @@ class GridCell(BaseModel):
 class TimetableGrid(BaseModel):
     timetable: TimetableOut
     cells: list[GridCell]
+    # Geri/ileri alınacak adım var mı — arayüz düğmeleri buna göre açılır.
+    can_undo: bool = False
+    can_redo: bool = False
 
 
 class WarningOut(BaseModel):

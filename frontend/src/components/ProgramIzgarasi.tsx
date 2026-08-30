@@ -1,21 +1,23 @@
 /** Haftalık program tablosu. Şube ya da öğretmen bakışıyla çizilir.
  *
  *  Sütunlar eşit genişlikte sabitlenir (`table-fixed`) ve hücre metinleri
- *  kırpılır; böylece gün sayısı ne olursa olsun tablo ekrana sığar, yatay
- *  kaydırma yalnızca gerçekten gerektiğinde devreye girer.
+ *  kırpılır; böylece gün sayısı ne olursa olsun tablo ekrana sığar.
  *
- *  `tasi` verilirse hücreler sürüklenebilir.
+ *  Elle düzenleme burada yapılır ama sürükleme bağlamı (DndContext) dışarıda,
+ *  `ProgramDetay`ta durur: bekleyenler rafı da aynı bağlamı paylaşmalı ki ders
+ *  ızgaradan rafa, raftan ızgaraya sürüklenebilsin.
+ *
+ *  Sürüklenen şey blok bütünüdür. Sürükleme başlayınca sunucudan gelen
+ *  değerlendirmeye göre konabilecek saatler belirginleşir, konamayacaklar
+ *  soluklaşır ve nedeni hücrenin ipucunda yazar.
  */
-import {
-  DndContext, DragOverlay, PointerSensor, useDraggable, useDroppable, useSensor,
-  useSensors, type DragEndEvent, type DragStartEvent,
-} from "@dnd-kit/core";
-import { useState } from "react";
+import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { Lock } from "lucide-react";
 import clsx from "clsx";
 
+import { bloklariCikar } from "../lib/hucreler";
 import { dersZemini } from "../lib/renkler";
-import type { DersSaati, Gun, Hucre } from "../lib/types";
+import type { DersSaati, Gun, Hedef, Hucre, Suruklenen } from "../lib/types";
 
 export type Bakis = "sube" | "ogretmen";
 
@@ -24,7 +26,7 @@ function altSatir(hucre: Hucre, bakis: Bakis): string {
   return bakis === "sube" ? hucre.teacher_name : hucre.section_name;
 }
 
-function HucreIcerigi({ hucre, bakis }: { hucre: Hucre; bakis: Bakis }) {
+export function HucreIcerigi({ hucre, bakis }: { hucre: Hucre; bakis: Bakis }) {
   return (
     <div
       className="flex h-full w-full flex-col justify-center overflow-hidden rounded-md px-1.5 py-1 text-center"
@@ -47,16 +49,23 @@ function HucreIcerigi({ hucre, bakis }: { hucre: Hucre; bakis: Bakis }) {
 function Surukle({
   hucre,
   bakis,
+  blokBoyu,
   kilitle,
+  suruklenenMi,
 }: {
   hucre: Hucre;
   bakis: Bakis;
+  blokBoyu: number;
   kilitle?: (id: number) => void;
+  suruklenenMi: boolean;
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-    id: hucre.assignment_id,
+    id: `h:${hucre.assignment_id}`,
     disabled: hucre.is_locked,
   });
+
+  const kim = altSatir(hucre, bakis);
+  const blokNotu = blokBoyu > 1 ? ` · ${blokBoyu} saatlik blok birlikte taşınır` : "";
 
   return (
     <div
@@ -66,15 +75,15 @@ function Surukle({
       onDoubleClick={() => kilitle?.(hucre.assignment_id)}
       title={
         hucre.is_locked
-          ? `${hucre.subject_name} · ${altSatir(hucre, bakis)} — kilitli, çift tıklayarak açın`
-          : `${hucre.subject_name} · ${altSatir(hucre, bakis)} — sürükleyerek taşıyın, çift tıklayarak kilitleyin`
+          ? `${hucre.subject_name} · ${kim} — kilitli, çift tıklayarak açın`
+          : `${hucre.subject_name} · ${kim}${blokNotu} — sürükleyerek taşıyın, çift tıklayarak kilitleyin`
       }
       className={clsx(
         "h-full w-full transition-opacity",
         hucre.is_locked
           ? "cursor-default rounded-md ring-1 ring-inset ring-cizgi-guclu"
           : "cursor-grab active:cursor-grabbing",
-        isDragging && "opacity-30",
+        (isDragging || suruklenenMi) && "opacity-30",
       )}
     >
       <HucreIcerigi hucre={hucre} bakis={bakis} />
@@ -82,23 +91,35 @@ function Surukle({
   );
 }
 
-function Hedef({
+function Hedefli({
   periodId,
   bos,
+  degerlendirme,
+  suruklemeVar,
   children,
 }: {
   periodId: number;
   bos: boolean;
+  degerlendirme?: Hedef;
+  suruklemeVar: boolean;
   children: React.ReactNode;
 }) {
-  const { setNodeRef, isOver } = useDroppable({ id: periodId });
+  const { setNodeRef, isOver } = useDroppable({ id: `s:${periodId}` });
+  // Sürükleme sürerken: uygun hedefler belirgin, uygunsuzlar soluk.
+  const isaretle = suruklemeVar && degerlendirme !== undefined;
+  const uygun = degerlendirme?.uygun ?? true;
+
   return (
     <td
       ref={setNodeRef}
+      title={isaretle && !uygun ? (degerlendirme?.neden ?? undefined) : undefined}
       className={clsx(
         "h-14 border border-cizgi p-0.5 align-middle transition-colors",
         bos && "bg-yuzey-alt/60",
-        isOver && "bg-murekkep/10 ring-2 ring-inset ring-cizgi-guclu",
+        isaretle && uygun && "bg-basari-zemin",
+        isaretle && !uygun && "opacity-40",
+        isOver && uygun && "bg-murekkep/10 ring-2 ring-inset ring-cizgi-guclu",
+        isOver && !uygun && "ring-2 ring-inset ring-hata",
       )}
     >
       {children}
@@ -111,7 +132,9 @@ export default function ProgramIzgarasi({
   hucreler,
   bakis,
   anahtar,
-  tasi,
+  duzenlenebilir,
+  hedefler,
+  suruklenen,
   kilitle,
 }: {
   gunler: Gun[];
@@ -119,14 +142,13 @@ export default function ProgramIzgarasi({
   bakis: Bakis;
   /** Gösterilecek şube ya da öğretmen adı */
   anahtar: string;
-  tasi?: (assignmentId: number, periodId: number) => void;
+  /** Sürükle-bırak açık mı (yayın görünümünde kapalı). */
+  duzenlenebilir?: boolean;
+  /** period_id -> sürüklenen ders o saate konabilir mi. */
+  hedefler?: Map<number, Hedef>;
+  suruklenen?: Suruklenen | null;
   kilitle?: (assignmentId: number) => void;
 }) {
-  const [suruklenen, setSuruklenen] = useState<Hucre | null>(null);
-  const sensorler = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-  );
-
   const aktifGunler = gunler.filter((g) => g.is_active);
   const enFazla = Math.max(
     0,
@@ -139,6 +161,13 @@ export default function ProgramIzgarasi({
   const yerlesim = new Map<string, Hucre>();
   for (const h of benimkiler) yerlesim.set(`${h.day_index}:${h.period_index}`, h);
 
+  // Bloklar tüm hücrelerden çıkarılır: seçili kayıt süzülmüş olsa da bir
+  // bloğun tamamı aynı kayda ait olduğu için sonuç değişmez.
+  const bloklar = bloklariCikar(hucreler);
+  const suruklenenAtamalar = new Set(
+    suruklenen?.tur === "hucre" ? suruklenen.hucreler.map((h) => h.assignment_id) : [],
+  );
+
   /** Satır başlığı: ders sırası ve varsa zil saatleri. */
   function saatAraligi(index: number): string | null {
     for (const g of aktifGunler) {
@@ -150,118 +179,107 @@ export default function ProgramIzgarasi({
     return null;
   }
 
-  function bittiginde(e: DragEndEvent) {
-    setSuruklenen(null);
-    if (!tasi || !e.over) return;
-    tasi(Number(e.active.id), Number(e.over.id));
-  }
-
-  function basladiginda(e: DragStartEvent) {
-    setSuruklenen(benimkiler.find((h) => h.assignment_id === Number(e.active.id)) ?? null);
-  }
-
-  const tablo = (
-    <table className="w-full table-fixed border-collapse">
-      <colgroup>
-        <col className="w-[86px]" />
-        {aktifGunler.map((g) => (
-          <col key={g.id} />
-        ))}
-      </colgroup>
-      <thead>
-        <tr>
-          <th className="border border-cizgi bg-yuzey-alt px-2 py-2 text-[11px] font-semibold text-murekkep-silik">
-            Saat
-          </th>
-          {aktifGunler.map((g) => (
-            <th
-              key={g.id}
-              className="border border-cizgi bg-yuzey-alt px-2 py-2 text-[12px] font-semibold text-murekkep-yumusak"
-            >
-              {g.name}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {Array.from({ length: enFazla }, (_, i) => {
-          const aralik = saatAraligi(i);
-          return (
-            <tr key={i}>
-              <th className="border border-cizgi bg-yuzey-alt px-1 py-1 text-center align-middle">
-                <span className="sayisal block text-[12px] font-semibold text-murekkep-yumusak">
-                  {i + 1}.
-                </span>
-                {aralik && (
-                  <span className="sayisal block font-mono text-[9px] leading-tight text-murekkep-silik">
-                    {aralik}
-                  </span>
-                )}
-              </th>
-              {aktifGunler.map((g) => {
-                const p: DersSaati | undefined = g.periods.find((x) => x.index === i);
-                if (!p) {
-                  return (
-                    <td
-                      key={g.id}
-                      className="h-14 border border-cizgi bg-[repeating-linear-gradient(45deg,#f8fafc,#f8fafc_6px,#f1f5f9_6px,#f1f5f9_12px)]"
-                    />
-                  );
-                }
-                if (p.is_break) {
-                  return (
-                    <td
-                      key={g.id}
-                      className="h-14 border border-cizgi bg-uyari-zemin text-center text-[10px] font-medium text-uyari"
-                    >
-                      {p.is_lunch ? "öğle arası" : "teneffüs"}
-                    </td>
-                  );
-                }
-                const h = yerlesim.get(`${g.index}:${i}`);
-                const icerik = h ? (
-                  <Surukle hucre={h} bakis={bakis} kilitle={kilitle} />
-                ) : null;
-                return tasi ? (
-                  <Hedef key={g.id} periodId={p.id} bos={!h}>
-                    {icerik}
-                  </Hedef>
-                ) : (
-                  <td
-                    key={g.id}
-                    className={clsx(
-                      "h-14 border border-cizgi p-0.5",
-                      !h && "bg-yuzey-alt/60",
-                    )}
-                  >
-                    {icerik}
-                  </td>
-                );
-              })}
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
-  );
-
-  if (!tasi) return <div className="overflow-x-auto">{tablo}</div>;
-
   return (
-    <DndContext
-      sensors={sensorler}
-      onDragStart={basladiginda}
-      onDragEnd={bittiginde}
-      onDragCancel={() => setSuruklenen(null)}
-    >
-      <div className="overflow-x-auto">{tablo}</div>
-      <DragOverlay dropAnimation={null}>
-        {suruklenen && (
-          <div className="h-14 w-32 rounded-md shadow-lg">
-            <HucreIcerigi hucre={suruklenen} bakis={bakis} />
-          </div>
-        )}
-      </DragOverlay>
-    </DndContext>
+    <div className="overflow-x-auto">
+      <table className="w-full table-fixed border-collapse">
+        <colgroup>
+          <col className="w-[86px]" />
+          {aktifGunler.map((g) => (
+            <col key={g.id} />
+          ))}
+        </colgroup>
+        <thead>
+          <tr>
+            <th className="border border-cizgi bg-yuzey-alt px-2 py-2 text-[11px] font-semibold text-murekkep-silik">
+              Saat
+            </th>
+            {aktifGunler.map((g) => (
+              <th
+                key={g.id}
+                className="border border-cizgi bg-yuzey-alt px-2 py-2 text-[12px] font-semibold text-murekkep-yumusak"
+              >
+                {g.name}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {Array.from({ length: enFazla }, (_, i) => {
+            const aralik = saatAraligi(i);
+            return (
+              <tr key={i}>
+                <th className="border border-cizgi bg-yuzey-alt px-1 py-1 text-center align-middle">
+                  <span className="sayisal block text-[12px] font-semibold text-murekkep-yumusak">
+                    {i + 1}.
+                  </span>
+                  {aralik && (
+                    <span className="sayisal block font-mono text-[9px] leading-tight text-murekkep-silik">
+                      {aralik}
+                    </span>
+                  )}
+                </th>
+                {aktifGunler.map((g) => {
+                  const p: DersSaati | undefined = g.periods.find((x) => x.index === i);
+                  if (!p) {
+                    return (
+                      <td
+                        key={g.id}
+                        className="h-14 border border-cizgi bg-[repeating-linear-gradient(45deg,#f8fafc,#f8fafc_6px,#f1f5f9_6px,#f1f5f9_12px)]"
+                      />
+                    );
+                  }
+                  if (p.is_break) {
+                    return (
+                      <td
+                        key={g.id}
+                        className="h-14 border border-cizgi bg-uyari-zemin text-center text-[10px] font-medium text-uyari"
+                      >
+                        {p.is_lunch ? "öğle arası" : "teneffüs"}
+                      </td>
+                    );
+                  }
+                  const h = yerlesim.get(`${g.index}:${i}`);
+
+                  // Yayın görünümünde sürükleme bağlamı yok; `useDraggable`
+                  // çağıran bileşen oraya hiç girmemeli.
+                  if (!duzenlenebilir) {
+                    return (
+                      <td
+                        key={g.id}
+                        className={clsx(
+                          "h-14 border border-cizgi p-0.5",
+                          !h && "bg-yuzey-alt/60",
+                        )}
+                      >
+                        {h && <HucreIcerigi hucre={h} bakis={bakis} />}
+                      </td>
+                    );
+                  }
+                  return (
+                    <Hedefli
+                      key={g.id}
+                      periodId={p.id}
+                      bos={!h}
+                      degerlendirme={hedefler?.get(p.id)}
+                      suruklemeVar={Boolean(suruklenen)}
+                    >
+                      {h && (
+                        <Surukle
+                          hucre={h}
+                          bakis={bakis}
+                          blokBoyu={bloklar.get(h.assignment_id)?.length ?? 1}
+                          kilitle={kilitle}
+                          suruklenenMi={suruklenenAtamalar.has(h.assignment_id)}
+                        />
+                      )}
+                    </Hedefli>
+                  );
+                })}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }
