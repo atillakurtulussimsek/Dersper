@@ -6,7 +6,9 @@ from datetime import date, datetime, time
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
 from app import bloklar
-from app.models import Availability, InstitutionType, SolveStatus, TimetableStatus
+from app.models import (
+    Availability, InstitutionType, SolveStatus, TimetableStatus, VersionKind,
+)
 
 
 class ORMModel(BaseModel):
@@ -398,9 +400,20 @@ class GridCell(BaseModel):
 class TimetableGrid(BaseModel):
     timetable: TimetableOut
     cells: list[GridCell]
-    # Geri/ileri alınacak adım var mı — arayüz düğmeleri buna göre açılır.
+    # Geri/ileri alınacak sürüm var mı — arayüz düğmeleri buna göre açılır.
     can_undo: bool = False
     can_redo: bool = False
+    # Programın durduğu sürüm numarası.
+    version: int | None = None
+
+
+class VersionOut(ORMModel):
+    """Geçmiş listesindeki tek bir sürüm."""
+    number: int
+    kind: VersionKind
+    label: str
+    placed: int
+    created_at: datetime
 
 
 class WarningOut(BaseModel):

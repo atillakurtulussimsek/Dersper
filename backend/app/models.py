@@ -285,14 +285,65 @@ class Timetable(Base, SoftDelete):
     section_ids: Mapped[list | None] = mapped_column(JSON)
     # Kullanıcının "görmezden gel" dediği uyarı anahtarları.
     ignored_warnings: Mapped[list | None] = mapped_column(JSON)
-    # Elle düzenlemenin geri/ileri alma yığınları. Her adım, dokunulan ders
-    # saatlerinin o andaki içeriğidir; geri alma onu geri yazar.
-    edit_undo: Mapped[list | None] = mapped_column(JSON)
-    edit_redo: Mapped[list | None] = mapped_column(JSON)
+    # Programın şu an hangi sürümde durduğu. Geri/ileri alma bu imleci
+    # sürüm ağacında gezdirir; ayrı bir adım yığını yoktur.
+    current_version_id: Mapped[int | None] = mapped_column(
+        ForeignKey("timetable_versions.id", ondelete="SET NULL", use_alter=True,
+                   name="fk_timetables_current_version")
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     assignments: Mapped[list[Assignment]] = relationship(
         back_populates="timetable", cascade="all, delete-orphan"
+    )
+    versions: Mapped[list["TimetableVersion"]] = relationship(
+        back_populates="timetable", cascade="all, delete-orphan",
+        foreign_keys="TimetableVersion.timetable_id",
+    )
+
+
+class VersionKind(str, enum.Enum):
+    ILK = "ilk"            # program açıldığında, boş hâli
+    URETIM = "uretim"      # çözücü çıktısı
+    ELLE = "elle"          # elle düzenleme
+
+
+class TimetableVersion(Base):
+    """Programın bir andaki tam hâli.
+
+    Her değişiklik — üretim de, elle düzenleme de — yeni bir sürüm yazar.
+    Sürümler EKLENİR, hiç silinmez: geri alıp başka bir yöne gitseniz de eski
+    dal veritabanında durur ve listeden geri yüklenebilir.
+
+    `parent_id` ağacı kurar: geri alma ebeveyne, ileri alma en yeni çocuğa
+    gider. Böylece geri aldıktan sonra yapılan yeni değişiklik eski dalı
+    silmeden yeni bir dal açar.
+    """
+    __tablename__ = "timetable_versions"
+    __table_args__ = (
+        UniqueConstraint("timetable_id", "number", name="uq_version_number"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    timetable_id: Mapped[int] = mapped_column(
+        ForeignKey("timetables.id", ondelete="CASCADE")
+    )
+    # Program içinde 1'den başlayan, hiç tekrar etmeyen sıra numarası.
+    number: Mapped[int] = mapped_column(Integer)
+    parent_id: Mapped[int | None] = mapped_column(
+        ForeignKey("timetable_versions.id", ondelete="SET NULL")
+    )
+    kind: Mapped[VersionKind] = mapped_column(Enum(VersionKind))
+    # Ne olduğunu anlatan kısa Türkçe satır — geçmiş listesinde okunur.
+    label: Mapped[str] = mapped_column(String(200))
+    # Yerleşimlerin tamamı: [[curriculum_entry_id, period_id, kilitli], ...]
+    placements: Mapped[list] = mapped_column(JSON)
+    # Listede göstermek için; placements uzunluğuyla aynı.
+    placed: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    timetable: Mapped[Timetable] = relationship(
+        back_populates="versions", foreign_keys=[timetable_id]
     )
 
 

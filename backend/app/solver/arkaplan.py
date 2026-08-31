@@ -20,7 +20,10 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 
 from app.db import SessionLocal
-from app.models import Assignment, SolveRun, SolveStatus, Term, Timetable, TimetableStatus
+from app import surumler
+from app.models import (
+    Assignment, SolveRun, SolveStatus, Term, Timetable, TimetableStatus, VersionKind,
+)
 from app.solver.diagnose import rapor_olustur
 from app.solver.engine import SolveInput, solve
 from app.solver.loader import (
@@ -143,7 +146,7 @@ def _dongu(run_id: int, term_id: int, dur: threading.Event) -> None:
                                 sonuc.proven_infeasible, son_rapor, baslangic)
 
                 if sonuc.ok:
-                    _yerlesimleri_yaz(run_id, sonuc.placements, kilitli)
+                    _yerlesimleri_yaz(run_id, sonuc.placements, kilitli, gereken)
                     _bitir(db, run_id, SolveStatus.BASARILI, son_rapor, baslangic)
                     return
 
@@ -160,7 +163,7 @@ def _dongu(run_id: int, term_id: int, dur: threading.Event) -> None:
 
             # Durduruldu: o ana kadarki en iyi yerleşimi kaydet.
             if en_iyi:
-                _yerlesimleri_yaz(run_id, en_iyi, kilitli)
+                _yerlesimleri_yaz(run_id, en_iyi, kilitli, gereken)
             if son_rapor is None:
                 son_rapor = rapor_olustur(slots, lessons, en_iyi_eksik, "DURDURULDU",
                                           0.0, gun_sinirlari)
@@ -199,12 +202,20 @@ def _ilerlemeyi_yaz(run_id: int, deneme: int, en_iyi: int, gereken: int,
 
 
 def _yerlesimleri_yaz(run_id: int, yerlesim: list[tuple[int, int]],
-                      kilitli: dict[int, list[int]]) -> None:
-    """Sonucu programa yazar. Yeni sonuç hazır olana kadar eskisi durur."""
+                      kilitli: dict[int, list[int]], gereken: int) -> None:
+    """Sonucu programa yazar. Yeni sonuç hazır olana kadar eskisi durur.
+
+    Üretim de geçmişe bir sürüm bırakır: elle düzenlemelerle aynı zincirde
+    dururlar, böylece "üretimden önceki hâle dön" mümkün olur.
+    """
     with SessionLocal() as db:
         run = db.get(SolveRun, run_id)
         if run is None:
             return
+        program = db.get(Timetable, run.timetable_id)
+        # Üretimden ÖNCEKİ hâl de bir geri dönüş noktası olmalı.
+        surumler.baslangici_guvence_al(db, program)
+
         for a in db.scalars(
             select(Assignment).where(Assignment.timetable_id == run.timetable_id)
         ):
@@ -215,6 +226,11 @@ def _yerlesimleri_yaz(run_id: int, yerlesim: list[tuple[int, int]],
                 timetable_id=run.timetable_id, curriculum_entry_id=entry_id,
                 period_id=period_id, is_locked=period_id in kilitli.get(entry_id, []),
             ))
+        db.flush()
+        surumler.surum_yaz(
+            db, program, VersionKind.URETIM,
+            f"Üretim — {len(yerlesim)}/{gereken} ders saati yerleşti",
+        )
         db.commit()
 
 

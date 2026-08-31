@@ -12,12 +12,13 @@ from app.db import get_db
 from app.deps import aktif_donem, current_user
 from app.models import (
     Assignment, CurriculumEntry, Day, Period, Section, SolveRun, SolveStatus, Term,
-    Timetable, TimetableStatus,
+    Timetable, TimetableStatus, TimetableVersion, VersionKind,
 )
+from app import surumler
 from app.duzenle import Duzenleyici
 from app.schemas import (
     AssignmentMove, GridCell, PendingOut, PlaceIn, SolveRunOut, TargetOut,
-    TimetableGrid, TimetableIn, TimetableOut, WarningIgnoreIn, WarningOut,
+    TimetableGrid, TimetableIn, TimetableOut, VersionOut, WarningIgnoreIn, WarningOut,
 )
 from app.uyarilar import uyarilari_hesapla
 from app.solver import arkaplan
@@ -227,11 +228,13 @@ def denemeler(
 
 
 def _izgara(db: Session, t: Timetable) -> TimetableGrid:
+    simdiki = surumler.gecerli_surum(db, t)
     return TimetableGrid(
         timetable=TimetableOut.model_validate(t),
         cells=izgara_hucreleri(db, t.id),
-        can_undo=bool(t.edit_undo),
-        can_redo=bool(t.edit_redo),
+        can_undo=surumler.onceki_surum(db, t) is not None,
+        can_redo=surumler.sonraki_surum(db, t) is not None,
+        version=simdiki.number if simdiki else None,
     )
 
 
@@ -324,8 +327,9 @@ def hedefler(
 def geri_al(
     timetable_id: int, db: Session = Depends(get_db), donem: Term = Depends(aktif_donem)
 ) -> TimetableGrid:
+    """Bir önceki sürüme döner. Sonraki sürümler silinmez, ileri alınabilir."""
     t = _programi_getir(db, timetable_id, donem)
-    Duzenleyici(db, t, donem).geri_al()
+    surumler.geri_al(db, t)
     return _izgara(db, t)
 
 
@@ -334,7 +338,33 @@ def ileri_al(
     timetable_id: int, db: Session = Depends(get_db), donem: Term = Depends(aktif_donem)
 ) -> TimetableGrid:
     t = _programi_getir(db, timetable_id, donem)
-    Duzenleyici(db, t, donem).ileri_al()
+    surumler.ileri_al(db, t)
+    return _izgara(db, t)
+
+
+@router.get("/{timetable_id}/versions", response_model=list[VersionOut])
+def surumler_listesi(
+    timetable_id: int, db: Session = Depends(get_db), donem: Term = Depends(aktif_donem)
+) -> list[TimetableVersion]:
+    """Programın sürüm geçmişi, en yeniden eskiye."""
+    t = _programi_getir(db, timetable_id, donem)
+    return list(db.scalars(
+        select(TimetableVersion)
+        .where(TimetableVersion.timetable_id == t.id)
+        .order_by(TimetableVersion.number.desc())
+    ))
+
+
+@router.post("/{timetable_id}/versions/{number}/restore", response_model=TimetableGrid)
+def surume_don(
+    timetable_id: int,
+    number: int,
+    db: Session = Depends(get_db),
+    donem: Term = Depends(aktif_donem),
+) -> TimetableGrid:
+    """Seçilen sürüme döner. Sonraki sürümler silinmez; geçmişte dururlar."""
+    t = _programi_getir(db, timetable_id, donem)
+    surumler.geri_yukle(db, t, number)
     return _izgara(db, t)
 
 
@@ -350,7 +380,15 @@ def kilidi_degistir(
     a = db.get(Assignment, assignment_id)
     if a is None or a.timetable_id != t.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Yerleşim bulunamadı.")
+    surumler.baslangici_guvence_al(db, t)
     a.is_locked = not a.is_locked
+    db.flush()
+    entry = a.entry
+    surumler.surum_yaz(
+        db, t, VersionKind.ELLE,
+        f"{entry.subject.name} · {entry.section.name} "
+        f"{'kilitlendi' if a.is_locked else 'kilidi açıldı'}",
+    )
     db.commit()
     return _izgara(db, t)
 

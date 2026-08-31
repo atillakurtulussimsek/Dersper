@@ -157,9 +157,22 @@ export interface ProgramUyarisi {
 export interface Izgara {
   timetable: Program;
   cells: Hucre[];
-  /** Geri/ileri alınacak adım var mı. */
+  /** Geri/ileri alınacak sürüm var mı. */
   can_undo: boolean;
   can_redo: boolean;
+  /** Programın durduğu sürüm numarası. */
+  version: number | null;
+}
+
+export type SurumTuru = "ilk" | "uretim" | "elle";
+
+/** Geçmiş listesindeki tek bir sürüm. */
+export interface Surum {
+  number: number;
+  kind: SurumTuru;
+  label: string;
+  placed: number;
+  created_at: string;
 }
 
 /** Sürüklenen ders için tek bir saatin değerlendirmesi. */

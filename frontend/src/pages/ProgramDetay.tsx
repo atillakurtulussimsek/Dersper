@@ -19,6 +19,7 @@ import GecmisCalistirmalar from "../components/GecmisCalistirmalar";
 import ProgramAracCubugu, { type Duzen } from "../components/ProgramAracCubugu";
 import ProgramIzgarasi, { HucreIcerigi, type Bakis } from "../components/ProgramIzgarasi";
 import ProgramUyarilari from "../components/ProgramUyarilari";
+import SurumGecmisi from "../components/SurumGecmisi";
 import TaniRaporu from "../components/TaniRaporu";
 import UretimIzleme from "../components/UretimIzleme";
 import { Buton, Kart, Rozet, Uyari, Yukleniyor } from "../components/ui";
@@ -27,7 +28,7 @@ import { bloklariCikar } from "../lib/hucreler";
 import { dersZemini } from "../lib/renkler";
 import type {
   BekleyenBlok, Deneme, Gun, Hedef, Hucre, Izgara, KapaliSaatler, Program,
-  Suruklenen, Sube,
+  Suruklenen, Sube, Surum,
 } from "../lib/types";
 
 const DURUM = {
@@ -90,6 +91,10 @@ export default function ProgramDetay() {
     queryKey: ["bekleyenler", id],
     queryFn: () => get<BekleyenBlok[]>(`/timetables/${id}/pending`),
   });
+  const surumler = useQuery({
+    queryKey: ["surumler", id],
+    queryFn: () => get<Surum[]>(`/timetables/${id}/versions`),
+  });
   const denemeler = useQuery({
     queryKey: ["denemeler", id],
     queryFn: () => get<Deneme[]>(`/timetables/${id}/runs`),
@@ -117,6 +122,7 @@ export default function ProgramDetay() {
     qc.setQueryData(["izgara", id], veri);
     qc.invalidateQueries({ queryKey: ["uyarilar", id] });
     qc.invalidateQueries({ queryKey: ["bekleyenler", id] });
+    qc.invalidateQueries({ queryKey: ["surumler", id] });
     // Hedef değerlendirmeleri artık eskidi.
     qc.removeQueries({ queryKey: ["hedefler", id] });
   }
@@ -153,7 +159,14 @@ export default function ProgramDetay() {
   const kilitle = useMutation({
     mutationFn: (atama: number) =>
       post<Izgara>(`/timetables/${id}/assignments/${atama}/lock`),
-    onSuccess: (veri) => qc.setQueryData(["izgara", id], veri),
+    onSuccess: duzenlemeSonucu,
+  });
+
+  const surumeDon = useMutation({
+    mutationFn: (number: number) =>
+      post<Izgara>(`/timetables/${id}/versions/${number}/restore`),
+    onSuccess: duzenlemeSonucu,
+    onError: (e: Error) => setHata(e.message),
   });
 
   const yayin = useMutation({
@@ -171,6 +184,8 @@ export default function ProgramDetay() {
     qc.invalidateQueries({ queryKey: ["izgara", id] });
     qc.invalidateQueries({ queryKey: ["denemeler", id] });
     qc.invalidateQueries({ queryKey: ["uyarilar", id] });
+    qc.invalidateQueries({ queryKey: ["surumler", id] });
+    qc.invalidateQueries({ queryKey: ["bekleyenler", id] });
   }
 
   const hucreler = izgaraSorgu.data?.cells ?? [];
@@ -278,7 +293,8 @@ export default function ProgramDetay() {
   }
 
   const duzenlemeSuruyor =
-    tasi.isPending || izgaradanAl.isPending || yerlestir.isPending || geriAl.isPending;
+    tasi.isPending || izgaradanAl.isPending || yerlestir.isPending ||
+    geriAl.isPending || surumeDon.isPending;
 
   const sonDeneme = denemeler.data?.[0];
   const gosterRapor =
@@ -356,6 +372,11 @@ export default function ProgramDetay() {
                 : "Tüm şubeler"}
             </span>
             <span className="sayisal">· {hucreler.length} ders saati yerleşmiş</span>
+            {izgaraSorgu.data?.version != null && (
+              <span className="sayisal font-mono text-murekkep-silik">
+                · v{izgaraSorgu.data.version}
+              </span>
+            )}
             {surenUretim && (
               <span className="sayisal text-murekkep-silik">
                 · {surenUretim.attempts}. deneme sürüyor
@@ -518,6 +539,14 @@ export default function ProgramDetay() {
       )}
 
       {hucreler.length > 0 && id && <ProgramUyarilari timetableId={id} />}
+
+      <SurumGecmisi
+        surumler={surumler.data ?? []}
+        yukleniyor={surumler.isLoading}
+        simdiki={izgaraSorgu.data?.version ?? null}
+        don={(number) => surumeDon.mutate(number)}
+        bekliyor={duzenlemeSuruyor}
+      />
 
       <GecmisCalistirmalar denemeler={denemeler.data ?? []} />
 

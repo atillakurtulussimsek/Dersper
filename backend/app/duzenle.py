@@ -28,15 +28,12 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from app import bloklar
+from app import bloklar, surumler
 from app.models import (
     Assignment, Availability, CurriculumEntry, Day, Period, Section,
     SectionAvailability, Teacher, TeacherAvailability, Term, Timetable,
+    VersionKind,
 )
-
-# Geri alma yığınında tutulacak en fazla adım. Amaç son birkaç hatayı geri
-# almak; sınırsız geçmiş programın kendisinden büyük bir kayıt yığar.
-GERI_ALMA_SINIRI = 25
 
 
 @dataclass(frozen=True)
@@ -166,7 +163,7 @@ def _kapali_saatler(db: Session, donem: Term) -> tuple[dict[int, set[int]], dict
 
 
 class Duzenleyici:
-    """Bir programın elle düzenlenmesi. Kuralları ve geri alma yığınını tutar."""
+    """Bir programın elle düzenlenmesi. Kuralları uygular, geçmişi yazar."""
 
     def __init__(self, db: Session, program: Timetable, donem: Term):
         self.db = db
@@ -255,67 +252,26 @@ class Duzenleyici:
             })
         return sonuc
 
-    # --- Geri alma ---
+    # --- Sürüm geçmişi ---
 
-    def _anlik_goruntu(self, period_ids: list[int]) -> dict:
-        """Verilen saatlerin O ANKİ içeriği. Geri alma bunu geri yazar."""
-        icerik = [
-            {"e": a.curriculum_entry_id, "p": a.period_id, "k": a.is_locked}
-            for pid in period_ids
-            for a in self.doluluk.get(pid, [])
-        ]
-        return {"periods": sorted(set(period_ids)), "icerik": icerik}
+    def _saat_adi(self, saat: Saat) -> str:
+        return f"{saat.gun_adi} {saat.period_index + 1}. saat"
 
-    def _adimi_kaydet(self, adim: dict) -> None:
-        yigin = list(self.program.edit_undo or [])
-        yigin.append(adim)
-        self.program.edit_undo = yigin[-GERI_ALMA_SINIRI:]
-        # Yeni bir düzenleme ileri alma zincirini kopartır.
-        self.program.edit_redo = []
+    def _ders_adi(self, entry: CurriculumEntry) -> str:
+        return f"{entry.subject.name} · {entry.section.name}"
 
-    def _adimi_uygula(self, adim: dict) -> dict:
-        """Bir anlık görüntüyü geri yazar ve ÖNCEKİ hâli döndürür.
+    def _surum_yaz(self, etiket: str) -> None:
+        """Değişiklik uygulandıktan sonra geçmişe yeni bir sürüm ekler."""
+        surumler.surum_yaz(self.db, self.program, VersionKind.ELLE, etiket)
 
-        Simetriktir: dönen değer öbür yığına konur, böylece geri alma ile ileri
-        alma aynı işlemle yürür.
-        """
-        period_ids = list(adim["periods"])
-        onceki = self._anlik_goruntu(period_ids)
-        for pid in period_ids:
-            for a in list(self.doluluk.get(pid, [])):
-                self.db.delete(a)
-        self.db.flush()
-        for satir in adim["icerik"]:
-            self.db.add(Assignment(
-                timetable_id=self.program.id,
-                curriculum_entry_id=satir["e"],
-                period_id=satir["p"],
-                is_locked=satir["k"],
-            ))
-        self.db.flush()
-        return onceki
+    def geri_al(self) -> int:
+        return surumler.geri_al(self.db, self.program)
 
-    def geri_al(self) -> None:
-        yigin = list(self.program.edit_undo or [])
-        if not yigin:
-            raise HTTPException(status.HTTP_409_CONFLICT,
-                                "Geri alınacak bir değişiklik yok.")
-        adim = yigin.pop()
-        onceki = self._adimi_uygula(adim)
-        self.program.edit_undo = yigin
-        self.program.edit_redo = list(self.program.edit_redo or []) + [onceki]
-        self.db.commit()
+    def ileri_al(self) -> int:
+        return surumler.ileri_al(self.db, self.program)
 
-    def ileri_al(self) -> None:
-        yigin = list(self.program.edit_redo or [])
-        if not yigin:
-            raise HTTPException(status.HTTP_409_CONFLICT,
-                                "İleri alınacak bir değişiklik yok.")
-        adim = yigin.pop()
-        onceki = self._adimi_uygula(adim)
-        self.program.edit_redo = yigin
-        self.program.edit_undo = list(self.program.edit_undo or []) + [onceki]
-        self.db.commit()
+    def geri_yukle(self, number: int) -> int:
+        return surumler.geri_yukle(self.db, self.program, number)
 
     # --- İşlemler ---
 
@@ -393,8 +349,7 @@ class Duzenleyici:
                         f"karşı tarafa konamıyor: {neden}",
                     )
 
-        etkilenen = [s.id for s in kaynak_saatler] + [s.id for s in dizi]
-        self._adimi_kaydet(self._anlik_goruntu(etkilenen))
+        surumler.baslangici_guvence_al(self.db, self.program)
 
         # Sıra önemli: önce hepsi geçici olarak boşaltılmış sayılır, sonra yazılır.
         yeni_yer = {a.id: dizi[i].id for i, a in enumerate(blok)}
@@ -404,6 +359,14 @@ class Duzenleyici:
                 yeni_yer[a.id] = kaynak_saatler[i].id
         for a in blok + yer_degistiren:
             a.period_id = yeni_yer[a.id]
+
+        if yer_degistiren:
+            etiket = (f"{self._ders_adi(entry_on)} ↔ "
+                      f"{self._ders_adi(yer_degistiren[0].entry)}")
+        else:
+            etiket = (f"{self._ders_adi(entry_on)}: "
+                      f"{self._saat_adi(kaynak_saatler[0])} → {self._saat_adi(dizi[0])}")
+        self._surum_yaz(etiket)
         self.db.commit()
 
     def izgaradan_al(self, assignment_id: int) -> None:
@@ -414,10 +377,12 @@ class Duzenleyici:
             raise HTTPException(status.HTTP_409_CONFLICT,
                                 "Kilitli ders ızgaradan alınamaz. Önce kilidi açın.")
 
-        etkilenen = [a.period_id for a in blok]
-        self._adimi_kaydet(self._anlik_goruntu(etkilenen))
+        surumler.baslangici_guvence_al(self.db, self.program)
+        etiket = f"{self._ders_adi(atama.entry)} ızgaradan alındı"
         for a in blok:
             self.db.delete(a)
+        self.db.flush()
+        self._surum_yaz(etiket)
         self.db.commit()
 
     def yerlestir(self, entry_id: int, hedef_period_id: int, uzunluk: int) -> None:
@@ -443,14 +408,17 @@ class Duzenleyici:
             if neden:
                 raise HTTPException(status.HTTP_409_CONFLICT, neden)
 
-        etkilenen = [s.id for s in dizi]
-        self._adimi_kaydet(self._anlik_goruntu(etkilenen))
+        surumler.baslangici_guvence_al(self.db, self.program)
         for saat in dizi:
             self.db.add(Assignment(
                 timetable_id=self.program.id,
                 curriculum_entry_id=entry_id,
                 period_id=saat.id,
             ))
+        self.db.flush()
+        self._surum_yaz(
+            f"{self._ders_adi(entry)} yerleştirildi — {self._saat_adi(dizi[0])}"
+        )
         self.db.commit()
 
     def _mufredat_satiri(self, entry_id: int) -> CurriculumEntry:
