@@ -94,6 +94,9 @@ class Term(Base, SoftDelete):
     name: Mapped[str] = mapped_column(String(150))
     starts_on: Mapped[date | None] = mapped_column(Date)
     ends_on: Mapped[date | None] = mapped_column(Date)
+    # Açıkken bir öğretmen bir günde tek binada ders verir: binaların dersleri
+    # ayrı günlere toplanır, gün içinde bina değiştirmek gerekmez.
+    block_building_switch: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 
@@ -228,6 +231,23 @@ class Subject(Base, SoftDelete):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
+class Building(Base, SoftDelete):
+    """Bina. Bazı kurumlar birden fazla binada ders yapar.
+
+    Şube kendi dersliğiyle birlikte bir binada durur; öğretmen ise binalar
+    arasında gezer. Uzak binalarda gün içinde geçiş yapmak zor olduğu için
+    dönem ayarıyla bu geçiş engellenebilir (bkz. `Term.block_building_switch`).
+    """
+    __tablename__ = "buildings"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    term_id: Mapped[int] = mapped_column(ForeignKey("terms.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(String(120))
+    short_code: Mapped[str | None] = mapped_column(String(20))
+    notes: Mapped[str | None] = mapped_column(Text)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
 class Section(Base, SoftDelete):
     """Şube — örn. 5-A."""
     __tablename__ = "sections"
@@ -237,7 +257,14 @@ class Section(Base, SoftDelete):
     name: Mapped[str] = mapped_column(String(50))
     grade_level: Mapped[int | None] = mapped_column(Integer)
     student_count: Mapped[int | None] = mapped_column(Integer)
+    # Şubenin dersliğinin bulunduğu bina. NULL = tek binalı kurum ya da
+    # henüz atanmamış; bina kuralları bu şubeyi kısıtlamaz.
+    building_id: Mapped[int | None] = mapped_column(
+        ForeignKey("buildings.id", ondelete="SET NULL")
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    building: Mapped[Building | None] = relationship()
 
     curriculum: Mapped[list[CurriculumEntry]] = relationship(
         back_populates="section", cascade="all, delete-orphan"
@@ -296,6 +323,7 @@ class Timetable(Base, SoftDelete):
     assignments: Mapped[list[Assignment]] = relationship(
         back_populates="timetable", cascade="all, delete-orphan"
     )
+    term: Mapped[Term] = relationship()
     versions: Mapped[list["TimetableVersion"]] = relationship(
         back_populates="timetable", cascade="all, delete-orphan",
         foreign_keys="TimetableVersion.timetable_id",

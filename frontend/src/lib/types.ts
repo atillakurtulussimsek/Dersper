@@ -21,9 +21,19 @@ export interface Donem {
   name: string;
   starts_on: string | null;
   ends_on: string | null;
+  /** Açıkken bir öğretmen bir günde tek binada ders verir. */
+  block_building_switch: boolean;
   created_at: string;
   is_active: boolean;
   counts: Record<string, number>;
+}
+
+export interface Bina {
+  id: number;
+  name: string;
+  short_code: string | null;
+  notes: string | null;
+  is_active: boolean;
 }
 
 export interface AktarimSonucu {
@@ -91,6 +101,8 @@ export interface Sube {
   name: string;
   grade_level: number | null;
   student_count: number | null;
+  /** Dersliğinin bulunduğu bina; null = tek binalı kurum. */
+  building_id: number | null;
   is_active: boolean;
 }
 
@@ -142,7 +154,7 @@ export interface Hucre {
 
 export interface ProgramUyarisi {
   key: string;
-  tur: "gunluk_asim" | "bitisik" | "gun_siniri";
+  tur: "gunluk_asim" | "bitisik" | "gun_siniri" | "bina_gecisi";
   baslik: string;
   detay: string;
   sube: string;

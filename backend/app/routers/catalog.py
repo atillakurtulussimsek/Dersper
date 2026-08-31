@@ -16,14 +16,14 @@ from sqlalchemy.orm import Session, selectinload
 from app.db import get_db
 from app.deps import aktif_donem, current_user
 from app.models import (
-    Availability, CurriculumEntry, Period, Section, SectionAvailability, Subject,
-    Teacher, TeacherAvailability, Term,
+    Availability, Building, CurriculumEntry, Period, Section, SectionAvailability,
+    Subject, Teacher, TeacherAvailability, Term,
 )
 from app.schemas import (
     AvailabilityCell, AvailabilityCopyIn, AvailabilityCopyOut, AvailabilityUpdate,
-    ClosedAvailabilityOut, CurriculumCopyIn, CurriculumCopyOut, CurriculumIn,
-    CurriculumOut, ImportIn, ImportOut, SectionIn, SectionOut, SubjectIn, SubjectOut,
-    TeacherIn, TeacherOut,
+    BuildingIn, BuildingOut, ClosedAvailabilityOut, CurriculumCopyIn,
+    CurriculumCopyOut, CurriculumIn, CurriculumOut, ImportIn, ImportOut, SectionIn,
+    SectionOut, SubjectIn, SubjectOut, TeacherIn, TeacherOut,
 )
 
 router = APIRouter(tags=["tanımlar"], dependencies=[Depends(current_user)])
@@ -266,6 +266,93 @@ def musaitlik_kaydet(
     return musaitlik(teacher_id, db, donem)
 
 
+# --- Binalar ---
+
+@router.get("/buildings", response_model=list[BuildingOut])
+def binalar(
+    db: Session = Depends(get_db), donem: Term = Depends(aktif_donem)
+) -> list[Building]:
+    return list(db.scalars(_donemin(Building, donem).order_by(Building.name)))
+
+
+@router.post("/buildings", response_model=BuildingOut,
+             status_code=status.HTTP_201_CREATED)
+def bina_ekle(
+    payload: BuildingIn,
+    db: Session = Depends(get_db),
+    donem: Term = Depends(aktif_donem),
+) -> Building:
+    b = Building(term_id=donem.id, **payload.model_dump())
+    db.add(b)
+    db.commit()
+    db.refresh(b)
+    return b
+
+
+@router.put("/buildings/{building_id}", response_model=BuildingOut)
+def bina_guncelle(
+    building_id: int,
+    payload: BuildingIn,
+    db: Session = Depends(get_db),
+    donem: Term = Depends(aktif_donem),
+) -> Building:
+    b = _getir(db, Building, building_id, "Bina", donem)
+    for alan, deger in payload.model_dump().items():
+        setattr(b, alan, deger)
+    db.commit()
+    db.refresh(b)
+    return b
+
+
+@router.delete("/buildings/{building_id}", status_code=status.HTTP_204_NO_CONTENT)
+def bina_sil(
+    building_id: int,
+    db: Session = Depends(get_db),
+    donem: Term = Depends(aktif_donem),
+):
+    """Yumuşak silme. Şubeleri binasız kalır; kural onları kısıtlamaz."""
+    b = _getir(db, Building, building_id, "Bina", donem)
+    for sube in db.scalars(select(Section).where(Section.building_id == b.id)):
+        sube.building_id = None
+    b.deleted_at = _simdi()
+    db.commit()
+
+
+@router.get("/buildings/import/{term_id}", response_model=list[BuildingOut])
+def aktarilabilir_binalar(
+    term_id: int, db: Session = Depends(get_db), donem: Term = Depends(aktif_donem)
+) -> list[Building]:
+    kaynak = _kaynak_donem(db, term_id, donem)
+    return list(db.scalars(_donemin(Building, kaynak).order_by(Building.name)))
+
+
+@router.post("/buildings/import", response_model=ImportOut,
+             status_code=status.HTTP_201_CREATED)
+def bina_aktar(
+    payload: ImportIn,
+    db: Session = Depends(get_db),
+    donem: Term = Depends(aktif_donem),
+) -> ImportOut:
+    kaynak = _kaynak_donem(db, payload.term_id, donem)
+    mevcut = {b.name.casefold() for b in db.scalars(_donemin(Building, donem))}
+    secilenler = db.scalars(
+        _donemin(Building, kaynak).where(Building.id.in_(payload.ids))
+    )
+    sayi, atlanan = 0, []
+    for kaynak_b in secilenler:
+        if kaynak_b.name.casefold() in mevcut:
+            atlanan.append(f"{kaynak_b.name}: bu dönemde zaten var.")
+            continue
+        db.add(Building(
+            term_id=donem.id, name=kaynak_b.name, short_code=kaynak_b.short_code,
+            notes=kaynak_b.notes, is_active=kaynak_b.is_active,
+        ))
+        mevcut.add(kaynak_b.name.casefold())
+        sayi += 1
+    db.commit()
+    return ImportOut(imported=sayi, skipped=atlanan)
+
+
 # --- Dersler ---
 
 @router.get("/subjects", response_model=list[SubjectOut])
@@ -363,6 +450,13 @@ def subeler(
     )
 
 
+def _binayi_dogrula(db: Session, building_id: int | None, donem: Term) -> None:
+    """Bina aktif döneme ait olmalı; başka kurumun binası bağlanamaz."""
+    if building_id is None:
+        return
+    _getir(db, Building, building_id, "Bina", donem)
+
+
 @router.post("/sections", response_model=SectionOut, status_code=status.HTTP_201_CREATED)
 def sube_ekle(
     payload: SectionIn,
@@ -373,6 +467,7 @@ def sube_ekle(
         raise HTTPException(
             status.HTTP_409_CONFLICT, "Bu dönemde bu adda bir şube zaten var."
         )
+    _binayi_dogrula(db, payload.building_id, donem)
     s = Section(term_id=donem.id, **payload.model_dump())
     db.add(s)
     db.commit()
@@ -395,6 +490,7 @@ def sube_guncelle(
         raise HTTPException(
             status.HTTP_409_CONFLICT, "Bu dönemde bu adda bir şube zaten var."
         )
+    _binayi_dogrula(db, payload.building_id, donem)
     for alan, deger in payload.model_dump().items():
         setattr(s, alan, deger)
     db.commit()
@@ -497,13 +593,23 @@ def sube_aktar(
 ) -> ImportOut:
     kaynak = _kaynak_donem(db, payload.term_id, donem)
     mevcut = {s.name.casefold() for s in db.scalars(_donemin(Section, donem))}
+    # Bina kimlikleri döneme özgü; eşleme ADA göre yapılır. Hedefte aynı adda
+    # bina yoksa şube binasız gelir — yanlış binaya bağlamaktansa boş kalsın.
+    hedef_binalar = {
+        b.name.casefold(): b.id for b in db.scalars(_donemin(Building, donem))
+    }
+    kaynak_binalar = {
+        b.id: b.name for b in db.scalars(_donemin(Building, kaynak))
+    }
     sayi, atlanan = 0, []
     for k in db.scalars(_donemin(Section, kaynak).where(Section.id.in_(payload.ids))):
         if k.name.casefold() in mevcut:
             atlanan.append(f"{k.name}: bu dönemde zaten var.")
             continue
+        bina_adi = kaynak_binalar.get(k.building_id)
         db.add(Section(term_id=donem.id, name=k.name, grade_level=k.grade_level,
-                       student_count=k.student_count, is_active=k.is_active))
+                       student_count=k.student_count, is_active=k.is_active,
+                       building_id=hedef_binalar.get((bina_adi or "").casefold())))
         mevcut.add(k.name.casefold())
         sayi += 1
     db.commit()

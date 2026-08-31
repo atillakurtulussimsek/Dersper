@@ -20,6 +20,9 @@ Sert kısıtlar (v1):
      biriminde verilir (9 = 4,5 gün); günü sabah/öğleden sonra diye bölen şey
      ızgaradaki öğle arasıdır. Hangi günlerin kullanılacağına çözücü karar
      verir — sabit bir günü kapatmak programı gereksiz sıkıştırırdı.
+ 11. (İsteğe bağlı) Bir öğretmen bir günde tek binada ders verir. Binalar uzak
+     olabildiği için gün içinde geçiş zordur; kural açıkken bir binanın
+     dersleri bir güne toplanır. Binasız şubeler kuralın dışındadır.
 
 Günlük sınır ve gün sınırı gerektiğinde esnetilebilir (`esnek_gunluk`): bu
 kipte aşım yasak değil, cezalıdır ve çözücü toplam cezayı en aza indirir; gün
@@ -40,6 +43,9 @@ from ortools.sat.python import cp_model
 CEZA_YERLESMEYEN = 1000
 # Esnek kipte günlük sınırın her bir saatlik aşımının bedeli.
 CEZA_GUNLUK_ASIM = 10
+# Esnek kipte bir öğretmenin bir günde ikinci binaya geçmesinin bedeli.
+# Gün sınırı kadar ağır: ikisi de fiziksel/sözleşmesel bir engeli zorlar.
+CEZA_BINA_GECISI = 40
 # Esnek kipte öğretmenin gün sınırını her yarım günlük aşmasının bedeli.
 # Günlük tekrar sınırından ağır: o pedagojik bir tercih, bu ise öğretmenle
 # yapılmış bir anlaşma. Çözücü zorunlu kalmadıkça bu sınırı bozmamalı.
@@ -73,8 +79,10 @@ class Lesson:
     # Blok uzunlukları, örn. (2, 2, 1). Toplamı weekly_hours eder.
     blocks: tuple[int, ...]
     max_per_day: int
+    # Şubenin dersliğinin bulunduğu bina. None = binasız (kural uygulanmaz).
+    building_id: int | None = None
     # Öğretmenin uygun OLMADIĞI period_id kümesi
-    blocked_period_ids: frozenset[int]
+    blocked_period_ids: frozenset[int] = frozenset()
     # Şubenin uygun OLMADIĞI period_id kümesi
     section_blocked_period_ids: frozenset[int] = frozenset()
 
@@ -96,8 +104,10 @@ class SolveInput:
     time_limit_seconds: float = VARSAYILAN_SURE_SN
     # Her denemede farklı bir arama yolu izlemek için.
     seed: int = 0
-    # Günlük ders tekrar sınırı ve öğretmen gün sınırı aşılabilsin mi?
-    # Aşım cezalandırılır, yasak değildir.
+    # Açıkken bir öğretmen bir günde tek binada ders verir.
+    bina_gecisi_engelle: bool = False
+    # Günlük ders tekrar sınırı, öğretmen gün sınırı ve bina kuralı
+    # aşılabilsin mi? Aşım cezalandırılır, yasak değildir.
     esnek_gunluk: bool = False
 
 
@@ -261,6 +271,9 @@ def _calistir(
     # bozan bir programı başarılı diye döndürürdü.
     gun_asimlari = _gun_siniri(model, data, dolu, gunler, slots, esnek=esnek_gunluk)
 
+    # (11) Bina kuralı: bir öğretmen bir günde tek binada ders verir.
+    bina_asimlari = _bina_kurali(model, data, dolu, gunler, esnek=esnek_gunluk)
+
     # (8) Kilitli yerleşimler
     for li, lesson in enumerate(data.lessons):
         for period_id in data.locked.get(lesson.entry_id, []):
@@ -270,12 +283,13 @@ def _calistir(
 
     if gevsek:
         model.Minimize(sum(CEZA_YERLESMEYEN * v for v in yerlesmeyen.values()))
-    elif asimlar or gun_asimlari:
+    elif asimlar or gun_asimlari or bina_asimlari:
         # Tek amaç işlevi: çözücü hangi kuralı bozacağını bedele göre seçer,
-        # ikisini birden gerekmedikçe bozmaz.
+        # gerekmedikçe hiçbirini bozmaz.
         model.Minimize(
             sum(CEZA_GUNLUK_ASIM * v for v in asimlar.values())
             + sum(CEZA_GUN_SINIRI * v for v in gun_asimlari.values())
+            + sum(CEZA_BINA_GECISI * v for v in bina_asimlari.values())
         )
 
     solver = cp_model.CpSolver()
@@ -321,6 +335,70 @@ def _calistir(
         status_name=solver.StatusName(status),
         relaxations=sorted(esnetmeler),
     )
+
+
+def _bina_kurali(
+    model, data: SolveInput, dolu: dict, gunler: dict[int, list[int]], *, esnek: bool,
+) -> dict[tuple[int, int], cp_model.IntVar]:
+    """Bir öğretmen bir günde tek binada ders verir.
+
+    Binalar birbirinden uzak olabildiği için gün içinde geçiş yapmak zordur;
+    kural açıkken bir binanın dersleri bir güne, öbürününki başka güne
+    toplanır. Hangi binanın hangi güne düşeceğine çözücü karar verir.
+
+    Binası olmayan şubelerin dersleri kuralın dışındadır: tek binalı kurumda
+    ya da henüz bina atanmamış şubelerde yapay bir çakışma üretmemek için.
+
+    Esnek kipte ikinci bina yasak değil cezalıdır; (öğretmen, gün) başına
+    fazladan bina sayısı döner.
+    """
+    if not data.bina_gecisi_engelle:
+        return {}
+
+    # (öğretmen, bina) -> o binadaki ders indeksleri
+    ogretmen_bina: dict[tuple[int, int], list[int]] = {}
+    for li, lesson in enumerate(data.lessons):
+        if lesson.building_id is None:
+            continue
+        ogretmen_bina.setdefault((lesson.teacher_id, lesson.building_id), []).append(li)
+
+    ogretmenler: dict[int, set[int]] = {}
+    for tid, bid in ogretmen_bina:
+        ogretmenler.setdefault(tid, set()).add(bid)
+
+    asimlar: dict[tuple[int, int], cp_model.IntVar] = {}
+    for tid, binalar in ogretmenler.items():
+        # Tek binada ders veren öğretmen zaten geçiş yapmaz.
+        if len(binalar) < 2:
+            continue
+        for gi, gun_slotlari in gunler.items():
+            gun_binalari = []
+            for bid in sorted(binalar):
+                hucreler = [
+                    dolu[(li, si)]
+                    for li in ogretmen_bina[(tid, bid)]
+                    for si in gun_slotlari
+                    if (li, si) in dolu
+                ]
+                if not hucreler:
+                    continue
+                # "Öğretmen o gün bu binada" — yalnızca aşağı bağlanır;
+                # çözücünün bu değişkenleri küçük tutmakta zaten çıkarı var.
+                var = model.NewBoolVar(f"bina_{tid}_{gi}_{bid}")
+                for h in hucreler:
+                    model.AddImplication(h, var)
+                gun_binalari.append(var)
+
+            if len(gun_binalari) < 2:
+                continue
+            if esnek:
+                asim = model.NewIntVar(0, len(gun_binalari), f"binaasim_{tid}_{gi}")
+                model.Add(asim >= sum(gun_binalari) - 1)
+                asimlar[(tid, gi)] = asim
+            else:
+                model.Add(sum(gun_binalari) <= 1)
+
+    return asimlar
 
 
 def _gun_siniri(

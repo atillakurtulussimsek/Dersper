@@ -471,3 +471,109 @@ def test_teneffusler_bolmede_sayilmaz():
     ]
     dersler = [p for p in saatler if not p.is_break]
     assert [sabah_mi(saatler, p) for p in dersler] == [True, True, False, False]
+
+
+# --- Bina kuralı ---
+
+def ders_binali(entry_id, sube, ogretmen, ad, saat, bina, desen="", gunluk=2):
+    return Lesson(
+        entry_id=entry_id, section_id=sube, section_name=f"{sube}-A",
+        teacher_id=ogretmen, teacher_name=f"Öğretmen {ogretmen}",
+        subject_name=ad, weekly_hours=saat, blocks=tuple(coz(desen, saat)),
+        max_per_day=gunluk, building_id=bina, blocked_period_ids=frozenset(),
+    )
+
+
+def _gun_binalari(slots, placements, dersler) -> dict[int, set[int]]:
+    """gün -> o gün ders verilen binalar (tek öğretmenli kurulumlar için)."""
+    konum = {s.period_id: s for s in slots}
+    bina = {d.entry_id: d.building_id for d in dersler}
+    sonuc: dict[int, set[int]] = {}
+    for eid, pid in placements:
+        sonuc.setdefault(konum[pid].day_index, set()).add(bina[eid])
+    return sonuc
+
+
+def test_bina_kurali_gunleri_ayirir():
+    """İki binada ders veren öğretmenin günleri binaya göre ayrılır."""
+    slots = izgara()
+    # Her ders günde en fazla 2 saat: 4'er saat, binası ayrı iki şube.
+    # Bina kuralıyla günler ayrılınca 2 + 2 = 4 gün gerekir, hafta yeter.
+    dersler = [
+        ders_binali(1, 1, 10, "Matematik", 4, bina=1),
+        ders_binali(2, 2, 10, "Matematik", 4, bina=2),
+    ]
+    sonuc = solve(SolveInput(
+        slots=slots, lessons=dersler, bina_gecisi_engelle=True,
+        time_limit_seconds=20,
+    ))
+    assert sonuc.ok, sonuc.status_name
+    for gun, binalar in _gun_binalari(slots, sonuc.placements, dersler).items():
+        assert len(binalar) == 1, f"{gun}. günde birden fazla bina: {binalar}"
+
+
+def test_bina_kurali_kapaliyken_karisabilir():
+    """Kural kapalıyken çözücü binaları aynı güne koymakta serbesttir."""
+    slots = izgara(gun_sayisi=1, ders_sayisi=8)
+    dersler = [
+        ders_binali(1, 1, 10, "Matematik", 4, bina=1, desen="2+2", gunluk=4),
+        ders_binali(2, 2, 10, "Türkçe", 4, bina=2, desen="2+2", gunluk=4),
+    ]
+    sonuc = solve(SolveInput(
+        slots=slots, lessons=dersler, bina_gecisi_engelle=False,
+        time_limit_seconds=20,
+    ))
+    # Tek gün var; kural kapalı olduğu için ikisi de yerleşebilmeli.
+    assert sonuc.ok, sonuc.status_name
+    assert len(sonuc.placements) == 8
+
+
+def test_binasiz_sube_kurali_tetiklemez():
+    """Binası olmayan şube kuralın dışındadır; yapay çakışma üretmez."""
+    slots = izgara(gun_sayisi=1, ders_sayisi=8)
+    dersler = [
+        ders_binali(1, 1, 10, "Matematik", 4, bina=1, desen="2+2", gunluk=4),
+        ders_binali(2, 2, 10, "Türkçe", 4, bina=None, desen="2+2", gunluk=4),
+    ]
+    sonuc = solve(SolveInput(
+        slots=slots, lessons=dersler, bina_gecisi_engelle=True,
+        time_limit_seconds=20,
+    ))
+    assert sonuc.ok, sonuc.status_name
+    assert len(sonuc.placements) == 8
+
+
+def test_bina_kurali_tek_gune_sigmazsa_esnetilir():
+    """İki bina tek güne sığmıyorsa program yine kurulur, kural aşılarak."""
+    slots = izgara(gun_sayisi=1, ders_sayisi=8)
+    dersler = [
+        ders_binali(1, 1, 10, "Matematik", 4, bina=1, desen="2+2", gunluk=4),
+        ders_binali(2, 2, 10, "Türkçe", 4, bina=2, desen="2+2", gunluk=4),
+    ]
+    kati = solve(SolveInput(
+        slots=slots, lessons=dersler, bina_gecisi_engelle=True,
+        time_limit_seconds=20,
+    ))
+    assert not kati.ok
+
+    esnek = solve(SolveInput(
+        slots=slots, lessons=dersler, bina_gecisi_engelle=True,
+        esnek_gunluk=True, time_limit_seconds=20,
+    ))
+    assert esnek.ok, esnek.status_name
+    assert len(esnek.placements) == 8
+
+
+def test_farkli_ogretmenler_ayni_gun_farkli_binada_olabilir():
+    """Kural öğretmen başınadır; iki öğretmen aynı gün ayrı binalarda olabilir."""
+    slots = izgara(gun_sayisi=1, ders_sayisi=8)
+    dersler = [
+        ders_binali(1, 1, 10, "Matematik", 4, bina=1, desen="2+2", gunluk=4),
+        ders_binali(2, 2, 11, "Türkçe", 4, bina=2, desen="2+2", gunluk=4),
+    ]
+    sonuc = solve(SolveInput(
+        slots=slots, lessons=dersler, bina_gecisi_engelle=True,
+        time_limit_seconds=20,
+    ))
+    assert sonuc.ok, sonuc.status_name
+    assert len(sonuc.placements) == 8

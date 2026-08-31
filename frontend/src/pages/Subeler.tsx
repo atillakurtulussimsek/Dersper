@@ -3,20 +3,27 @@ import { useQuery } from "@tanstack/react-query";
 import { CalendarCheck, Download, Pencil, Plus, Trash2 } from "lucide-react";
 
 import {
-  Alan, BosDurum, Buton, Girdi, Kart, Kutu, SayfaBasligi, Tablo, Uyari,
+  Alan, BosDurum, Buton, Girdi, Kart, Kutu, SayfaBasligi, Secim, Tablo, Uyari,
   Yukleniyor,
 } from "../components/ui";
 import GecmisDonemdenAktar from "../components/GecmisDonemdenAktar";
 import MusaitlikMatrisi from "../components/MusaitlikMatrisi";
 import { get } from "../lib/api";
 import { hataMetni, useKaynak, useListe } from "../lib/hooks";
-import type { Gun, Sube } from "../lib/types";
+import type { Bina, Gun, Sube } from "../lib/types";
 
-const BOS = { name: "", grade_level: "" as number | "", student_count: "" as number | "", is_active: true };
+const BOS = {
+  name: "",
+  grade_level: "" as number | "",
+  student_count: "" as number | "",
+  building_id: "" as number | "",
+  is_active: true,
+};
 
 export default function Subeler() {
   const liste = useListe<Sube>("subeler", "/sections");
   const izgara = useQuery({ queryKey: ["timegrid"], queryFn: () => get<Gun[]>("/timegrid") });
+  const binalar = useListe<Bina>("binalar", "/buildings");
   const kaynak = useKaynak<any, Sube>("subeler", "/sections");
   const [acik, setAcik] = useState(false);
   const [duzenlenen, setDuzenlenen] = useState<Sube | null>(null);
@@ -32,6 +39,7 @@ export default function Subeler() {
             name: s.name,
             grade_level: s.grade_level ?? "",
             student_count: s.student_count ?? "",
+            building_id: s.building_id ?? "",
             is_active: s.is_active,
           }
         : BOS,
@@ -45,6 +53,7 @@ export default function Subeler() {
       name: form.name,
       grade_level: form.grade_level === "" ? null : Number(form.grade_level),
       student_count: form.student_count === "" ? null : Number(form.student_count),
+      building_id: form.building_id === "" ? null : Number(form.building_id),
       is_active: form.is_active,
     };
     if (duzenlenen) await kaynak.guncelle.mutateAsync({ id: duzenlenen.id, veri });
@@ -53,6 +62,7 @@ export default function Subeler() {
   }
 
   const hata = hataMetni(kaynak.ekle, kaynak.guncelle, kaynak.sil);
+  const binaVar = (binalar.data?.length ?? 0) > 0;
 
   return (
     <div className="space-y-5">
@@ -83,10 +93,21 @@ export default function Subeler() {
             eylem={<Buton onClick={() => ac()}>Şube ekle</Buton>}
           />
         ) : (
-          <Tablo basliklar={["Şube", "Sınıf seviyesi", "Öğrenci", "Durum", ""]}>
+          <Tablo
+            basliklar={[
+              "Şube",
+              ...(binaVar ? ["Bina"] : []),
+              "Sınıf seviyesi", "Öğrenci", "Durum", "",
+            ]}
+          >
             {liste.data.map((s) => (
               <tr key={s.id} className="hover:bg-yuzey-alt">
                 <td className="px-3 py-2.5 font-medium">{s.name}</td>
+                {binaVar && (
+                  <td className="px-3 py-2.5 text-murekkep-silik">
+                    {binalar.data?.find((b) => b.id === s.building_id)?.name ?? "—"}
+                  </td>
+                )}
                 <td className="px-3 py-2.5 text-murekkep-silik">{s.grade_level ?? "—"}</td>
                 <td className="px-3 py-2.5 text-murekkep-silik">{s.student_count ?? "—"}</td>
                 <td className="px-3 py-2.5 text-murekkep-silik">
@@ -157,6 +178,34 @@ export default function Subeler() {
               />
             </Alan>
           </div>
+
+          {/* Bina yalnızca birden fazla bina tanımlıysa sorulur; tek binalı
+              kurumu boş bir seçimle meşgul etmenin anlamı yok. */}
+          {(binalar.data?.length ?? 0) > 0 && (
+            <Alan
+              etiket="Bina"
+              ipucu="Şubenin dersliğinin bulunduğu bina. Boş bırakılırsa bina kuralları bu şubeyi kısıtlamaz."
+            >
+              <Secim
+                value={form.building_id}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    building_id: e.target.value === "" ? "" : Number(e.target.value),
+                  })
+                }
+              >
+                <option value="">Bina seçilmedi</option>
+                {binalar.data?.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                    {b.is_active ? "" : " · pasif"}
+                  </option>
+                ))}
+              </Secim>
+            </Alan>
+          )}
+
           <label className="flex items-center gap-2 text-sm">
             <input
               type="checkbox"

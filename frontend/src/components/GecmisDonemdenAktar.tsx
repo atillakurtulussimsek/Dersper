@@ -8,7 +8,12 @@ import { Buton, Kutu, Secim, Uyari, Yukleniyor } from "./ui";
 import { get, post } from "../lib/api";
 import type { AktarimSonucu, Donem } from "../lib/types";
 
-export type AktarimTuru = "teachers" | "subjects" | "sections" | "curriculum";
+export type AktarimTuru =
+  | "teachers"
+  | "subjects"
+  | "sections"
+  | "curriculum"
+  | "buildings";
 
 export default function GecmisDonemdenAktar<T extends { id: number }>({
   tur,

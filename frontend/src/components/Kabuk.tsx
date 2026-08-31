@@ -6,7 +6,8 @@
  */
 import { useQuery } from "@tanstack/react-query";
 import {
-  BookOpen, CalendarClock, CalendarRange, Gauge, GraduationCap, LayoutGrid,
+  BookOpen,
+  Building2, CalendarClock, CalendarRange, Gauge, GraduationCap, LayoutGrid,
   LogOut, Settings, Table2, UserCog, Users,
 } from "lucide-react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
@@ -41,6 +42,7 @@ const MENU: Obek[] = [
   {
     baslik: "Kurum",
     girdiler: [
+      { yol: "/binalar", ad: "Binalar", ikon: Building2 },
       { yol: "/donemler", ad: "Dönemler", ikon: CalendarRange },
       { yol: "/kullanicilar", ad: "Kullanıcılar", ikon: UserCog },
       { yol: "/ayarlar", ad: "Ayarlar", ikon: Settings },

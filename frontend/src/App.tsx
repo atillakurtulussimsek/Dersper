@@ -15,6 +15,7 @@ import Ogretmenler from "./pages/Ogretmenler";
 import Ozet from "./pages/Ozet";
 import ProgramDetay from "./pages/ProgramDetay";
 import Programlar from "./pages/Programlar";
+import Binalar from "./pages/Binalar";
 import Subeler from "./pages/Subeler";
 import Tanitim from "./pages/Tanitim";
 import Yayin from "./pages/Yayin";
@@ -86,6 +87,7 @@ export default function App() {
           <Route path="/ogretmenler" element={<Ogretmenler />} />
           <Route path="/dersler" element={<Dersler />} />
           <Route path="/subeler" element={<Subeler />} />
+          <Route path="/binalar" element={<Binalar />} />
           <Route path="/ders-atamalari" element={<DersAtamalari />} />
           {/* Eski adres, yer imleri bozulmasın diye yönlendirilir. */}
           <Route path="/mufredat" element={<Navigate to="/ders-atamalari" replace />} />

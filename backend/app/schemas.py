@@ -21,6 +21,8 @@ class TermIn(BaseModel):
     name: str = Field(min_length=1, max_length=150)
     starts_on: date | None = None
     ends_on: date | None = None
+    # Açıkken bir öğretmen bir günde tek binada ders verir.
+    block_building_switch: bool = False
 
 
 class TermOut(ORMModel):
@@ -28,6 +30,7 @@ class TermOut(ORMModel):
     name: str
     starts_on: date | None
     ends_on: date | None
+    block_building_switch: bool = False
     created_at: datetime
     is_active: bool = False
     # Dönemde tanımlı kayıt sayıları — listede özet göstermek için.
@@ -269,10 +272,27 @@ class SubjectOut(ORMModel):
     is_active: bool
 
 
+class BuildingIn(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    short_code: str | None = Field(default=None, max_length=20)
+    notes: str | None = None
+    is_active: bool = True
+
+
+class BuildingOut(ORMModel):
+    id: int
+    name: str
+    short_code: str | None
+    notes: str | None
+    is_active: bool
+
+
 class SectionIn(BaseModel):
     name: str = Field(min_length=1, max_length=50)
     grade_level: int | None = Field(default=None, ge=1, le=13)
     student_count: int | None = Field(default=None, ge=0, le=200)
+    # Şubenin dersliğinin bulunduğu bina. NULL = tek binalı kurum.
+    building_id: int | None = None
     is_active: bool = True
 
 
@@ -281,6 +301,7 @@ class SectionOut(ORMModel):
     name: str
     grade_level: int | None
     student_count: int | None
+    building_id: int | None
     is_active: bool
 
 

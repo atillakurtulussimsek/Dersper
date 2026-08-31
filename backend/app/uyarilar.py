@@ -10,6 +10,8 @@ elle sürükle-bırak yapıldığında da doğru kalırlar.
     yalnızca elle taşımayla oluşabilir.
   * `gun_siniri` — öğretmen anlaştığından fazla gün okulda. Yine ancak program
     başka türlü tamamlanamadığında oluşur.
+  * `bina_gecisi` — öğretmen bir günde birden fazla binada. Yalnızca dönem
+    ayarı açıkken hesaplanır; kural esnetilebilir olduğu için oluşabilir.
 
 Kullanıcı bir uyarıyı "görmezden gel" diyerek o program için kalıcı olarak
 gizleyebilir.
@@ -21,7 +23,9 @@ from collections import defaultdict
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from app.models import Assignment, CurriculumEntry, Day, Period, Timetable
+from app.models import (
+    Assignment, CurriculumEntry, Day, Period, Section, Timetable,
+)
 from app.solver.loader import sabah_mi
 
 
@@ -102,12 +106,63 @@ def _gun_siniri_uyarilari(
     return uyarilar
 
 
+def _bina_uyarilari(
+    program: Timetable, atamalar: list, saatler: dict, gizlenen: set[str]
+) -> list[dict]:
+    """Bir günde birden fazla binada ders veren öğretmenler.
+
+    Binası olmayan şubeler sayılmaz — kural onları da kapsamıyor.
+    """
+    # (öğretmen, gün) -> {bina adı}
+    gunluk: dict[tuple[int, int], set[str]] = defaultdict(set)
+    ogretmenler: dict[int, object] = {}
+    gun_adlari: dict[int, str] = {}
+    for a in atamalar:
+        konum = saatler.get(a.period_id)
+        bina = a.entry.section.building
+        if konum is None or bina is None:
+            continue
+        gun, _, gun_adi, _ = konum
+        gunluk[(a.entry.teacher_id, gun)].add(bina.name)
+        ogretmenler[a.entry.teacher_id] = a.entry.teacher
+        gun_adlari[gun] = gun_adi
+
+    uyarilar: list[dict] = []
+    for (tid, gun), binalar in sorted(gunluk.items()):
+        if len(binalar) < 2:
+            continue
+        ogretmen = ogretmenler[tid]
+        anahtar = f"bina:{tid}:{gun}"
+        uyarilar.append({
+            "key": anahtar,
+            "tur": "bina_gecisi",
+            "baslik": (f"{ogretmen.full_name}: {gun_adlari[gun]} günü "
+                       f"{len(binalar)} binada ders var"),
+            "detay": (
+                f"{', '.join(sorted(binalar))} binalarında ders verecek. Program "
+                f"başka türlü tamamlanamadığı için bina kuralı esnetildi. Dersleri "
+                f"binaya göre ayrı günlere toplamak için öğretmenin yükünü ya da "
+                f"müsaitliğini gözden geçirin."
+            ),
+            "sube": "",
+            "ders": "",
+            "ogretmen": ogretmen.full_name,
+            "gun": gun_adlari[gun],
+            "konan": len(binalar),
+            "sinir": 1,
+            "ignored": anahtar in gizlenen,
+        })
+    return uyarilar
+
+
 def uyarilari_hesapla(db: Session, program: Timetable) -> list[dict]:
     saatler = _saat_bilgisi(db)
     atamalar = list(db.scalars(
         select(Assignment)
         .options(
-            selectinload(Assignment.entry).selectinload(CurriculumEntry.section),
+            selectinload(Assignment.entry)
+            .selectinload(CurriculumEntry.section)
+            .selectinload(Section.building),
             selectinload(Assignment.entry).selectinload(CurriculumEntry.subject),
             selectinload(Assignment.entry).selectinload(CurriculumEntry.teacher),
         )
@@ -129,6 +184,9 @@ def uyarilari_hesapla(db: Session, program: Timetable) -> list[dict]:
 
     gizlenen = set(program.ignored_warnings or [])
     uyarilar: list[dict] = _gun_siniri_uyarilari(program, atamalar, saatler, gizlenen)
+    # Bina kuralı kapalıysa geçiş bir sorun değildir; uyarı da üretilmez.
+    if program.term.block_building_switch:
+        uyarilar += _bina_uyarilari(program, atamalar, saatler, gizlenen)
 
     for (entry_id, gun), saatler_listesi in sorted(gunluk.items()):
         e = satirlar[entry_id]
