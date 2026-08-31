@@ -1126,3 +1126,26 @@ def test_mufredat_ogretmene_gore_suzulur(yonetici: TestClient):
     kesisim = yonetici.get(f"/api/curriculum?teacher_id={o}&section_id={a}").json()
     assert len(kesisim) == 1
     assert kesisim[0]["section"]["name"] == "5-S"
+
+
+def test_bosluk_politikasi_kaydedilir_ve_degistirilir(yonetici: TestClient):
+    p = yonetici.post("/api/timetables", json={"name": "Sıkı", "gap_policy": "siki"})
+    assert p.status_code == 201, p.text
+    assert p.json()["gap_policy"] == "siki"
+
+    pid = p.json()["id"]
+    r = yonetici.patch(f"/api/timetables/{pid}", json={"gap_policy": "bosluklu"})
+    assert r.status_code == 200, r.text
+    assert r.json()["gap_policy"] == "bosluklu"
+    assert yonetici.get(f"/api/timetables/{pid}/grid").json()[
+        "timetable"]["gap_policy"] == "bosluklu"
+
+
+def test_bosluk_politikasi_varsayilani_ideal(yonetici: TestClient):
+    p = yonetici.post("/api/timetables", json={"name": "Varsayılan"}).json()
+    assert p["gap_policy"] == "ideal"
+
+
+def test_gecersiz_bosluk_politikasi_reddedilir(yonetici: TestClient):
+    r = yonetici.post("/api/timetables", json={"name": "X", "gap_policy": "hizli"})
+    assert r.status_code == 422

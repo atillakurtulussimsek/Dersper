@@ -7,7 +7,8 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
 from app import bloklar
 from app.models import (
-    Availability, InstitutionType, SolveStatus, TimetableStatus, VersionKind,
+    Availability, GapPolicy, InstitutionType, SolveStatus, TimetableStatus,
+    VersionKind,
 )
 
 
@@ -355,6 +356,13 @@ class TimetableIn(BaseModel):
     name: str = Field(min_length=1, max_length=150)
     # None = dönemin tüm şubeleri.
     section_ids: list[int] | None = None
+    gap_policy: GapPolicy = GapPolicy.IDEAL
+
+
+class TimetableUpdate(BaseModel):
+    """Üretim öncesi değiştirilebilen alanlar."""
+    name: str | None = Field(default=None, min_length=1, max_length=150)
+    gap_policy: GapPolicy | None = None
 
 
 class TimetableOut(ORMModel):
@@ -363,6 +371,7 @@ class TimetableOut(ORMModel):
     status: TimetableStatus
     public_token: str | None
     section_ids: list[int] | None
+    gap_policy: GapPolicy
     created_at: datetime
 
 

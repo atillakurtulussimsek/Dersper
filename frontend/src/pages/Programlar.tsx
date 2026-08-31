@@ -7,7 +7,8 @@ import {
   Uyari, Yukleniyor,
 } from "../components/ui";
 import { hataMetni, useKaynak, useListe } from "../lib/hooks";
-import type { Program, ProgramDurumu, Sube } from "../lib/types";
+import { BOSLUK_SECENEKLERI, boslukEtiketi } from "../lib/bosluk";
+import type { BoslukPolitikasi, Program, ProgramDurumu, Sube } from "../lib/types";
 
 const DURUM: Record<ProgramDurumu, { etiket: string; tur: "notr" | "iyi" | "uyari" }> = {
   taslak: { etiket: "Taslak", tur: "notr" },
@@ -19,13 +20,14 @@ export default function Programlar() {
   const navigate = useNavigate();
   const liste = useListe<Program>("programlar", "/timetables");
   const subeler = useListe<Sube>("subeler", "/sections");
-  const kaynak = useKaynak<{ name: string; section_ids: number[] | null }, Program>(
-    "programlar",
-    "/timetables",
-  );
+  const kaynak = useKaynak<
+    { name: string; section_ids: number[] | null; gap_policy: BoslukPolitikasi },
+    Program
+  >("programlar", "/timetables");
   const [acik, setAcik] = useState(false);
   const [ad, setAd] = useState("");
   const [secili, setSecili] = useState<number[]>([]);
+  const [politika, setPolitika] = useState<BoslukPolitikasi>("ideal");
 
   const adaylar = subeler.data ?? [];
   const hepsiSecili = adaylar.length > 0 && secili.length === adaylar.length;
@@ -33,6 +35,7 @@ export default function Programlar() {
   function ac() {
     // Olağan durum tüm şubelerdir; seçim yalnızca daraltmak içindir.
     setSecili(adaylar.map((s) => s.id));
+    setPolitika("ideal");
     setAcik(true);
   }
 
@@ -47,6 +50,7 @@ export default function Programlar() {
       // Hepsi seçiliyse "tüm şubeler" olarak kaydedilir; sonradan eklenen
       // şubeler de programa girer.
       section_ids: hepsiSecili ? null : secili,
+      gap_policy: politika,
     });
     setAcik(false);
     setAd("");
@@ -87,7 +91,9 @@ export default function Programlar() {
             eylem={<Buton onClick={ac}>Yeni program</Buton>}
           />
         ) : (
-          <Tablo basliklar={["Program", "Şubeler", "Durum", "Oluşturulma", ""]}>
+          <Tablo
+            basliklar={["Program", "Şubeler", "Boşluk", "Durum", "Oluşturulma", ""]}
+          >
             {liste.data.map((p) => (
               <tr
                 key={p.id}
@@ -97,6 +103,9 @@ export default function Programlar() {
                 <td className="px-3 py-2.5 font-medium">{p.name}</td>
                 <td className="max-w-64 truncate px-3 py-2.5 text-murekkep-silik">
                   {kapsamMetni(p)}
+                </td>
+                <td className="px-3 py-2.5 text-murekkep-silik">
+                  {boslukEtiketi(p.gap_policy)}
                 </td>
                 <td className="px-3 py-2.5">
                   <Rozet tur={DURUM[p.status].tur}>{DURUM[p.status].etiket}</Rozet>
@@ -176,6 +185,39 @@ export default function Programlar() {
                 </div>
               </div>
             )}
+          </Alan>
+
+          <Alan
+            etiket="Öğretmen boşlukları"
+            ipucu="Boşluk, öğretmenin bir gündeki ilk ve son dersi arasında kalan boş saattir. Bu bir tercihtir; program başka türlü kurulamıyorsa çözücü vazgeçer."
+          >
+            <div className="space-y-1.5">
+              {BOSLUK_SECENEKLERI.map((se) => (
+                <label
+                  key={se.id}
+                  className={
+                    politika === se.id
+                      ? "flex cursor-pointer gap-2.5 rounded-lg border border-cizgi-guclu bg-yuzey-alt px-3 py-2"
+                      : "flex cursor-pointer gap-2.5 rounded-lg border border-cizgi px-3 py-2 hover:bg-yuzey-alt"
+                  }
+                >
+                  <input
+                    type="radio"
+                    name="bosluk"
+                    checked={politika === se.id}
+                    onChange={() => setPolitika(se.id)}
+                    className="mt-0.5 h-4 w-4 border-cizgi-guclu"
+                  />
+                  <span className="text-sm">
+                    <span className="font-medium text-murekkep">{se.etiket}</span>
+                    <span className="text-murekkep-silik"> · {se.ozet}</span>
+                    <span className="mt-0.5 block text-xs text-murekkep-silik">
+                      {se.aciklama}
+                    </span>
+                  </span>
+                </label>
+              ))}
+            </div>
           </Alan>
 
           <div className="flex justify-end gap-2">

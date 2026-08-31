@@ -18,7 +18,8 @@ from app import surumler
 from app.duzenle import Duzenleyici
 from app.schemas import (
     AssignmentMove, GridCell, PendingOut, PlaceIn, SolveRunOut, TargetOut,
-    TimetableGrid, TimetableIn, TimetableOut, VersionOut, WarningIgnoreIn, WarningOut,
+    TimetableGrid, TimetableIn, TimetableOut, TimetableUpdate, VersionOut,
+    WarningIgnoreIn, WarningOut,
 )
 from app.uyarilar import uyarilari_hesapla
 from app.solver import arkaplan
@@ -112,8 +113,28 @@ def program_olustur(
         # eklenen şubeler de programa girer.
         secilenler = None if len(istenen) == len(gecerli) else istenen
 
-    t = Timetable(term_id=donem.id, name=payload.name, section_ids=secilenler)
+    t = Timetable(term_id=donem.id, name=payload.name, section_ids=secilenler,
+                  gap_policy=payload.gap_policy)
     db.add(t)
+    db.commit()
+    db.refresh(t)
+    return t
+
+
+@router.patch("/{timetable_id}", response_model=TimetableOut)
+def program_guncelle(
+    timetable_id: int,
+    payload: TimetableUpdate,
+    db: Session = Depends(get_db),
+    donem: Term = Depends(aktif_donem),
+) -> Timetable:
+    """Adı ya da boşluk tercihini değiştirir. Tercih bir sonraki üretimde geçerli
+    olur; yerleşmiş programı kendiliğinden değiştirmez."""
+    t = _programi_getir(db, timetable_id, donem)
+    if payload.name is not None:
+        t.name = payload.name
+    if payload.gap_policy is not None:
+        t.gap_policy = payload.gap_policy
     db.commit()
     db.refresh(t)
     return t

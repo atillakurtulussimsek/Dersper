@@ -577,3 +577,80 @@ def test_farkli_ogretmenler_ayni_gun_farkli_binada_olabilir():
     ))
     assert sonuc.ok, sonuc.status_name
     assert len(sonuc.placements) == 8
+
+
+# --- Boşluk politikası ---
+
+def _bosluk_sayisi(slots, placements, ogretmen_dersleri: set[int]) -> int:
+    """Bir öğretmenin gün içi boşlukları: ilk ve son ders arasındaki boş saat."""
+    konum = {s.period_id: s for s in slots}
+    gunluk: dict[int, list[int]] = {}
+    for eid, pid in placements:
+        if eid not in ogretmen_dersleri:
+            continue
+        s = konum[pid]
+        gunluk.setdefault(s.day_index, []).append(s.period_index)
+    toplam = 0
+    for saatler in gunluk.values():
+        toplam += max(saatler) - min(saatler) + 1 - len(saatler)
+    return toplam
+
+
+def _bosluk_kurulumu():
+    """Tek öğretmen, tek şube, bol yer: boşluk tercihi serbestçe çalışsın."""
+    slots = izgara(gun_sayisi=2, ders_sayisi=8)
+    dersler = [
+        ders(1, 1, 10, "Matematik", 4, gunluk=2),
+        ders(2, 1, 10, "Türkçe", 4, gunluk=2),
+    ]
+    return slots, dersler, {1, 2}
+
+
+def test_siki_politika_bosluklari_azaltir():
+    slots, dersler, benim = _bosluk_kurulumu()
+    siki = solve(SolveInput(slots=slots, lessons=dersler,
+                            bosluk_politikasi="siki", time_limit_seconds=20))
+    assert siki.ok, siki.status_name
+    assert _bosluk_sayisi(slots, siki.placements, benim) == 0
+
+
+def test_bosluklu_politika_bosluk_uretir():
+    slots, dersler, benim = _bosluk_kurulumu()
+    bol = solve(SolveInput(slots=slots, lessons=dersler,
+                           bosluk_politikasi="bosluklu", time_limit_seconds=20))
+    assert bol.ok, bol.status_name
+    assert _bosluk_sayisi(slots, bol.placements, benim) > 0
+
+
+def test_siki_bosluklu_farki_olculebilir():
+    """İki politika aynı girdide farklı sonuç vermeli."""
+    slots, dersler, benim = _bosluk_kurulumu()
+    siki = solve(SolveInput(slots=slots, lessons=dersler,
+                            bosluk_politikasi="siki", time_limit_seconds=20))
+    bol = solve(SolveInput(slots=slots, lessons=dersler,
+                           bosluk_politikasi="bosluklu", time_limit_seconds=20))
+    assert (_bosluk_sayisi(slots, bol.placements, benim)
+            > _bosluk_sayisi(slots, siki.placements, benim))
+
+
+def test_ideal_politika_programi_bozmaz():
+    """Varsayılan: boşluğa bakılmaz, her saat yine yerleşir."""
+    slots, dersler, _ = _bosluk_kurulumu()
+    sonuc = solve(SolveInput(slots=slots, lessons=dersler,
+                             bosluk_politikasi="ideal", time_limit_seconds=20))
+    assert sonuc.ok, sonuc.status_name
+    assert len(sonuc.placements) == 8
+
+
+def test_bosluk_tercihi_kurallari_ezmez():
+    """Tercih, kuralların önüne geçmez: her saat yine yerleşir."""
+    slots = izgara(gun_sayisi=5, ders_sayisi=8)
+    dersler = [
+        ders(1, 1, 10, "Matematik", 10, gunluk=2),
+        ders(2, 2, 11, "Türkçe", 10, gunluk=2),
+    ]
+    for politika in ("siki", "bosluklu", "ideal"):
+        sonuc = solve(SolveInput(slots=slots, lessons=dersler,
+                                 bosluk_politikasi=politika, time_limit_seconds=20))
+        assert sonuc.ok, f"{politika}: {sonuc.status_name}"
+        assert len(sonuc.placements) == 20, politika

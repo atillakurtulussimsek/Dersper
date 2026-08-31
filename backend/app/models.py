@@ -44,6 +44,17 @@ class TimetableStatus(str, enum.Enum):
     YAYINDA = "yayinda"
 
 
+class GapPolicy(str, enum.Enum):
+    """Öğretmenin dersleri arasındaki boşluğa nasıl davranılacağı.
+
+    Boşluk, bir öğretmenin bir gün içindeki ilk ve son dersi arasında kalan
+    boş ders saatidir. Üç tercih de meşrudur; okul kendi düzenini seçer.
+    """
+    BOSLUKLU = "bosluklu"   # boşluk istenir — dersler güne yayılır
+    IDEAL = "ideal"         # boşluğa bakılmaz (varsayılan, eski davranış)
+    SIKI = "siki"           # boşluk en aza indirilir — gün sıkışır
+
+
 class SolveStatus(str, enum.Enum):
     BEKLIYOR = "bekliyor"
     CALISIYOR = "calisiyor"
@@ -310,6 +321,10 @@ class Timetable(Base, SoftDelete):
     public_token: Mapped[str | None] = mapped_column(String(64), unique=True)
     # Programa dahil şube kimlikleri. NULL = dönemin tüm şubeleri.
     section_ids: Mapped[list | None] = mapped_column(JSON)
+    # Öğretmen boşluklarına nasıl davranılacağı. Üretimde kullanılır.
+    gap_policy: Mapped[GapPolicy] = mapped_column(
+        Enum(GapPolicy), default=GapPolicy.IDEAL
+    )
     # Kullanıcının "görmezden gel" dediği uyarı anahtarları.
     ignored_warnings: Mapped[list | None] = mapped_column(JSON)
     # Programın şu an hangi sürümde durduğu. Geri/ileri alma bu imleci

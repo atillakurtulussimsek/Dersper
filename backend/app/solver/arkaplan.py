@@ -129,6 +129,7 @@ def _dongu(run_id: int, term_id: int, dur: threading.Event) -> None:
                     slots=slots, lessons=lessons, locked=kilitli,
                     ogretmen_yarim_gun=gun_sinirlari,
                     bina_gecisi_engelle=donem.block_building_switch,
+                    bosluk_politikasi=program.gap_policy.value,
                     time_limit_seconds=sure, seed=deneme, esnek_gunluk=esnek,
                 ))
                 if sonuc.proven_infeasible:

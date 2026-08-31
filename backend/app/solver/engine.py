@@ -24,6 +24,13 @@ Sert kısıtlar (v1):
      olabildiği için gün içinde geçiş zordur; kural açıkken bir binanın
      dersleri bir güne toplanır. Binasız şubeler kuralın dışındadır.
 
+Bunların üstünde bir de TERCİH vardır (kural değil): `bosluk_politikasi`.
+"siki" öğretmenin gün içindeki boşluklarını en aza indirir, "bosluklu" tam
+tersine boşluğu ödüllendirir, "ideal" hiç bakmaz. Ağırlığı kural cezalarının
+çok altındadır — program kurulabilirlik uğruna tercihten vazgeçer, tersi olmaz.
+"ideal" seçiliyken modele hiçbir amaç eklenmez; problem eskisi gibi saf
+sağlanabilirlik problemi kalır ve aynı hızda çözülür.
+
 Günlük sınır ve gün sınırı gerektiğinde esnetilebilir (`esnek_gunluk`): bu
 kipte aşım yasak değil, cezalıdır ve çözücü toplam cezayı en aza indirir; gün
 sınırını bozmak günlük sınırı bozmaktan pahalıdır. Kural 7 esnek kipte de sert
@@ -43,6 +50,10 @@ from ortools.sat.python import cp_model
 CEZA_YERLESMEYEN = 1000
 # Esnek kipte günlük sınırın her bir saatlik aşımının bedeli.
 CEZA_GUNLUK_ASIM = 10
+# Boşluk tercihinin ağırlığı. Kural ihlallerinin çok altında: boşluk bir
+# TERCİHTİR, kural değil. Program kurulabilirlik uğruna boşluk tercihinden
+# vazgeçilir, tersi olmaz.
+AGIRLIK_BOSLUK = 1
 # Esnek kipte bir öğretmenin bir günde ikinci binaya geçmesinin bedeli.
 # Gün sınırı kadar ağır: ikisi de fiziksel/sözleşmesel bir engeli zorlar.
 CEZA_BINA_GECISI = 40
@@ -106,6 +117,9 @@ class SolveInput:
     seed: int = 0
     # Açıkken bir öğretmen bir günde tek binada ders verir.
     bina_gecisi_engelle: bool = False
+    # Öğretmen boşluklarına nasıl davranılacağı: "bosluklu" | "ideal" | "siki".
+    # "ideal" hiçbir amaç eklemez — model saf sağlanabilirlik problemi kalır.
+    bosluk_politikasi: str = "ideal"
     # Günlük ders tekrar sınırı, öğretmen gün sınırı ve bina kuralı
     # aşılabilsin mi? Aşım cezalandırılır, yasak değildir.
     esnek_gunluk: bool = False
@@ -274,6 +288,12 @@ def _calistir(
     # (11) Bina kuralı: bir öğretmen bir günde tek binada ders verir.
     bina_asimlari = _bina_kurali(model, data, dolu, gunler, esnek=esnek_gunluk)
 
+    # (12) Boşluk tercihi. Gevşek model yalnızca "kaç saat yerleşemedi"
+    # sorusunu yanıtlar; oraya tercih eklemek raporu bozar ve yavaşlatır.
+    bosluklar: list[cp_model.IntVar] = []
+    if not gevsek and data.bosluk_politikasi in ("siki", "bosluklu"):
+        bosluklar = _bosluklar(model, data, dolu, gunler)
+
     # (8) Kilitli yerleşimler
     for li, lesson in enumerate(data.lessons):
         for period_id in data.locked.get(lesson.entry_id, []):
@@ -283,13 +303,16 @@ def _calistir(
 
     if gevsek:
         model.Minimize(sum(CEZA_YERLESMEYEN * v for v in yerlesmeyen.values()))
-    elif asimlar or gun_asimlari or bina_asimlari:
+    elif asimlar or gun_asimlari or bina_asimlari or bosluklar:
         # Tek amaç işlevi: çözücü hangi kuralı bozacağını bedele göre seçer,
-        # gerekmedikçe hiçbirini bozmaz.
+        # gerekmedikçe hiçbirini bozmaz. Boşluk terimi en hafif olan; işareti
+        # tercihe göre değişir (sıkı: azalt, boşluklu: artır).
+        bosluk_yonu = -1 if data.bosluk_politikasi == "bosluklu" else 1
         model.Minimize(
             sum(CEZA_GUNLUK_ASIM * v for v in asimlar.values())
             + sum(CEZA_GUN_SINIRI * v for v in gun_asimlari.values())
             + sum(CEZA_BINA_GECISI * v for v in bina_asimlari.values())
+            + bosluk_yonu * AGIRLIK_BOSLUK * sum(bosluklar)
         )
 
     solver = cp_model.CpSolver()
@@ -335,6 +358,82 @@ def _calistir(
         status_name=solver.StatusName(status),
         relaxations=sorted(esnetmeler),
     )
+
+
+def _bosluklar(
+    model, data: SolveInput, dolu: dict, gunler: dict[int, list[int]],
+) -> list[cp_model.IntVar]:
+    """Öğretmenlerin gün içindeki boşluklarını sayan değişkenler.
+
+    Boşluk: bir öğretmenin bir gündeki İLK ve SON dersi arasında kalan boş
+    ders saati. Günün başındaki ve sonundaki boşluklar sayılmaz — öğretmen
+    henüz gelmemiş ya da çoktan gitmiştir.
+
+    Bir saatin boşluk olması üç koşula bağlı: o saat boş, ÖNCESİNDE ders var,
+    SONRASINDA ders var. Öncesi/sonrası birikimli VEYA zinciriyle kurulur.
+
+    Değişkenler yalnızca amacın ittiği yönde bağlanır:
+      * "siki" boşluğu azaltmak ister → alt sınır yeter (gerçek boşlukta 1
+        olmaya zorlanır), çözücü zaten küçültmeye çalışır.
+      * "bosluklu" boşluğu artırmak ister → üst sınır yeter (boşluk olmayan
+        yerde 1 olamaz), çözücü zaten büyütmeye çalışır.
+    Tek yönü bağlamak modeli belirgin biçimde küçültüyor.
+    """
+    artir = data.bosluk_politikasi == "bosluklu"
+    ogretmen_dersleri: dict[int, list[int]] = {}
+    for li, lesson in enumerate(data.lessons):
+        ogretmen_dersleri.setdefault(lesson.teacher_id, []).append(li)
+
+    bosluklar: list[cp_model.IntVar] = []
+    for tid, dersler in ogretmen_dersleri.items():
+        for gi, gun_slotlari in gunler.items():
+            # Öğretmenin o gün her saatte meşgul olup olmadığı. Kural 3
+            # sayesinde aynı saatte en fazla bir dersi olabilir.
+            mesgul: list[cp_model.IntVar] = []
+            for si in gun_slotlari:
+                hucreler = [dolu[(li, si)] for li in dersler if (li, si) in dolu]
+                v = model.NewBoolVar(f"mesgul_{tid}_{gi}_{si}")
+                if hucreler:
+                    model.Add(v == sum(hucreler))
+                else:
+                    model.Add(v == 0)
+                mesgul.append(v)
+
+            n = len(mesgul)
+            if n < 3:           # boşluk için en az üç saat gerekir
+                continue
+
+            # once[i]: i dahil, i'ye kadar herhangi bir saatte ders var mı
+            once: list[cp_model.IntVar] = []
+            for i in range(n):
+                v = model.NewBoolVar(f"once_{tid}_{gi}_{i}")
+                if i == 0:
+                    model.Add(v == mesgul[0])
+                else:
+                    model.AddMaxEquality(v, [once[i - 1], mesgul[i]])
+                once.append(v)
+
+            # sonra[i]: i dahil, i'den sonra herhangi bir saatte ders var mı
+            sonra: list[cp_model.IntVar | None] = [None] * n
+            for i in range(n - 1, -1, -1):
+                v = model.NewBoolVar(f"sonra_{tid}_{gi}_{i}")
+                if i == n - 1:
+                    model.Add(v == mesgul[i])
+                else:
+                    model.AddMaxEquality(v, [sonra[i + 1], mesgul[i]])
+                sonra[i] = v
+
+            for i in range(1, n - 1):
+                b = model.NewBoolVar(f"bosluk_{tid}_{gi}_{i}")
+                if artir:
+                    model.Add(b <= once[i - 1])
+                    model.Add(b <= sonra[i + 1])
+                    model.Add(b + mesgul[i] <= 1)
+                else:
+                    model.Add(b >= once[i - 1] + sonra[i + 1] - mesgul[i] - 1)
+                bosluklar.append(b)
+
+    return bosluklar
 
 
 def _bina_kurali(

@@ -120,6 +120,9 @@ export interface MufredatSatiri {
   section: Sube;
 }
 
+/** Öğretmenin dersleri arasındaki boşluğa nasıl davranılacağı. */
+export type BoslukPolitikasi = "bosluklu" | "ideal" | "siki";
+
 export interface Program {
   id: number;
   name: string;
@@ -127,6 +130,7 @@ export interface Program {
   public_token: string | null;
   /** Programa dahil şubeler; null = dönemin tüm şubeleri. */
   section_ids: number[] | null;
+  gap_policy: BoslukPolitikasi;
   created_at: string;
 }
 

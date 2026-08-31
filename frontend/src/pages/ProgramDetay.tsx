@@ -24,11 +24,12 @@ import TaniRaporu from "../components/TaniRaporu";
 import UretimIzleme from "../components/UretimIzleme";
 import { Buton, Kart, Rozet, Uyari, Yukleniyor } from "../components/ui";
 import { get, jetonuAl, patch, post } from "../lib/api";
+import { BOSLUK_SECENEKLERI } from "../lib/bosluk";
 import { bloklariCikar } from "../lib/hucreler";
 import { dersZemini } from "../lib/renkler";
 import type {
-  BekleyenBlok, Deneme, Gun, Hedef, Hucre, Izgara, KapaliSaatler, Program,
-  Suruklenen, Sube, Surum,
+  BekleyenBlok, BoslukPolitikasi, Deneme, Gun, Hedef, Hucre, Izgara,
+  KapaliSaatler, Program, Suruklenen, Sube, Surum,
 } from "../lib/types";
 
 const DURUM = {
@@ -160,6 +161,17 @@ export default function ProgramDetay() {
     mutationFn: (atama: number) =>
       post<Izgara>(`/timetables/${id}/assignments/${atama}/lock`),
     onSuccess: duzenlemeSonucu,
+  });
+
+  const politikaDegistir = useMutation({
+    mutationFn: (gap_policy: BoslukPolitikasi) =>
+      patch<Program>(`/timetables/${id}`, { gap_policy }),
+    onSuccess: () => {
+      setHata(null);
+      qc.invalidateQueries({ queryKey: ["izgara", id] });
+      qc.invalidateQueries({ queryKey: ["programlar"] });
+    },
+    onError: (e: Error) => setHata(e.message),
   });
 
   const surumeDon = useMutation({
@@ -413,6 +425,19 @@ export default function ProgramDetay() {
             </Buton>
           </>
         )}
+        <select
+          value={program.gap_policy}
+          disabled={Boolean(surenUretim) || politikaDegistir.isPending}
+          onChange={(e) => politikaDegistir.mutate(e.target.value as BoslukPolitikasi)}
+          title="Öğretmen boşlukları — bir sonraki üretimde geçerli olur"
+          className="shrink-0 rounded-lg border border-cizgi-guclu bg-yuzey px-2.5 py-2 text-sm text-murekkep-yumusak"
+        >
+          {BOSLUK_SECENEKLERI.map((se) => (
+            <option key={se.id} value={se.id}>
+              Boşluk: {se.etiket}
+            </option>
+          ))}
+        </select>
         <Buton
           onClick={() => uret.mutate()}
           yukleniyor={uret.isPending}
