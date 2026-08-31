@@ -1101,3 +1101,28 @@ def test_kimliksiz_gonderim_eskisi_gibi_calisir(yonetici: TestClient):
     _, sonra = _gun_ve_saatler(yonetici)
     assert [p["id"] for p in sonra] == kimlikler      # kayıtlar korundu
     assert sonra[0]["name"] == "Ders 1"
+
+
+def test_mufredat_ogretmene_gore_suzulur(yonetici: TestClient):
+    """Atamalara öğretmen tarafından bakmak: hangi şubelerde neyi okutuyor."""
+    d = yonetici.post("/api/subjects", json={"name": "Matematik"}).json()["id"]
+    d2 = yonetici.post("/api/subjects", json={"name": "Geometri"}).json()["id"]
+    o = yonetici.post("/api/teachers", json={"full_name": "Süzgeç Öğretmen"}).json()["id"]
+    o2 = yonetici.post("/api/teachers", json={"full_name": "Öteki Öğretmen"}).json()["id"]
+    a = yonetici.post("/api/sections", json={"name": "5-S"}).json()["id"]
+    b = yonetici.post("/api/sections", json={"name": "6-S"}).json()["id"]
+
+    for sube, ders, ogr in ((a, d, o), (b, d, o), (a, d2, o2)):
+        yonetici.post("/api/curriculum", json={
+            "section_id": sube, "subject_id": ders, "teacher_id": ogr,
+            "weekly_hours": 4,
+        })
+
+    benim = yonetici.get(f"/api/curriculum?teacher_id={o}").json()
+    assert {m["section"]["name"] for m in benim} == {"5-S", "6-S"}
+    assert all(m["teacher_id"] == o for m in benim)
+
+    # Şube ve öğretmen birlikte de süzülebilir.
+    kesisim = yonetici.get(f"/api/curriculum?teacher_id={o}&section_id={a}").json()
+    assert len(kesisim) == 1
+    assert kesisim[0]["section"]["name"] == "5-S"

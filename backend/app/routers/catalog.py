@@ -542,12 +542,20 @@ def _mufredat_sorgusu(donem: Term):
 @router.get("/curriculum", response_model=list[CurriculumOut])
 def mufredat(
     section_id: int | None = None,
+    teacher_id: int | None = None,
     db: Session = Depends(get_db),
     donem: Term = Depends(aktif_donem),
 ) -> list[CurriculumEntry]:
+    """Ders atamaları. Şubeye ya da öğretmene göre süzülebilir.
+
+    Öğretmen süzgeci, atamalara öğretmen tarafından bakmak için: bir
+    öğretmenin hangi şubelerde neyi okuttuğu tek listede görünür.
+    """
     sorgu = _mufredat_sorgusu(donem)
     if section_id is not None:
         sorgu = sorgu.where(CurriculumEntry.section_id == section_id)
+    if teacher_id is not None:
+        sorgu = sorgu.where(CurriculumEntry.teacher_id == teacher_id)
     return list(db.scalars(
         sorgu.join(Subject, Subject.id == CurriculumEntry.subject_id)
         .order_by(CurriculumEntry.section_id, Subject.name, CurriculumEntry.id)

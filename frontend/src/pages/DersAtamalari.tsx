@@ -1,5 +1,10 @@
 /** Ders atamaları: hangi şubede hangi ders, kaç saat, hangi öğretmenle.
  *
+ *  Aynı tabloya iki taraftan bakılabilir: ŞUBE bakışında bir şubenin dersleri,
+ *  ÖĞRETMEN bakışında bir öğretmenin hangi şubelerde neyi okuttuğu listelenir.
+ *  Atama her iki taraftan da yapılabilir — kayıt aynı kayıttır, yalnızca hangi
+ *  alanın önceden dolu geldiği değişir.
+ *
  *  Bir derse birden fazla öğretmen girebilir — aynı ders, farklı öğretmenle
  *  ikinci kez atanabilir (örneğin İngilizce'nin 2 saati bir, 2 saati başka
  *  öğretmende). Engellenen yalnızca birebir aynı şube–ders–öğretmen tekrarıdır.
@@ -20,6 +25,7 @@ import { hataMetni, useKaynak, useListe } from "../lib/hooks";
 import type { Ders, Gun, MufredatSatiri, Ogretmen, Sube } from "../lib/types";
 
 const BOS = {
+  section_id: 0,
   subject_id: 0,
   teacher_id: 0,
   weekly_hours: 4,
@@ -27,25 +33,38 @@ const BOS = {
   max_per_day: 2,
 };
 
+type Bakis = "sube" | "ogretmen";
+
 export default function DersAtamalari() {
   const subeler = useListe<Sube>("subeler", "/sections");
   const dersler = useListe<Ders>("dersler", "/subjects");
   const ogretmenler = useListe<Ogretmen>("ogretmenler", "/teachers");
   const izgara = useQuery({ queryKey: ["timegrid"], queryFn: () => get<Gun[]>("/timegrid") });
 
+  const [bakis, setBakis] = useState<Bakis>("sube");
   const [subeId, setSubeId] = useState<number | null>(null);
-  const secili = subeId ?? subeler.data?.[0]?.id ?? null;
+  const [ogretmenId, setOgretmenId] = useState<number | null>(null);
+  const seciliSube = subeId ?? subeler.data?.[0]?.id ?? null;
+  const seciliOgretmen = ogretmenId ?? ogretmenler.data?.[0]?.id ?? null;
+  // Listenin süzüldüğü kayıt — bakışa göre şube ya da öğretmen.
+  const secili = bakis === "sube" ? seciliSube : seciliOgretmen;
 
   const mufredat = useQuery({
-    queryKey: ["mufredat", secili],
-    queryFn: () => get<MufredatSatiri[]>(`/curriculum?section_id=${secili}`),
+    queryKey: ["mufredat", bakis, secili],
+    queryFn: () =>
+      get<MufredatSatiri[]>(
+        `/curriculum?${bakis === "sube" ? "section_id" : "teacher_id"}=${secili}`,
+      ),
     enabled: secili !== null,
   });
-  // Şube kendi saatlerini kısıtlamış olabilir; doluluk buna göre hesaplanır.
-  const subeMusaitlik = useQuery({
-    queryKey: ["sube-musaitlik", secili],
+  // Seçili kayıt kendi saatlerini kısıtlamış olabilir; doluluk buna göre
+  // hesaplanır. Şube de öğretmen de aynı matrisi kullanıyor.
+  const musaitlik = useQuery({
+    queryKey: ["musaitlik", bakis, secili],
     queryFn: () =>
-      get<{ period_id: number; state: string }[]>(`/sections/${secili}/availability`),
+      get<{ period_id: number; state: string }[]>(
+        `/${bakis === "sube" ? "sections" : "teachers"}/${secili}/availability`,
+      ),
     enabled: secili !== null,
   });
   const kaynak = useKaynak<any, MufredatSatiri>(`mufredat`, "/curriculum");
@@ -64,7 +83,7 @@ export default function DersAtamalari() {
         .reduce((t, g) => t + g.periods.filter((p) => !p.is_break).length, 0),
     [izgara.data],
   );
-  const kapaliSaat = (subeMusaitlik.data ?? []).filter(
+  const kapaliSaat = (musaitlik.data ?? []).filter(
     (h) => h.state === "uygun_degil",
   ).length;
   const kullanilabilir = Math.max(0, haftalikSlot - kapaliSaat);
@@ -77,6 +96,7 @@ export default function DersAtamalari() {
     setForm(
       m
         ? {
+            section_id: m.section_id,
             subject_id: m.subject_id,
             teacher_id: m.teacher_id,
             weekly_hours: m.weekly_hours,
@@ -85,8 +105,13 @@ export default function DersAtamalari() {
           }
         : {
             ...BOS,
+            // Hangi bakıştaysanız o taraf hazır gelir; öbürü seçilir.
+            section_id: seciliSube ?? subeler.data?.[0]?.id ?? 0,
+            teacher_id:
+              bakis === "ogretmen"
+                ? (seciliOgretmen ?? 0)
+                : (ogretmenler.data?.[0]?.id ?? 0),
             subject_id: dersler.data?.[0]?.id ?? 0,
-            teacher_id: ogretmenler.data?.[0]?.id ?? 0,
           },
     );
     setAcik(true);
@@ -94,10 +119,9 @@ export default function DersAtamalari() {
 
   async function kaydet(e: React.FormEvent) {
     e.preventDefault();
-    if (secili === null) return;
-    const veri = { ...form, section_id: secili };
-    if (duzenlenen) await kaynak.guncelle.mutateAsync({ id: duzenlenen.id, veri });
-    else await kaynak.ekle.mutateAsync(veri);
+    if (!form.section_id || !form.teacher_id) return;
+    if (duzenlenen) await kaynak.guncelle.mutateAsync({ id: duzenlenen.id, veri: form });
+    else await kaynak.ekle.mutateAsync(form);
     await mufredat.refetch();
     setAcik(false);
   }
@@ -135,27 +159,70 @@ export default function DersAtamalari() {
         </Kart>
       ) : (
         <>
-          <div className="flex flex-wrap items-center gap-2">
-            {subeler.data!.map((s) => (
-              <button
-                key={s.id}
-                onClick={() => setSubeId(s.id)}
-                className={
-                  s.id === secili
-                    ? "rounded-lg bg-murekkep px-3 py-1.5 text-sm font-medium text-uzeri"
-                    : "rounded-lg border border-cizgi-guclu bg-yuzey px-3 py-1.5 text-sm text-murekkep-yumusak hover:bg-yuzey-alt"
-                }
-              >
-                {s.name}
-              </button>
-            ))}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex shrink-0 rounded-lg border border-cizgi-guclu bg-yuzey p-0.5">
+              {([["sube", "Şube"], ["ogretmen", "Öğretmen"]] as const).map(
+                ([deger, etiket]) => (
+                  <button
+                    key={deger}
+                    onClick={() => setBakis(deger)}
+                    className={
+                      bakis === deger
+                        ? "rounded-md bg-murekkep px-2.5 py-1 text-xs font-medium text-uzeri"
+                        : "rounded-md px-2.5 py-1 text-xs font-medium text-murekkep-yumusak hover:bg-yuzey-alt"
+                    }
+                  >
+                    {etiket}
+                  </button>
+                ),
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {bakis === "sube"
+                ? subeler.data!.map((s) => (
+                    <button
+                      key={s.id}
+                      onClick={() => setSubeId(s.id)}
+                      className={
+                        s.id === secili
+                          ? "rounded-lg bg-murekkep px-3 py-1.5 text-sm font-medium text-uzeri"
+                          : "rounded-lg border border-cizgi-guclu bg-yuzey px-3 py-1.5 text-sm text-murekkep-yumusak hover:bg-yuzey-alt"
+                      }
+                    >
+                      {s.name}
+                    </button>
+                  ))
+                : ogretmenler.data!.map((o) => (
+                    <button
+                      key={o.id}
+                      onClick={() => setOgretmenId(o.id)}
+                      className={
+                        o.id === secili
+                          ? "flex items-center gap-2 rounded-lg bg-murekkep px-3 py-1.5 text-sm font-medium text-uzeri"
+                          : "flex items-center gap-2 rounded-lg border border-cizgi-guclu bg-yuzey px-3 py-1.5 text-sm text-murekkep-yumusak hover:bg-yuzey-alt"
+                      }
+                    >
+                      <span
+                        className="h-2.5 w-2.5 shrink-0 rounded-full"
+                        style={{ background: o.color }}
+                      />
+                      {o.full_name}
+                    </button>
+                  ))}
+            </div>
           </div>
 
           <Kart
-            baslik={subeler.data!.find((s) => s.id === secili)?.name}
+            baslik={
+              bakis === "sube"
+                ? subeler.data!.find((s) => s.id === secili)?.name
+                : ogretmenler.data!.find((o) => o.id === secili)?.full_name
+            }
             aciklama={
               kapaliSaat > 0
-                ? `Haftalık toplam ${toplam} saat · şubeye ${kullanilabilir} saat açık ` +
+                ? `Haftalık toplam ${toplam} saat · ` +
+                  `${bakis === "sube" ? "şubeye" : "öğretmene"} ${kullanilabilir} saat açık ` +
                   `(${kapaliSaat} saat kapatılmış)`
                 : `Haftalık toplam ${toplam} saat · ızgarada ${haftalikSlot} ders saati var`
             }
@@ -166,7 +233,7 @@ export default function DersAtamalari() {
                     {toplam - kullanilabilir} saat fazla
                   </span>
                 )}
-                {mufredat.data && mufredat.data.length > 0 && (
+                {bakis === "sube" && mufredat.data && mufredat.data.length > 0 && (
                   <Buton
                     tur="ikincil"
                     onClick={() => setKopyalanacak(mufredat.data!)}
@@ -182,13 +249,25 @@ export default function DersAtamalari() {
               <Yukleniyor />
             ) : !mufredat.data?.length ? (
               <BosDurum
-                baslik="Bu şubede ders ataması yok"
-                aciklama="Şubeye okutulacak dersleri ve öğretmenlerini ekleyin."
+                baslik={
+                  bakis === "sube"
+                    ? "Bu şubede ders ataması yok"
+                    : "Bu öğretmene ders atanmamış"
+                }
+                aciklama={
+                  bakis === "sube"
+                    ? "Şubeye okutulacak dersleri ve öğretmenlerini ekleyin."
+                    : "Öğretmenin hangi şubede neyi okutacağını ekleyin."
+                }
                 eylem={<Buton onClick={() => ac()}>Ders ata</Buton>}
               />
             ) : (
               <Tablo
-                basliklar={["Ders", "Öğretmen", "Haftalık", "Dağılım", "Günde en fazla", ""]}
+                basliklar={[
+                  "Ders",
+                  bakis === "sube" ? "Öğretmen" : "Şube",
+                  "Haftalık", "Dağılım", "Günde en fazla", "",
+                ]}
               >
                 {mufredat.data.map((m) => (
                   <tr key={m.id} className="hover:bg-yuzey-alt">
@@ -202,13 +281,19 @@ export default function DersAtamalari() {
                       </span>
                     </td>
                     <td className="px-3 py-2.5 text-murekkep-yumusak">
-                      <span className="flex items-center gap-2">
-                        <span
-                          className="h-2.5 w-2.5 shrink-0 rounded-full"
-                          style={{ background: m.teacher.color }}
-                        />
-                        {m.teacher.full_name}
-                      </span>
+                      {bakis === "sube" ? (
+                        <span className="flex items-center gap-2">
+                          <span
+                            className="h-2.5 w-2.5 shrink-0 rounded-full"
+                            style={{ background: m.teacher.color }}
+                          />
+                          {m.teacher.full_name}
+                        </span>
+                      ) : (
+                        <span className="font-medium text-murekkep">
+                          {m.section.name}
+                        </span>
+                      )}
                     </td>
                     <td className="px-3 py-2.5 text-murekkep-yumusak">{m.weekly_hours} saat</td>
                     <td className="px-3 py-2.5 font-mono text-xs text-murekkep-yumusak">
@@ -217,14 +302,16 @@ export default function DersAtamalari() {
                     <td className="px-3 py-2.5 text-murekkep-yumusak">{m.max_per_day}</td>
                     <td className="px-3 py-2.5 text-right">
                       <div className="flex justify-end gap-1">
-                        <Buton
-                          tur="sade"
-                          onClick={() => setKopyalanacak([m])}
-                          aria-label="Kopyala"
-                          title="Bu dersi başka şubelere kopyala"
-                        >
-                          <Copy className="h-4 w-4" />
-                        </Buton>
+                        {bakis === "sube" && (
+                          <Buton
+                            tur="sade"
+                            onClick={() => setKopyalanacak([m])}
+                            aria-label="Kopyala"
+                            title="Bu dersi başka şubelere kopyala"
+                          >
+                            <Copy className="h-4 w-4" />
+                          </Buton>
+                        )}
                         <Buton tur="sade" onClick={() => ac(m)} aria-label="Düzenle">
                           <Pencil className="h-4 w-4" />
                         </Buton>
@@ -273,7 +360,7 @@ export default function DersAtamalari() {
       {kopyalanacak && (
         <MufredatKopyala
           satirlar={kopyalanacak}
-          hedefAdaylari={(subeler.data ?? []).filter((s) => s.id !== secili)}
+          hedefAdaylari={(subeler.data ?? []).filter((s) => s.id !== seciliSube)}
           kapat={() => {
             setKopyalanacak(null);
             mufredat.refetch();
@@ -284,9 +371,25 @@ export default function DersAtamalari() {
       <Kutu
         acik={acik}
         kapat={() => setAcik(false)}
-        baslik={duzenlenen ? "Ders atamasını düzenle" : "Şubeye ders ata"}
+        baslik={duzenlenen ? "Ders atamasını düzenle" : "Ders ata"}
       >
         <form onSubmit={kaydet} className="space-y-4">
+          {/* Şube ve öğretmen ikisi de burada seçilir; hangi bakıştaysanız o
+              taraf hazır gelir. Böylece atama iki taraftan da yapılabiliyor. */}
+          <Alan etiket="Şube">
+            <Secim
+              value={form.section_id}
+              onChange={(e) => setForm({ ...form, section_id: Number(e.target.value) })}
+            >
+              {subeler.data?.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                  {s.is_active ? "" : " · pasif"}
+                </option>
+              ))}
+            </Secim>
+          </Alan>
+
           <Alan etiket="Ders">
             <Secim
               value={form.subject_id}
