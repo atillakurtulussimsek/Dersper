@@ -123,6 +123,10 @@ Sorun giderme:
 >
 > Alan adı ayarında servis olarak `app`, port olarak `8000` girin.
 
+## Değişiklikler
+
+Sürüm sürüm geliştirme günlüğü: [DEGISIKLIKLER.md](DEGISIKLIKLER.md).
+
 ## Lisans
 
 [GNU Affero General Public License v3.0](LICENSE) — özgür yazılım. Değiştirip
