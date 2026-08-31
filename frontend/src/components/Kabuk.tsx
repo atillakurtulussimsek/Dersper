@@ -102,7 +102,15 @@ export default function Kabuk() {
         </nav>
 
         <div className="space-y-2 border-t border-cizgi px-4 py-3">
-          <TemaSecici />
+          <div className="flex items-center justify-between gap-2">
+            <TemaSecici />
+            <span
+              title={`Dersper ${__SURUM__}`}
+              className="sayisal shrink-0 font-mono text-[11px] text-murekkep-silik"
+            >
+              v{__SURUM__}
+            </span>
+          </div>
           <button
             onClick={cikis}
             className="flex w-full items-center gap-2.5 rounded-lg px-1 py-2 text-sm text-murekkep-silik transition-colors hover:text-murekkep"

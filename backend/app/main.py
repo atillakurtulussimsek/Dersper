@@ -32,7 +32,9 @@ app = FastAPI(
     lifespan=yasam_dongusu,
     title="Dersper",
     description="Okullar için açık kaynaklı ders dağıtım programı.",
-    version="0.1.0",
+    # Sürüm numarasının kaynağı frontend/package.json — arayüzdeki rozet
+    # oradan gömülür. Sürüm yükseltilirken bu satır da birlikte güncellenir.
+    version="0.9.0",
     docs_url="/docs",
 )
 
