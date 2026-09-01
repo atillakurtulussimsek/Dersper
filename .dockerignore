@@ -24,6 +24,10 @@ backend/tests/
 frontend/node_modules/
 frontend/dist/
 
+# Tema kaynağı (tescilli, ~200 MB). İmaja yalnızca `npm run tema:kur` ile
+# frontend/public/metronic/ altına kopyalanan tek CSS dosyası girer.
+Metronic/
+
 # Diğer
 **/*.log
 .DS_Store
