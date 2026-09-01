@@ -1,14 +1,30 @@
 <!doctype html>
-<html lang="tr" class="koyu">
+<html lang="tr" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Dersper — Ders Dağıtım Programı</title>
+    <!--
+      Metronic 8 (KeenThemes) — tescilli tema; depoda bulunmaz.
+      `npm run tema:kur` lisanslı kopyadan buraya kopyalar.
+      Vite kendi CSS'ini bundan sonra ekler; böylece bizim sınıflarımız üstte kalır.
+    -->
+    <link rel="stylesheet" href="/metronic/style.bundle.css" />
   </head>
-  <body>
+  <body
+    class="app-default"
+    data-kt-app-layout="dark-sidebar"
+    data-kt-app-header-fixed="true"
+    data-kt-app-sidebar-enabled="true"
+    data-kt-app-sidebar-fixed="true"
+    data-kt-app-sidebar-push-header="true"
+    data-kt-app-sidebar-push-footer="true"
+    data-kt-app-toolbar-enabled="false"
+  >
     <script>
       // Tema React yüklenmeden uygulanır; aksi halde koyu temada bir kare
-      // beyaz parlama olur.
+      // beyaz parlama olur. Metronic paleti [data-theme] ile açılır, bu yüzden
+      // açık temada da öznitelik yazılmak zorundadır.
       (function () {
         try {
           var t = localStorage.getItem("dersper_tema") || "koyu";
@@ -16,10 +32,10 @@
             t === "koyu" ||
             (t === "sistem" &&
               window.matchMedia("(prefers-color-scheme: dark)").matches);
-          document.documentElement.classList.toggle("koyu", koyu);
+          document.documentElement.dataset.theme = koyu ? "dark" : "light";
           document.documentElement.style.colorScheme = koyu ? "dark" : "light";
         } catch (e) {
-          document.documentElement.classList.add("koyu");
+          document.documentElement.dataset.theme = "dark";
           document.documentElement.style.colorScheme = "dark";
         }
       })();

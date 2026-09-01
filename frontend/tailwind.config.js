@@ -6,7 +6,11 @@ const renk = (ad) => `rgb(var(--${ad}) / <alpha-value>)`;
 
 export default {
   content: ["./index.html", "./src/**/*.{ts,tsx}"],
-  darkMode: "class",
+  // Koyu tema Metronic ile ortak öznitelik üzerinden açılır.
+  darkMode: ["selector", '[data-theme="dark"]'],
+  // Metronic kendi temel stillerini (Bootstrap reboot) getirir; Tailwind'in
+  // preflight'ı onunla çakışır ve .btn/.card/.table gibi bileşenleri bozar.
+  corePlugins: { preflight: false },
   theme: {
     extend: {
       colors: {
@@ -19,6 +23,8 @@ export default {
         "murekkep-yumusak": renk("murekkep-yumusak"),
         "murekkep-silik": renk("murekkep-silik"),
         uzeri: renk("uzeri"),
+        vurgu: renk("vurgu"),
+        "vurgu-zemin": renk("vurgu-zemin"),
         basari: renk("basari"),
         "basari-zemin": renk("basari-zemin"),
         uyari: renk("uyari"),
@@ -27,15 +33,20 @@ export default {
         "hata-zemin": renk("hata-zemin"),
       },
       fontFamily: {
-        // Başlıklar ve büyük sayılar: karakterli, değişken genişlikli grotesk.
-        baslik: ['"Bricolage Grotesque Variable"', "system-ui", "sans-serif"],
-        // Arayüz: yoğun ekranlar için tasarlanmış, Türkçe kapsamı tam.
-        sans: ['"IBM Plex Sans Variable"', "system-ui", "sans-serif"],
-        // Veri: saatler, ders sırası, blok desenleri, kısa kodlar.
-        mono: ['"IBM Plex Mono"', "ui-monospace", "monospace"],
+        // Metronic tek bir arayüz yazı tipi kullanır; başlık/gövde ayrımı
+        // ağırlık ve punto ile yapılır.
+        baslik: ["var(--yazi-arayuz)"],
+        sans: ["var(--yazi-arayuz)"],
+        mono: ["var(--yazi-veri)"],
       },
       fontSize: {
         "2xs": ["0.6875rem", { lineHeight: "1rem" }],
+      },
+      borderRadius: {
+        // Metronic'in bileşen yarıçapları.
+        md: "0.475rem",
+        lg: "0.625rem",
+        xl: "0.625rem",
       },
       transitionTimingFunction: {
         yumusak: "cubic-bezier(0.4, 0, 0.2, 1)",

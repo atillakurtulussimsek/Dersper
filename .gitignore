@@ -41,3 +41,7 @@ venv/
 frontend/node_modules/
 frontend/dist/
 frontend/tsconfig.tsbuildinfo
+
+# Satın alınmış tema kaynağı — tescilli, depoya girmemeli (bkz. DEGISIKLIKLER/README).
+Metronic/
+frontend/public/metronic/

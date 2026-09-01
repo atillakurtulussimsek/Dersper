@@ -26,7 +26,9 @@ export function koyuMu(tema: Tema): boolean {
 
 export function temayiUygula(tema: Tema): void {
   const koyu = koyuMu(tema);
-  document.documentElement.classList.toggle("koyu", koyu);
+  // Metronic paleti [data-theme=dark] / [data-theme=light] altında tanımlıdır;
+  // ikisinden biri mutlaka yazılmalı, öznitelik yoksa renkler boş kalır.
+  document.documentElement.dataset.theme = koyu ? "dark" : "light";
   // Tarayıcının kendi bileşenleri (kaydırma çubuğu, tarih seçici) de uysun.
   document.documentElement.style.colorScheme = koyu ? "dark" : "light";
 }
