@@ -42,5 +42,27 @@
     </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      // Tema dosyası yoksa sayfa "bozuk" görünür ama sebebi hiçbir yerde
+      // yazmaz — bir kez böyle yayına çıktı. Metronic'in kendi değişkenini
+      // yoklayıp durumu açıkça söyleriz. 404 yerine SPA'nın index.html'ini
+      // dönen sunucularda `link.onerror` çalışmaz, bu yüzden dosyanın varlığı
+      // değil etkisi ölçülür.
+      addEventListener("load", function () {
+        var d = document.documentElement;
+        if (getComputedStyle(d).getPropertyValue("--kt-app-bg-color").trim()) return;
+        var k = document.createElement("div");
+        k.setAttribute("role", "alert");
+        k.style.cssText =
+          "position:fixed;inset:0 0 auto 0;z-index:99999;padding:14px 18px;" +
+          "background:#f1416c;color:#fff;font:14px/1.5 system-ui,sans-serif";
+        k.innerHTML =
+          "<strong>Arayüz teması yüklenemedi.</strong> " +
+          "Sayfa bu yüzden biçimsiz görünüyor. Kuran kişi arayüz klasöründe " +
+          "<code>npm run tema:kur</code> çalıştırıp yeniden derlemeli " +
+          "(README &gt; Kurulum &gt; Tema).";
+        d.querySelector("body").prepend(k);
+      });
+    </script>
   </body>
 </html>
