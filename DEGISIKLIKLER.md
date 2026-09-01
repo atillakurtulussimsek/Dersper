@@ -5,6 +5,10 @@ Dersper'in geliştirme günlüğü. Her değişiklik tek cümleyle, en yeni sür
 öncesinde ikinci hane özellik, üçüncü hane düzeltme demektir. Uygulamanın
 sürümü arayüzde yan menünün altında yazar.
 
+## 0.12.2 — 2026-09-01
+
+- Ders programı ekranı sadeleşti: sürüm geçmişi, geçmiş çalıştırmalar ve yayın bölümleri katlanır hâle geldi, özet sayımlar araç çubuğuna taşındı, kullanım notları tek satıra indi.
+
 ## 0.12.1 — 2026-09-01
 
 - 0.12.0'daki Metronic teması geri alındı: tema tescilli olduğu için herkese açık depoda dağıtılamıyor, arayüz kendi tasarımına döndü.

@@ -77,17 +77,26 @@ export default function BekleyenDersler({
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: "raf" });
   const izgaradanGeliyor = suruklenen?.tur === "hucre";
+  // Bekleyen yokken ve sürükleme de yokken raf işlevsizdir: kesikli kutu ve
+  // açıklama yer kaplamasın, tek satır yeter. Bırakma hedefi yine de bağlıdır,
+  // sürükleme başlar başlamaz kutu geri açılır.
+  const sakin = bloklar.length === 0 && !izgaradanGeliyor;
 
   return (
     <Kart
       baslik="Bekleyen dersler"
-      aciklama="Izgaraya girmemiş saatler. Buradan ızgaraya sürükleyin; ızgaradan buraya bırakılan ders programdan çıkar."
+      aciklama={
+        sakin
+          ? undefined
+          : "Izgaraya girmemiş saatler. Buradan ızgaraya sürükleyin; ızgaradan buraya bırakılan ders programdan çıkar."
+      }
       sag={<Inbox className="h-4 w-4 text-murekkep-silik" />}
     >
       <div
         ref={setNodeRef}
         className={clsx(
-          "min-h-[76px] rounded-lg border border-dashed p-2 transition-colors",
+          "rounded-lg transition-colors",
+          !sakin && "min-h-[76px] border border-dashed p-2",
           isOver && izgaradanGeliyor
             ? "border-cizgi-guclu bg-uyari-zemin"
             : izgaradanGeliyor
@@ -96,7 +105,12 @@ export default function BekleyenDersler({
         )}
       >
         {bloklar.length === 0 ? (
-          <p className="px-1 py-4 text-center text-sm text-murekkep-silik">
+          <p
+            className={clsx(
+              "text-sm text-murekkep-silik",
+              sakin ? "" : "px-1 py-4 text-center",
+            )}
+          >
             {izgaradanGeliyor
               ? "Dersi buraya bırakın — ızgaradan çıkar, sonra geri koyabilirsiniz."
               : "Bekleyen ders yok; bütün saatler yerleşmiş."}

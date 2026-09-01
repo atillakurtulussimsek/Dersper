@@ -22,7 +22,7 @@ import ProgramUyarilari from "../components/ProgramUyarilari";
 import SurumGecmisi from "../components/SurumGecmisi";
 import TaniRaporu from "../components/TaniRaporu";
 import UretimIzleme from "../components/UretimIzleme";
-import { Buton, Kart, Rozet, Uyari, Yukleniyor } from "../components/ui";
+import { Buton, Ipucu, Kart, Rozet, Uyari, Yukleniyor } from "../components/ui";
 import { get, jetonuAl, patch, post } from "../lib/api";
 import { BOSLUK_SECENEKLERI } from "../lib/bosluk";
 import { bloklariCikar } from "../lib/hucreler";
@@ -385,18 +385,20 @@ export default function ProgramDetay() {
             </span>
             <span className="sayisal">· {hucreler.length} ders saati yerleşmiş</span>
             {izgaraSorgu.data?.version != null && (
-              <span className="sayisal font-mono text-murekkep-silik">
+              <span
+                className="sayisal font-mono text-murekkep-silik"
+                title={
+                  sonDeneme?.seconds != null
+                    ? `Son üretim ${sonDeneme.seconds.toFixed(1)} saniye sürdü`
+                    : undefined
+                }
+              >
                 · v{izgaraSorgu.data.version}
               </span>
             )}
             {surenUretim && (
               <span className="sayisal text-murekkep-silik">
                 · {surenUretim.attempts}. deneme sürüyor
-              </span>
-            )}
-            {sonDeneme?.seconds != null && (
-              <span className="sayisal text-murekkep-silik">
-                · {sonDeneme.seconds.toFixed(1)} sn
               </span>
             )}
           </p>
@@ -477,39 +479,27 @@ export default function ProgramDetay() {
             anahtarlar={duzen === "ayri" ? anahtarlar : []}
             seciliAnahtar={seciliAnahtar}
             anahtarDegistir={setAnahtar}
+            baslik={`Tüm ${bakis === "sube" ? "şubeler" : "öğretmenler"}`}
+            ozet={(duzen === "carsaf"
+              ? [
+                  ["satir", `${carsafOzeti.satir} ${bakis === "sube" ? "şube" : "öğretmen"}`],
+                  ["dolu", `${carsafOzeti.dolu} saat dolu`],
+                  ["bosluk", `${carsafOzeti.bosluk} boşluk`],
+                ]
+              : [
+                  ["dolu", `${ozet.dolu} dolu`],
+                  ["bos", `${ozet.bos} boş`],
+                  ["bosluk", `${ozet.bosluk} boşluk`],
+                  ["yogun", `en yoğun ${ozet.enYogun.gun} (${ozet.enYogun.saat})`],
+                ]
+            ).map(([k, metin]) => (
+              <span key={k} className="sayisal whitespace-nowrap">
+                {metin}
+              </span>
+            ))}
             yazdir={yazdir}
             indir={indir}
           />
-
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-base font-semibold text-murekkep">
-              {duzen === "carsaf"
-                ? `Tüm ${bakis === "sube" ? "şubeler" : "öğretmenler"}`
-                : seciliAnahtar}
-            </h2>
-            <div className="flex flex-wrap gap-1.5 text-xs">
-              {(duzen === "carsaf"
-                ? [
-                    ["satir", `${carsafOzeti.satir} ${bakis === "sube" ? "şube" : "öğretmen"}`],
-                    ["dolu", `${carsafOzeti.dolu} saat dolu`],
-                    ["bosluk", `${carsafOzeti.bosluk} boşluk`],
-                  ]
-                : [
-                    ["dolu", `${ozet.dolu} saat dolu`],
-                    ["bos", `${ozet.bos} saat boş`],
-                    ["bosluk", `${ozet.bosluk} boşluk`],
-                    ["yogun", `en yoğun: ${ozet.enYogun.gun} (${ozet.enYogun.saat})`],
-                  ]
-              ).map(([k, metin]) => (
-                <span
-                  key={k}
-                  className="rounded-md bg-yuzey-alt px-2 py-1 font-medium text-murekkep-yumusak"
-                >
-                  {metin}
-                </span>
-              ))}
-            </div>
-          </div>
 
           {duzen === "carsaf" ? (
             <>
@@ -525,11 +515,11 @@ export default function ProgramDetay() {
                   setDuzen("ayri");
                 }}
               />
-              <p className="mt-3 text-xs text-murekkep-silik">
+              <Ipucu>
                 Ardışık saatler tek hücrede birleşir; <span className="font-mono">×</span>{" "}
                 o kaydın kapalı saatidir. Çarşaf inceleme içindir — düzenlemek için satır
                 adına tıklayıp ayrı sayfa görünümüne geçin.
-              </p>
+              </Ipucu>
             </>
           ) : (
             <>
@@ -545,12 +535,12 @@ export default function ProgramDetay() {
                   kilitle={(atama) => kilitle.mutate(atama)}
                 />
               )}
-              <p className="mt-3 text-xs text-murekkep-silik">
+              <Ipucu>
                 Hücreyi sürükleyerek taşıyın — blok bütün taşınır. Dolu bir hücreye
                 bırakmak iki dersi yer değiştirir. Aşağıdaki rafa bırakmak dersi
                 programdan çıkarır. Çift tıklamak kilitler; kilitli dersler yeniden
                 üretimde yerinde kalır.
-              </p>
+              </Ipucu>
             </>
           )}
         </Kart>
@@ -580,6 +570,9 @@ export default function ProgramDetay() {
           baslik="Yayın"
           aciklama="Yayınlanan program, girişe gerek kalmadan bir bağlantı üzerinden görüntülenebilir."
           sag={<Globe className="h-4 w-4 text-murekkep-silik" />}
+          katlanir
+          acik={Boolean(program.public_token)}
+          ozet={program.public_token ? "yayında" : "yayında değil"}
         >
           {program.public_token ? (
             <div className="flex flex-wrap items-center gap-2">

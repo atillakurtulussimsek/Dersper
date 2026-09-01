@@ -6,6 +6,7 @@
  *  çarşafta zaten hepsi görünür — o durumda çağıran boş liste geçirir. */
 import { Download, FileSpreadsheet, Printer } from "lucide-react";
 import clsx from "clsx";
+import type { ReactNode } from "react";
 
 import { Buton } from "./ui";
 import type { Bakis } from "./ProgramIzgarasi";
@@ -48,6 +49,8 @@ export default function ProgramAracCubugu({
   anahtarlar,
   seciliAnahtar,
   anahtarDegistir,
+  baslik,
+  ozet,
   yazdir,
   indir,
 }: {
@@ -58,6 +61,10 @@ export default function ProgramAracCubugu({
   anahtarlar: string[];
   seciliAnahtar?: string;
   anahtarDegistir: (a: string) => void;
+  /** Kayıt şeritleri yokken (çarşaf) neye bakıldığını söyler. */
+  baslik?: string;
+  /** "23 saat dolu" gibi kısa sayımlar; şeritlerin sağına yaslanır. */
+  ozet?: ReactNode;
   yazdir: () => void;
   indir: (bicim: "pdf" | "xlsx") => void;
 }) {
@@ -107,31 +114,44 @@ export default function ProgramAracCubugu({
         </div>
       </div>
 
-      {anahtarlar.length > 0 && (
-        // Sağ kenardaki soluklaşma, listenin devam ettiğini belli eder.
-        <div
-          className="flex gap-1.5 overflow-x-auto pb-0.5"
-          style={{
-            maskImage:
-              "linear-gradient(to right, #000 calc(100% - 28px), transparent 100%)",
-            WebkitMaskImage:
-              "linear-gradient(to right, #000 calc(100% - 28px), transparent 100%)",
-          }}
-        >
-          {anahtarlar.map((a) => (
-            <button
-              key={a}
-              onClick={() => anahtarDegistir(a)}
-              className={clsx(
-                "shrink-0 rounded-lg px-2.5 py-1 text-xs font-medium transition-colors",
-                a === seciliAnahtar
-                  ? "bg-murekkep text-uzeri"
-                  : "border border-cizgi-guclu bg-yuzey text-murekkep-yumusak hover:bg-yuzey-alt",
-              )}
+      {(anahtarlar.length > 0 || baslik || ozet) && (
+        <div className="flex items-center gap-3">
+          {anahtarlar.length > 0 ? (
+            // Sağ kenardaki soluklaşma, listenin devam ettiğini belli eder.
+            <div
+              className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto pb-0.5"
+              style={{
+                maskImage:
+                  "linear-gradient(to right, #000 calc(100% - 28px), transparent 100%)",
+                WebkitMaskImage:
+                  "linear-gradient(to right, #000 calc(100% - 28px), transparent 100%)",
+              }}
             >
-              {a}
-            </button>
-          ))}
+              {anahtarlar.map((a) => (
+                <button
+                  key={a}
+                  onClick={() => anahtarDegistir(a)}
+                  className={clsx(
+                    "shrink-0 rounded-lg px-2.5 py-1 text-xs font-medium transition-colors",
+                    a === seciliAnahtar
+                      ? "bg-murekkep text-uzeri"
+                      : "border border-cizgi-guclu bg-yuzey text-murekkep-yumusak hover:bg-yuzey-alt",
+                  )}
+                >
+                  {a}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <span className="min-w-0 flex-1 truncate text-sm font-medium text-murekkep">
+              {baslik}
+            </span>
+          )}
+          {ozet && (
+            <div className="hidden shrink-0 gap-3 text-xs text-murekkep-silik sm:flex">
+              {ozet}
+            </div>
+          )}
         </div>
       )}
     </div>

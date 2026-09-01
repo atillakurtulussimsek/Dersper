@@ -49,6 +49,8 @@ export default function SurumGecmisi({
       baslik="Sürüm geçmişi"
       aciklama="Her değişiklik bir sürüm bırakır. İstediğiniz sürüme dönebilirsiniz; sonraki sürümler silinmez."
       sag={<History className="h-4 w-4 text-murekkep-silik" />}
+      katlanir
+      ozet={surumler.length ? `${surumler.length} sürüm` : undefined}
     >
       {yukleniyor ? (
         <Yukleniyor />

@@ -5,7 +5,7 @@
  *  ve öğretmen renkleridir; arayüz kromu onlarla yarışmaz.
  */
 import clsx from "clsx";
-import { Loader2, X } from "lucide-react";
+import { ChevronRight, Loader2, X } from "lucide-react";
 import type {
   ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes,
   TextareaHTMLAttributes,
@@ -109,39 +109,100 @@ export function Kart({
   baslik,
   aciklama,
   sag,
+  katlanir = false,
+  acik = false,
+  ozet,
   className,
   children,
 }: {
   baslik?: string;
   aciklama?: string;
   sag?: ReactNode;
+  /** Başlık tıklanınca açılıp kapanır; kapalıyken kart tek satırdır. */
+  katlanir?: boolean;
+  /** Katlanır kartın açılıştaki hâli. */
+  acik?: boolean;
+  /** Kapalıyken başlığın yanında görünen kısa bilgi ("6 deneme" gibi). */
+  ozet?: ReactNode;
   className?: string;
   children: ReactNode;
 }) {
+  const kabuk = clsx("rounded-xl border border-cizgi bg-yuzey", className);
+
+  /* Saat rayı: başlıklar ızgaradaki ders saatleri gibi işaretlenir. */
+  const ustluk = (
+    <>
+      {baslik && (
+        <h2 className="ray font-baslik text-[0.95rem] font-semibold tracking-tight text-murekkep">
+          {baslik}
+        </h2>
+      )}
+      {aciklama && !katlanir && (
+        <p className="mt-1 pl-[1.125rem] text-sm text-murekkep-silik">{aciklama}</p>
+      )}
+    </>
+  );
+
+  /* Seyrek bakılan bölümler sayfayı uzatmasın diye kapalı durabilir. Yerli
+   * <details> tercih edildi: klavye ve ekran okuyucu desteği hazır gelir,
+   * durum React'te tutulmaz, sayfada arama (Ctrl+F) içeriği bulup açar. */
+  if (katlanir) {
+    return (
+      <details className={clsx(kabuk, "group/kart")} open={acik}>
+        <summary className="flex cursor-pointer list-none items-center gap-3 px-5 py-3.5 [&::-webkit-details-marker]:hidden">
+          <ChevronRight className="h-4 w-4 shrink-0 text-murekkep-silik transition-transform group-open/kart:rotate-90" />
+          <div className="min-w-0 flex-1">{ustluk}</div>
+          {ozet && (
+            <span className="shrink-0 text-xs text-murekkep-silik group-open/kart:hidden">
+              {ozet}
+            </span>
+          )}
+          {sag && <span onClick={(e) => e.stopPropagation()}>{sag}</span>}
+        </summary>
+        <div className="border-t border-cizgi p-5">
+          {aciklama && (
+            <p className="mb-4 -mt-1 text-sm text-murekkep-silik">{aciklama}</p>
+          )}
+          {children}
+        </div>
+      </details>
+    );
+  }
+
   return (
-    <section
-      className={clsx("rounded-xl border border-cizgi bg-yuzey", className)}
-    >
+    <section className={kabuk}>
       {(baslik || sag) && (
         <header className="flex items-start justify-between gap-4 border-b border-cizgi px-5 py-3.5">
-          <div className="min-w-0">
-            {/* Saat rayı: başlıklar ızgaradaki ders saatleri gibi işaretlenir. */}
-            {baslik && (
-              <h2 className="ray font-baslik text-[0.95rem] font-semibold tracking-tight text-murekkep">
-                {baslik}
-              </h2>
-            )}
-            {aciklama && (
-              <p className="mt-1 pl-[1.125rem] text-sm text-murekkep-silik">
-                {aciklama}
-              </p>
-            )}
-          </div>
+          <div className="min-w-0">{ustluk}</div>
           {sag}
         </header>
       )}
       <div className="p-5">{children}</div>
     </section>
+  );
+}
+
+/** Katlanmış kullanım notu.
+ *
+ *  Bu metinler ilk kez kullanana gerekli, sonra sürekli yer kaplar. Kapalı
+ *  hâlde tek satır; <details> olduğu için Ctrl+F ile aranınca kendi açılır. */
+export function Ipucu({
+  etiket = "Nasıl kullanılır?",
+  children,
+}: {
+  etiket?: string;
+  children: ReactNode;
+}) {
+  return (
+    <details className="group/ipucu mt-3">
+      <summary className="flex cursor-pointer list-none items-center gap-1.5 text-xs text-murekkep-silik hover:text-murekkep-yumusak [&::-webkit-details-marker]:hidden">
+        <ChevronRight className="h-3.5 w-3.5 transition-transform group-open/ipucu:rotate-90" />
+        {etiket}
+      </summary>
+      <p className="mt-2 pl-5 text-xs leading-relaxed text-murekkep-silik">
+        {children}
+      </p>
+    </details>
   );
 }
 

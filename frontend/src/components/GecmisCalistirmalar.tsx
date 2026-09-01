@@ -19,6 +19,8 @@ export default function GecmisCalistirmalar({ denemeler }: { denemeler: Deneme[]
     <Kart
       baslik="Geçmiş çalıştırmalar"
       aciklama="Bu program için yapılan tüm üretim denemeleri."
+      katlanir
+      ozet={`${denemeler.length} çalıştırma`}
     >
       <Tablo basliklar={["Başlangıç", "Durum", "Deneme", "Süre", "En iyi yerleşim"]}>
         {denemeler.map((d) => (
