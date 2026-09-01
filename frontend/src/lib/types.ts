@@ -225,6 +225,14 @@ export interface Bulgu {
   mevcut?: number;
 }
 
+/** Çözümsüzlükte çelişen tek bir kısıt ve çözüm önerisi. */
+export interface Celiski {
+  tur: string;
+  metin: string;
+  oneri: string;
+  tek_basina_yeterli: boolean;
+}
+
 export interface Rapor {
   durum: string;
   sure_sn: number;
@@ -238,6 +246,7 @@ export interface Rapor {
     yerlesmeyen_toplam: number;
   };
   bulgular: Bulgu[];
+  celiskiler: Celiski[];
   yerlesmeyenler: {
     sube: string;
     ders: string;

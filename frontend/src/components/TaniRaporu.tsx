@@ -43,6 +43,9 @@ export default function TaniRaporu({ deneme }: { deneme: Deneme }) {
 
   const engeller = rapor.bulgular.filter((b) => b.onem === "engel");
   const uyarilar = rapor.bulgular.filter((b) => b.onem === "uyari");
+  const celiskiler = rapor.celiskiler ?? [];
+  // Tek başına değiştirmesi yeten kısıtlar önce: kullanıcının en kısa çıkışı.
+  const cikislar = celiskiler.filter((c) => c.tek_basina_yeterli);
 
   return (
     <div className="space-y-4">
@@ -68,6 +71,45 @@ export default function TaniRaporu({ deneme }: { deneme: Deneme }) {
               </div>
             ))}
           </div>
+
+          {celiskiler.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-murekkep">
+                Şu kısıtlar birlikte çelişiyor:
+              </p>
+              <ul className="space-y-1.5">
+                {celiskiler.map((c, i) => (
+                  <li
+                    key={i}
+                    className="flex gap-2.5 rounded-lg border border-cizgi bg-yuzey-alt px-3 py-2"
+                  >
+                    <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-murekkep-silik" />
+                    <span className="text-sm">
+                      <span className="text-murekkep">{c.metin}</span>
+                      <span className="mt-0.5 block text-xs text-murekkep-silik">
+                        {c.oneri}
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+
+              {cikislar.length > 0 && (
+                <div className="rounded-lg border border-basari/25 bg-basari-zemin px-4 py-3">
+                  <p className="text-sm font-medium text-basari">
+                    Bunlardan <b>yalnızca birini</b> değiştirmek yeterli:
+                  </p>
+                  <ul className="mt-1 space-y-0.5">
+                    {cikislar.map((c, i) => (
+                      <li key={i} className="text-sm text-basari">
+                        · {c.oneri}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
 
           {engeller.length > 0 && (
             <div className="space-y-2">

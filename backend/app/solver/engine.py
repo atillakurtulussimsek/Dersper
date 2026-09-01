@@ -125,6 +125,58 @@ class SolveInput:
     esnek_gunluk: bool = False
 
 
+@dataclass(frozen=True)
+class Celisen:
+    """Çelişkiye katılan, KULLANICININ DEĞİŞTİREBİLECEĞİ tek bir kısıt.
+
+    `tur` arayüzün gruplaması için, `metin` ne olduğunu, `oneri` ne
+    yapılacağını söyler. `tek_basina_yeterli`, yalnızca bunu değiştirmenin
+    programı kurulabilir kılıp kılmadığıdır.
+    """
+    tur: str
+    metin: str
+    oneri: str
+    tek_basina_yeterli: bool = False
+
+
+class _Kisitlar:
+    """Kısıtları ya doğrudan ekler ya da tanı için varsayım anahtarıyla kuşatır.
+
+    Tanı kipinde her kullanıcı-değiştirilebilir kısıt bir anahtarın arkasına
+    alınır ve varsayım olarak sunulur; model çözümsüzse CP-SAT bu
+    anahtarlardan hangilerinin birlikte çelişki ürettiğini söyler.
+
+    Tanı kapalıyken hiçbir ek değişken kurulmaz — üretim yolu değişmez.
+    """
+
+    def __init__(self, model, tani: bool):
+        self.model = model
+        self.tani = tani
+        self.anahtarlar: list = []
+        self.etiketler: dict[int, Celisen] = {}
+
+    def ekle(self, ifade, etiket: Celisen | None = None) -> None:
+        if not self.tani or etiket is None:
+            self.model.Add(ifade)
+            return
+        anahtar = self.model.NewBoolVar(f"varsayim_{len(self.anahtarlar)}")
+        self.model.Add(ifade).OnlyEnforceIf(anahtar)
+        self.anahtarlar.append(anahtar)
+        self.etiketler[anahtar.Index()] = etiket
+
+    def cozumle(self, solver) -> list[Celisen]:
+        """Çözücünün bildirdiği çelişki çekirdeğini etiketlere çevirir."""
+        cekirdek = solver.SufficientAssumptionsForInfeasibility()
+        gorulen: list[Celisen] = []
+        for i in cekirdek:
+            etiket = self.etiketler.get(i)
+            # Aynı etiket birden çok kısıttan gelebilir (örn. günlere yayılan
+            # kurallar); tekrarları eleriz.
+            if etiket is not None and etiket not in gorulen:
+                gorulen.append(etiket)
+        return gorulen
+
+
 @dataclass
 class SolveOutput:
     ok: bool
@@ -139,6 +191,76 @@ class SolveOutput:
     proven_infeasible: bool = False
     # Günlük sınırın esnetildiği yerler: (entry_id, day_index, konan, sinir)
     relaxations: list[tuple[int, int, int, int]] = field(default_factory=list)
+    # Çözümsüzlükte çelişen kısıtlar (yalnızca tanı kipinde dolar).
+    celisenler: list[Celisen] = field(default_factory=list)
+
+
+def _ders_adi(lesson: Lesson) -> str:
+    return f"{lesson.section_name} · {lesson.subject_name}"
+
+
+def _yuk_etiketi(lesson: Lesson) -> Celisen:
+    return Celisen(
+        tur="yuk",
+        metin=f"{_ders_adi(lesson)} haftada {lesson.weekly_hours} saat okutulmalı",
+        oneri=f"{_ders_adi(lesson)} dersinin haftalık saatini azaltın",
+    )
+
+
+def _musaitlik_etiketi(lesson: Lesson) -> Celisen | None:
+    """Dersi kısıtlayan kapalı saatler. Kapalı saat yoksa etiket de yok."""
+    ogretmen = bool(lesson.blocked_period_ids)
+    sube = bool(lesson.section_blocked_period_ids)
+    if not ogretmen and not sube:
+        return None
+    if ogretmen and sube:
+        metin = (f"{lesson.teacher_name} ve {lesson.section_name} "
+                 f"için kapatılmış saatler")
+        oneri = (f"{lesson.teacher_name} ya da {lesson.section_name} "
+                 f"müsaitlik matrisinde birkaç saat açın")
+    elif ogretmen:
+        metin = f"{lesson.teacher_name} için kapatılmış saatler"
+        oneri = f"{lesson.teacher_name} müsaitlik matrisinde birkaç saat açın"
+    else:
+        metin = f"{lesson.section_name} için kapatılmış saatler"
+        oneri = f"{lesson.section_name} müsaitlik matrisinde birkaç saat açın"
+    return Celisen(tur="musaitlik", metin=metin, oneri=oneri)
+
+
+def _gunluk_etiketi(lesson: Lesson) -> Celisen:
+    return Celisen(
+        tur="gunluk_sinir",
+        metin=(f"{_ders_adi(lesson)} günde en fazla "
+               f"{lesson.max_per_day} saat olabilir"),
+        oneri=f"{_ders_adi(lesson)} için günlük sınırı yükseltin",
+    )
+
+
+def _desen_etiketi(lesson: Lesson) -> Celisen:
+    desen = "+".join(str(b) for b in lesson.blocks)
+    return Celisen(
+        tur="desen",
+        metin=f"{_ders_adi(lesson)} dersinin dağılımı {desen}",
+        oneri=(f"{_ders_adi(lesson)} dağılımını gevşetin "
+               f"(örn. blokları tek saatlere bölün)"),
+    )
+
+
+def _gun_siniri_etiketi(teacher_id: int, ad: str, yarim_gun: int) -> Celisen:
+    gun = f"{yarim_gun / 2:g}".replace(".", ",")
+    return Celisen(
+        tur="gun_siniri",
+        metin=f"{ad} haftada en fazla {gun} gün okulda olabilir",
+        oneri=f"{ad} için haftalık gün sınırını yükseltin",
+    )
+
+
+def _bina_etiketi(ad: str) -> Celisen:
+    return Celisen(
+        tur="bina",
+        metin=f"{ad} bir günde tek binada ders verebilir",
+        oneri="Binalar sayfasından bina geçişi kuralını kapatın",
+    )
 
 
 def _gune_gore(slots: list[Slot]) -> dict[int, list[int]]:
@@ -177,15 +299,65 @@ def solve(data: SolveInput) -> SolveOutput:
     return gevsek
 
 
+# Çekirdek büyükse hepsini tek tek sınamak pahalıya gelir; ilk birkaçı
+# kullanıcıya zaten yeterli bir resim verir.
+EN_FAZLA_ADAY = 6
+
+
+def celiskiyi_bul(data: SolveInput, sure_sn: float = 5.0) -> list[Celisen]:
+    """Program neden kurulamıyor? Çelişen kısıtları ve çözüm önerilerini döner.
+
+    İki adım:
+      1. Kullanıcının değiştirebileceği kısıtlar varsayım anahtarlarının
+         arkasına alınır; CP-SAT çözümsüzlükte hangilerinin BİRLİKTE çelişki
+         ürettiğini söyler. Gereksiz kısıtları kendisi eler, yani liste kısadır.
+      2. Çekirdekteki her kısıt sırayla modelden çıkarılıp yeniden çözülür.
+         Tek başına çıkarmak yetiyorsa "bunu değiştirmeniz yeterli" denir —
+         kullanıcıya somut bir çıkış yolu göstermenin tek dürüst yolu bu.
+
+    Çekirdek küçük olduğu için (genelde 2–5 kısıt) ikinci adım da hızlıdır.
+    """
+    ilk = SolveInput(**{**data.__dict__, "time_limit_seconds": sure_sn})
+    sonuc = _calistir(ilk, gevsek=False, tani=True)
+    if not sonuc.celisenler:
+        return []
+
+    # Her adayı tek tek çıkar: yalnız o değişse program kurulur mu?
+    sonuclar: list[Celisen] = []
+    for aday in sonuc.celisenler[:EN_FAZLA_ADAY]:
+        sinama = _calistir(
+            SolveInput(**{**data.__dict__, "time_limit_seconds": sure_sn}),
+            gevsek=False, tani=True, atlanan=aday,
+        )
+        sonuclar.append(
+            Celisen(tur=aday.tur, metin=aday.metin, oneri=aday.oneri,
+                    tek_basina_yeterli=sinama.ok)
+        )
+    return sonuclar
+
+
 def _calistir(
-    data: SolveInput, *, gevsek: bool, esnek_gunluk: bool = False
+    data: SolveInput, *, gevsek: bool, esnek_gunluk: bool = False,
+    tani: bool = False, atlanan: Celisen | None = None,
 ) -> SolveOutput:
+    """Modeli kurar ve çözer.
+
+    `tani=True` iken kullanıcının değiştirebileceği kısıtlar varsayım
+    anahtarlarının arkasına alınır; çözümsüzlükte hangilerinin çeliştiği
+    `celisenler` alanında döner. `atlanan` verilirse o kısıt hiç kurulmaz —
+    "yalnızca bunu değiştirsem yeter mi?" sorusunu sınamak için.
+    """
     basla = _time.monotonic()
     slots = data.slots
     gunler = _gune_gore(slots)
     slot_by_period = {s.period_id: i for i, s in enumerate(slots)}
 
     model = cp_model.CpModel()
+    kisit = _Kisitlar(model, tani)
+
+    def gecerli(etiket: Celisen | None) -> bool:
+        """Bu kısıt kurulacak mı? (sınama sırasında biri dışarıda bırakılır)"""
+        return atlanan is None or etiket != atlanan
 
     # y[(lesson_idx, blok_idx)] -> {baslangic_slot_idx: BoolVar}
     baslangic: dict[tuple[int, int], dict[int, cp_model.IntVar]] = {}
@@ -199,6 +371,9 @@ def _calistir(
         bloklar = list(lesson.blocks)
         engelli = lesson.engelli_period_ids
 
+        musaitlik_etiketi = _musaitlik_etiketi(lesson)
+        musaitlik_kurulacak = gecerli(musaitlik_etiketi)
+
         for bi, boy in enumerate(bloklar):
             secenekler: dict[int, cp_model.IntVar] = {}
             for gun_slotlari in gunler.values():
@@ -206,9 +381,16 @@ def _calistir(
                     pencere = gun_slotlari[konum:konum + boy]
                     if not _ardisik_mi(slots, pencere):
                         continue
-                    if any(slots[i].period_id in engelli for i in pencere):
+                    kapali = any(slots[i].period_id in engelli for i in pencere)
+                    # Üretimde kapalı pencere hiç kurulmaz. Tanıda kurulur ama
+                    # anahtarla yasaklanır — müsaitlik de çelişkinin parçası
+                    # olarak gösterilebilsin diye. Sınamada (müsaitlik dışarıda)
+                    # pencere serbest bırakılır.
+                    if kapali and musaitlik_kurulacak and not tani:
                         continue
                     v = model.NewBoolVar(f"b_{li}_{bi}_{pencere[0]}")
+                    if kapali and musaitlik_kurulacak:
+                        kisit.ekle(v == 0, musaitlik_etiketi)
                     secenekler[pencere[0]] = v
             baslangic[(li, bi)] = secenekler
 
@@ -220,13 +402,17 @@ def _calistir(
             secenekler = baslangic[(li, bi)]
             if not secenekler:
                 # Bu blok hiçbir yere sığmıyor.
-                if not gevsek:
-                    model.Add(1 == 0)
+                if not gevsek and gecerli(_yuk_etiketi(lesson)):
+                    kisit.ekle(sum([]) == 1, _yuk_etiketi(lesson))
                 continue
             if gevsek:
                 model.Add(sum(secenekler.values()) <= 1)
+            elif gecerli(_yuk_etiketi(lesson)):
+                kisit.ekle(sum(secenekler.values()) == 1, _yuk_etiketi(lesson))
             else:
-                model.AddExactlyOne(secenekler.values())
+                # "Saati azaltsam kurulur mu?" sınaması: blok yerleşmek
+                # zorunda değil. Sıfıra indirmeyi değil, AZALTMAYI sınar.
+                model.Add(sum(secenekler.values()) <= 1)
 
         if gevsek:
             yerlesen = sum(
@@ -257,8 +443,9 @@ def _calistir(
                 asim = model.NewIntVar(0, len(gunluk), f"asim_{li}_{gi}")
                 model.Add(asim >= sum(gunluk) - lesson.max_per_day)
                 asimlar[(li, gi)] = asim
-            else:
-                model.Add(sum(gunluk) <= lesson.max_per_day)
+            elif gecerli(_gunluk_etiketi(lesson)):
+                kisit.ekle(sum(gunluk) <= lesson.max_per_day,
+                           _gunluk_etiketi(lesson))
 
         # (7) Aynı dersin blokları arka arkaya gelmesin: gün içinde kesintisiz
         # dizi, en uzun bloğu aşamaz. Yalnızca raporlama için çalıştırılan
@@ -271,8 +458,9 @@ def _calistir(
                 if not _ardisik_mi(slots, dilim):
                     continue
                 hucreler = [dolu[(li, si)] for si in dilim if (li, si) in dolu]
-                if len(hucreler) > en_uzun_blok:
-                    model.Add(sum(hucreler) <= en_uzun_blok)
+                if len(hucreler) > en_uzun_blok and gecerli(_desen_etiketi(lesson)):
+                    kisit.ekle(sum(hucreler) <= en_uzun_blok,
+                               _desen_etiketi(lesson))
 
     # (2) Şube çakışması
     _tekil_kaynak(model, data.lessons, dolu, len(slots), lambda l: l.section_id)
@@ -283,10 +471,12 @@ def _calistir(
     # sert kalır: orada gevşetilen tek şey "her saat yerleşmeli" kuralıdır.
     # Aksi hâlde son çare model sınırı tamamen yok sayar ve anlaşmayı sessizce
     # bozan bir programı başarılı diye döndürürdü.
-    gun_asimlari = _gun_siniri(model, data, dolu, gunler, slots, esnek=esnek_gunluk)
+    gun_asimlari = _gun_siniri(model, data, dolu, gunler, slots,
+                               esnek=esnek_gunluk, kisit=kisit, gecerli=gecerli)
 
     # (11) Bina kuralı: bir öğretmen bir günde tek binada ders verir.
-    bina_asimlari = _bina_kurali(model, data, dolu, gunler, esnek=esnek_gunluk)
+    bina_asimlari = _bina_kurali(model, data, dolu, gunler, esnek=esnek_gunluk,
+                                 kisit=kisit, gecerli=gecerli)
 
     # (12) Boşluk tercihi. Gevşek model yalnızca "kaç saat yerleşemedi"
     # sorusunu yanıtlar; oraya tercih eklemek raporu bozar ve yavaşlatır.
@@ -315,17 +505,24 @@ def _calistir(
             + bosluk_yonu * AGIRLIK_BOSLUK * sum(bosluklar)
         )
 
+    if tani and kisit.anahtarlar:
+        model.AddAssumptions(kisit.anahtarlar)
+
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = data.time_limit_seconds
-    solver.parameters.num_workers = 8
+    # Çelişki çekirdeği tek iş parçacığında güvenilir biçimde çıkarılır.
+    solver.parameters.num_workers = 1 if tani else 8
     solver.parameters.random_seed = data.seed
     status = solver.Solve(model)
     gecen = _time.monotonic() - basla
 
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+        celisenler: list[Celisen] = []
+        if tani and status == cp_model.INFEASIBLE:
+            celisenler = kisit.cozumle(solver)
         return SolveOutput(
             ok=False, placements=[], seconds=gecen, unplaced={},
-            status_name=solver.StatusName(status),
+            status_name=solver.StatusName(status), celisenler=celisenler,
         )
 
     esnetmeler: list[tuple[int, int, int, int]] = []
@@ -437,7 +634,8 @@ def _bosluklar(
 
 
 def _bina_kurali(
-    model, data: SolveInput, dolu: dict, gunler: dict[int, list[int]], *, esnek: bool,
+    model, data: SolveInput, dolu: dict, gunler: dict[int, list[int]], *,
+    esnek: bool, kisit=None, gecerli=None,
 ) -> dict[tuple[int, int], cp_model.IntVar]:
     """Bir öğretmen bir günde tek binada ders verir.
 
@@ -456,10 +654,12 @@ def _bina_kurali(
 
     # (öğretmen, bina) -> o binadaki ders indeksleri
     ogretmen_bina: dict[tuple[int, int], list[int]] = {}
+    adlar: dict[int, str] = {}
     for li, lesson in enumerate(data.lessons):
         if lesson.building_id is None:
             continue
         ogretmen_bina.setdefault((lesson.teacher_id, lesson.building_id), []).append(li)
+        adlar[lesson.teacher_id] = lesson.teacher_name
 
     ogretmenler: dict[int, set[int]] = {}
     for tid, bid in ogretmen_bina:
@@ -495,14 +695,19 @@ def _bina_kurali(
                 model.Add(asim >= sum(gun_binalari) - 1)
                 asimlar[(tid, gi)] = asim
             else:
-                model.Add(sum(gun_binalari) <= 1)
+                etiket = _bina_etiketi(adlar.get(tid, "Öğretmen"))
+                if gecerli is None or gecerli(etiket):
+                    if kisit is None:
+                        model.Add(sum(gun_binalari) <= 1)
+                    else:
+                        kisit.ekle(sum(gun_binalari) <= 1, etiket)
 
     return asimlar
 
 
 def _gun_siniri(
     model, data: SolveInput, dolu: dict, gunler: dict[int, list[int]],
-    slots: list[Slot], *, esnek: bool,
+    slots: list[Slot], *, esnek: bool, kisit=None, gecerli=None,
 ) -> dict[int, cp_model.IntVar]:
     """Öğretmenin haftada okulda bulunacağı süreyi sınırlar.
 
@@ -524,8 +729,10 @@ def _gun_siniri(
         return {}
 
     ogretmen_dersleri: dict[int, list[int]] = {}
+    adlar: dict[int, str] = {}
     for li, lesson in enumerate(data.lessons):
         ogretmen_dersleri.setdefault(lesson.teacher_id, []).append(li)
+        adlar[lesson.teacher_id] = lesson.teacher_name
 
     gun_sayisi = len(gunler)
     asimlar: dict[int, cp_model.IntVar] = {}
@@ -578,8 +785,14 @@ def _gun_siniri(
             model.Add(asim >= sum(gun_degiskenleri) - gun_tavani)
             asimlar[tid] = asim
         else:
-            model.Add(sum(yarimlar) <= sinir)
-            model.Add(sum(gun_degiskenleri) <= gun_tavani)
+            etiket = _gun_siniri_etiketi(tid, adlar.get(tid, "Öğretmen"), sinir)
+            if gecerli is None or gecerli(etiket):
+                if kisit is None:
+                    model.Add(sum(yarimlar) <= sinir)
+                    model.Add(sum(gun_degiskenleri) <= gun_tavani)
+                else:
+                    kisit.ekle(sum(yarimlar) <= sinir, etiket)
+                    kisit.ekle(sum(gun_degiskenleri) <= gun_tavani, etiket)
 
     return asimlar
 

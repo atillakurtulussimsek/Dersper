@@ -25,7 +25,7 @@ from app.models import (
     Assignment, SolveRun, SolveStatus, Term, Timetable, TimetableStatus, VersionKind,
 )
 from app.solver.diagnose import rapor_olustur
-from app.solver.engine import SolveInput, solve
+from app.solver.engine import SolveInput, celiskiyi_bul, solve
 from app.solver.loader import (
     dersleri_yukle, gun_sinirlarini_yukle, slotlari_yukle,
 )
@@ -46,6 +46,10 @@ EN_UZUN_ARA_SN = 30.0
 # esnetilir. Amaç: önce kuralına uyan bir program aramak, esnetmeye mecbur
 # kalınca başvurmak.
 KATI_DENEME_SAYISI = 3
+
+# Çelişki çözümlemesi birkaç çözüm çalıştırır (çekirdek + her aday için bir
+# sınama). Kısa tutulur: amaç en iyi programı bulmak değil, nedeni söylemek.
+CELISKI_SURE_SN = 5.0
 
 # Çalışan işlerin durdurma bayrakları: run_id -> Event
 _calisanlar: dict[int, threading.Event] = {}
@@ -117,6 +121,10 @@ def _dongu(run_id: int, term_id: int, dur: threading.Event) -> None:
             ara = ARA_SN
             deneme = 0
             esnek = False
+            # Çelişki çözümlemesi birkaç çözüm çalıştırır; kanıtlanmış
+            # çözümsüzlükte YALNIZCA BİR KEZ yapılır.
+            celisenler: list = []
+            celiski_arandi = False
             baslangic = _simdi()
 
             while not dur.is_set():
@@ -142,10 +150,37 @@ def _dongu(run_id: int, term_id: int, dur: threading.Event) -> None:
 
                 son_rapor = rapor_olustur(slots, lessons, sonuc.unplaced,
                                           sonuc.status_name, sonuc.seconds,
-                                          gun_sinirlari)
+                                          gun_sinirlari, celisenler)
 
                 _ilerlemeyi_yaz(run_id, deneme, en_iyi_yerlesen, gereken,
                                 sonuc.proven_infeasible, son_rapor, baslangic)
+
+                # Çözümsüzlük kanıtlandıysa hangi kısıtların çeliştiğini BİR KEZ
+                # çözümle. İlerleme yazıldıktan sonra yapılır: kullanıcı önce
+                # denemenin sonucunu görsün, çözümleme raporu sonra zenginleştirsin.
+                # Ön kontroller zaten bir engel bulduysa çözümlemeye gerek yok:
+                # neden söylenmiş oluyor. Çekirdek çözümlemesi tam da ön
+                # kontrollerin sessiz kaldığı durumlar için var.
+                acik_engel = any(b["onem"] == "engel"
+                                 for b in son_rapor.get("bulgular", []))
+                if sonuc.proven_infeasible and not celiski_arandi and not acik_engel:
+                    celiski_arandi = True
+                    try:
+                        celisenler = celiskiyi_bul(SolveInput(
+                            slots=slots, lessons=lessons, locked=kilitli,
+                            ogretmen_yarim_gun=gun_sinirlari,
+                            bina_gecisi_engelle=donem.block_building_switch,
+                        ), sure_sn=CELISKI_SURE_SN)
+                    except Exception:
+                        # Çözümleme başarısız olursa üretim sürsün; rapor yine
+                        # de yerleşemeyenleri gösterir.
+                        log.exception("Çelişki çözümlemesi hata verdi")
+                    if celisenler:
+                        son_rapor = rapor_olustur(
+                            slots, lessons, sonuc.unplaced, sonuc.status_name,
+                            sonuc.seconds, gun_sinirlari, celisenler)
+                        _ilerlemeyi_yaz(run_id, deneme, en_iyi_yerlesen, gereken,
+                                        True, son_rapor, baslangic)
 
                 if sonuc.ok:
                     _yerlesimleri_yaz(run_id, sonuc.placements, kilitli, gereken)
@@ -168,7 +203,7 @@ def _dongu(run_id: int, term_id: int, dur: threading.Event) -> None:
                 _yerlesimleri_yaz(run_id, en_iyi, kilitli, gereken)
             if son_rapor is None:
                 son_rapor = rapor_olustur(slots, lessons, en_iyi_eksik, "DURDURULDU",
-                                          0.0, gun_sinirlari)
+                                          0.0, gun_sinirlari, celisenler)
             _bitir(db, run_id, SolveStatus.DURDURULDU, son_rapor, baslangic)
     except Exception:  # iş parçacığı sessizce ölmesin
         log.exception("Arka plan çözümü hata verdi (run_id=%s)", run_id)

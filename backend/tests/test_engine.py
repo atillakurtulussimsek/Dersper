@@ -1,7 +1,9 @@
 """Çözücü ve tanı katmanı testleri. Veritabanı gerektirmez."""
 from app.bloklar import coz
 from app.solver.diagnose import on_kontrol, rapor_olustur
-from app.solver.engine import Lesson, Slot, SolveInput, solve
+from app.solver.engine import (
+    Lesson, Slot, SolveInput, celiskiyi_bul, solve,
+)
 from app.solver.loader import sabah_mi
 
 GUNLER = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma"]
@@ -654,3 +656,49 @@ def test_bosluk_tercihi_kurallari_ezmez():
                                  bosluk_politikasi=politika, time_limit_seconds=20))
         assert sonuc.ok, f"{politika}: {sonuc.status_name}"
         assert len(sonuc.placements) == 20, politika
+
+
+# --- Çelişki çözümlemesi ---
+
+def _celiskili_okul():
+    """5 saatlik ders, günde en fazla 1 saat, öğretmen 3 gün kapalı."""
+    slots = izgara(gun_sayisi=5, ders_sayisi=6)
+    kapali = frozenset(s.period_id for s in slots if s.day_index >= 2)
+    d = Lesson(
+        entry_id=1, section_id=1, section_name="9-A", teacher_id=10,
+        teacher_name="Ayşe Yılmaz", subject_name="Matematik", weekly_hours=5,
+        blocks=tuple(coz("", 5)), max_per_day=1, blocked_period_ids=kapali,
+    )
+    return slots, [d]
+
+
+def test_celiski_kisitlari_adlandirir():
+    slots, dersler = _celiskili_okul()
+    celisenler = celiskiyi_bul(SolveInput(slots=slots, lessons=dersler), sure_sn=10)
+    turler = {c.tur for c in celisenler}
+    # Çelişki bu üçünün birleşiminden doğuyor.
+    assert {"musaitlik", "yuk", "gunluk_sinir"} <= turler
+    assert all(c.metin and c.oneri for c in celisenler)
+
+
+def test_celiski_tek_basina_yeterli_olani_isaretler():
+    slots, dersler = _celiskili_okul()
+    celisenler = celiskiyi_bul(SolveInput(slots=slots, lessons=dersler), sure_sn=10)
+    yeterli = {c.tur for c in celisenler if c.tek_basina_yeterli}
+    # Müsaitliği açmak ya da günlük sınırı yükseltmek tek başına çözer.
+    assert "musaitlik" in yeterli
+    assert "gunluk_sinir" in yeterli
+
+
+def test_celiski_kurulabilir_programda_bos_doner():
+    slots = izgara()
+    dersler = [ders(1, 1, 10, "Matematik", 4)]
+    assert celiskiyi_bul(SolveInput(slots=slots, lessons=dersler), sure_sn=10) == []
+
+
+def test_celiski_gereksiz_kisiti_listeye_almaz():
+    """Çelişkiye katılmayan ders listede görünmemeli."""
+    slots, dersler = _celiskili_okul()
+    dersler.append(ders(2, 2, 11, "Türkçe", 2))     # rahat, çelişkisiz
+    celisenler = celiskiyi_bul(SolveInput(slots=slots, lessons=dersler), sure_sn=10)
+    assert not any("Türkçe" in c.metin for c in celisenler)

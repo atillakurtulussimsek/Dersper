@@ -5,6 +5,10 @@ Dersper'in geliştirme günlüğü. Her değişiklik tek cümleyle, en yeni sür
 öncesinde ikinci hane özellik, üçüncü hane düzeltme demektir. Uygulamanın
 sürümü arayüzde yan menünün altında yazar.
 
+## 0.11.0 — 2026-09-01
+
+- Program kurulamadığında hangi kısıtların birbiriyle çeliştiği ve hangisini tek başına değiştirmenin yeteceği yazılıyor.
+
 ## 0.10.0 — 2026-08-31
 
 - Bina modülü eklendi: şubeler binalara bağlanıyor ve istenirse bir öğretmenin bir günkü dersleri tek binada toplanıyor.

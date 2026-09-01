@@ -34,7 +34,7 @@ app = FastAPI(
     description="Okullar için açık kaynaklı ders dağıtım programı.",
     # Sürüm numarasının kaynağı frontend/package.json — arayüzdeki rozet
     # oradan gömülür. Sürüm yükseltilirken bu satır da birlikte güncellenir.
-    version="0.10.0",
+    version="0.11.0",
     docs_url="/docs",
 )
 

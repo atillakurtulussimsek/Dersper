@@ -274,6 +274,7 @@ def rapor_olustur(
     status_name: str,
     seconds: float,
     gun_sinirlari: dict[int, int] | None = None,
+    celisenler: list | None = None,
 ) -> dict:
     """Ön kontrolleri ve çözücü sonucunu tek yapılandırılmış rapora toplar."""
     bulgular = on_kontrol(slots, lessons, gun_sinirlari)
@@ -317,4 +318,11 @@ def rapor_olustur(
         },
         "bulgular": bulgular,
         "yerlesmeyenler": yerlesmeyenler,
+        # Çözümsüzlük kanıtlandığında: hangi kısıtlar BİRLİKTE çelişiyor ve
+        # hangisini tek başına değiştirmek yetiyor.
+        "celiskiler": [
+            {"tur": c.tur, "metin": c.metin, "oneri": c.oneri,
+             "tek_basina_yeterli": c.tek_basina_yeterli}
+            for c in (celisenler or [])
+        ],
     }
