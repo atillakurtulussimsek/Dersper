@@ -5,10 +5,13 @@ Dersper'in geliştirme günlüğü. Her değişiklik tek cümleyle, en yeni sür
 öncesinde ikinci hane özellik, üçüncü hane düzeltme demektir. Uygulamanın
 sürümü arayüzde yan menünün altında yazar.
 
+## 0.12.1 — 2026-09-01
+
+- 0.12.0'daki Metronic teması geri alındı: tema tescilli olduğu için herkese açık depoda dağıtılamıyor, arayüz kendi tasarımına döndü.
+
 ## 0.12.0 — 2026-09-01
 
-- Arayüzün tamamı Metronic 8 temasına taşındı: koyu yan menü, üst çubuk ve tema bileşenleri.
-- Metronic tescilli olduğu için depoya girmez; kuran kişi kendi lisanslı kopyasından `npm run tema:kur` ile kurar (bkz. README > Kurulum > Tema).
+- Arayüzün tamamı Metronic 8 temasına taşındı (0.12.1'de geri alındı).
 
 ## 0.11.0 — 2026-09-01
 

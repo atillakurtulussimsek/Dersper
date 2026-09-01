@@ -174,7 +174,7 @@ export default function Programlar() {
                         type="checkbox"
                         checked={secili.includes(s.id)}
                         onChange={() => degistir(s.id)}
-                        className="form-check-input h-4 w-4"
+                        className="h-4 w-4 rounded border-cizgi-guclu"
                       />
                       <span className="font-medium">{s.name}</span>
                       {!s.is_active && (
@@ -206,7 +206,7 @@ export default function Programlar() {
                     name="bosluk"
                     checked={politika === se.id}
                     onChange={() => setPolitika(se.id)}
-                    className="form-check-input mt-0.5 h-4 w-4"
+                    className="mt-0.5 h-4 w-4 border-cizgi-guclu"
                   />
                   <span className="text-sm">
                     <span className="font-medium text-murekkep">{se.etiket}</span>

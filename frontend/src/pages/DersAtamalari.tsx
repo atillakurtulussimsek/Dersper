@@ -168,7 +168,7 @@ export default function DersAtamalari() {
                     onClick={() => setBakis(deger)}
                     className={
                       bakis === deger
-                        ? "rounded-md bg-vurgu px-2.5 py-1 text-xs font-medium text-uzeri"
+                        ? "rounded-md bg-murekkep px-2.5 py-1 text-xs font-medium text-uzeri"
                         : "rounded-md px-2.5 py-1 text-xs font-medium text-murekkep-yumusak hover:bg-yuzey-alt"
                     }
                   >
@@ -186,7 +186,7 @@ export default function DersAtamalari() {
                       onClick={() => setSubeId(s.id)}
                       className={
                         s.id === secili
-                          ? "rounded-lg bg-vurgu px-3 py-1.5 text-sm font-medium text-uzeri"
+                          ? "rounded-lg bg-murekkep px-3 py-1.5 text-sm font-medium text-uzeri"
                           : "rounded-lg border border-cizgi-guclu bg-yuzey px-3 py-1.5 text-sm text-murekkep-yumusak hover:bg-yuzey-alt"
                       }
                     >
@@ -199,7 +199,7 @@ export default function DersAtamalari() {
                       onClick={() => setOgretmenId(o.id)}
                       className={
                         o.id === secili
-                          ? "flex items-center gap-2 rounded-lg bg-vurgu px-3 py-1.5 text-sm font-medium text-uzeri"
+                          ? "flex items-center gap-2 rounded-lg bg-murekkep px-3 py-1.5 text-sm font-medium text-uzeri"
                           : "flex items-center gap-2 rounded-lg border border-cizgi-guclu bg-yuzey px-3 py-1.5 text-sm text-murekkep-yumusak hover:bg-yuzey-alt"
                       }
                     >
@@ -464,7 +464,7 @@ export default function DersAtamalari() {
                 onClick={() => setForm({ ...form, block_pattern: o })}
                 className={
                   form.block_pattern.replace(/[,\s]+/g, "+") === o
-                    ? "rounded-lg bg-vurgu px-2.5 py-1 font-mono text-xs text-uzeri"
+                    ? "rounded-lg bg-murekkep px-2.5 py-1 font-mono text-xs text-uzeri"
                     : "rounded-lg border border-cizgi-guclu bg-yuzey px-2.5 py-1 font-mono text-xs text-murekkep-yumusak hover:bg-yuzey-alt"
                 }
               >

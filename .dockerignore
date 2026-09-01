@@ -24,8 +24,7 @@ backend/tests/
 frontend/node_modules/
 frontend/dist/
 
-# Tema kaynağı (tescilli, ~200 MB). İmaja yalnızca `npm run tema:kur` ile
-# frontend/public/metronic/ altına kopyalanan tek CSS dosyası girer.
+# Satın alınmış tema kaynağı — tescilli ve ~200 MB; derleme bağlamına girmesin.
 Metronic/
 
 # Diğer

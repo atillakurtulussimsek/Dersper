@@ -124,7 +124,7 @@ export default function MufredatKopyala({
                         type="checkbox"
                         checked={secili.includes(s.id)}
                         onChange={() => degistir(s.id)}
-                        className="form-check-input h-4 w-4"
+                        className="h-4 w-4 rounded border-cizgi-guclu"
                       />
                       <span className="font-medium">{s.name}</span>
                       {!s.is_active && <span className="text-xs text-murekkep-silik">pasif</span>}

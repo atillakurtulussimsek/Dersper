@@ -46,17 +46,16 @@ export default function Kayit() {
   }
 
   return (
-    <div className="d-flex min-h-screen align-items-center justify-content-center p-4">
-      <form onSubmit={gonder} className="card w-full max-w-lg shadow-sm my-10">
-        <div className="card-body p-10 space-y-5">
-        <div className="text-center">
-          <span className="symbol symbol-50px d-inline-block mb-4">
-            <span className="symbol-label bg-primary text-inverse-primary fw-bold fs-2">
-              D
-            </span>
-          </span>
-          <h1 className="fw-bold fs-2 text-gray-900 m-0">Kurum kaydı</h1>
-          <p className="text-muted fs-7 mt-1 mb-0">
+    <div className="flex min-h-screen items-center justify-center p-4">
+      <form
+        onSubmit={gonder}
+        className="w-full max-w-lg space-y-5 rounded-xl border border-cizgi bg-yuzey p-8 shadow-sm"
+      >
+        <div>
+          <h1 className="font-baslik text-2xl font-semibold tracking-tight text-murekkep">
+            Kurum kaydı
+          </h1>
+          <p className="mt-1 text-sm text-murekkep-silik">
             Kurumunuzu tanımlayın ve ilk hesabınızı oluşturun. Bir hesap yalnızca bir
             kuruma bağlanır; başka bir kurum için ayrı hesap açmanız gerekir.
           </p>
@@ -133,13 +132,12 @@ export default function Kayit() {
           Kurumu oluştur
         </Buton>
 
-        <p className="text-center fs-7 text-muted mb-0">
+        <p className="text-center text-sm text-murekkep-silik">
           Hesabınız var mı?{" "}
-          <Link to="/giris" className="link-primary fw-semibold">
+          <Link to="/giris" className="font-medium text-murekkep hover:underline">
             Giriş yapın
           </Link>
         </p>
-        </div>
       </form>
     </div>
   );

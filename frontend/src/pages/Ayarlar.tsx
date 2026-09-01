@@ -167,7 +167,7 @@ export default function Ayarlar() {
               type="checkbox"
               checked={yzForm.enabled}
               onChange={(e) => setYzForm({ ...yzForm, enabled: e.target.checked })}
-              className="form-check-input h-4 w-4"
+              className="h-4 w-4 rounded border-cizgi-guclu"
             />
             Yapay zeka desteğini aç
           </label>

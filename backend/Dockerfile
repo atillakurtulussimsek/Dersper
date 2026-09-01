@@ -7,10 +7,6 @@
 # Derleme bağlamı deponun KÖKÜDÜR (hem backend/ hem frontend/ gerekir):
 #   docker build -f backend/Dockerfile .
 
-# NOT: Arayüz Metronic 8 temasını kullanır ve tema tescilli olduğu için depoda
-# bulunmaz. İmajı kurmadan önce `cd frontend && npm run tema:kur` çalıştırın;
-# betik lisanslı kopyanızdan tek CSS dosyasını frontend/public/metronic/ altına
-# koyar ve derleme onu buraya taşır. Atlanırsa arayüz biçimsiz derlenir.
 FROM node:20-alpine AS arayuz
 
 WORKDIR /arayuz

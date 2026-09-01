@@ -1,30 +1,14 @@
 <!doctype html>
-<html lang="tr" data-theme="dark">
+<html lang="tr" class="koyu">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Dersper — Ders Dağıtım Programı</title>
-    <!--
-      Metronic 8 (KeenThemes) — tescilli tema; depoda bulunmaz.
-      `npm run tema:kur` lisanslı kopyadan buraya kopyalar.
-      Vite kendi CSS'ini bundan sonra ekler; böylece bizim sınıflarımız üstte kalır.
-    -->
-    <link rel="stylesheet" href="/metronic/style.bundle.css" />
   </head>
-  <body
-    class="app-default"
-    data-kt-app-layout="dark-sidebar"
-    data-kt-app-header-fixed="true"
-    data-kt-app-sidebar-enabled="true"
-    data-kt-app-sidebar-fixed="true"
-    data-kt-app-sidebar-push-header="true"
-    data-kt-app-sidebar-push-footer="true"
-    data-kt-app-toolbar-enabled="false"
-  >
+  <body>
     <script>
       // Tema React yüklenmeden uygulanır; aksi halde koyu temada bir kare
-      // beyaz parlama olur. Metronic paleti [data-theme] ile açılır, bu yüzden
-      // açık temada da öznitelik yazılmak zorundadır.
+      // beyaz parlama olur.
       (function () {
         try {
           var t = localStorage.getItem("dersper_tema") || "koyu";
@@ -32,37 +16,15 @@
             t === "koyu" ||
             (t === "sistem" &&
               window.matchMedia("(prefers-color-scheme: dark)").matches);
-          document.documentElement.dataset.theme = koyu ? "dark" : "light";
+          document.documentElement.classList.toggle("koyu", koyu);
           document.documentElement.style.colorScheme = koyu ? "dark" : "light";
         } catch (e) {
-          document.documentElement.dataset.theme = "dark";
+          document.documentElement.classList.add("koyu");
           document.documentElement.style.colorScheme = "dark";
         }
       })();
     </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
-    <script>
-      // Tema dosyası yoksa sayfa "bozuk" görünür ama sebebi hiçbir yerde
-      // yazmaz — bir kez böyle yayına çıktı. Metronic'in kendi değişkenini
-      // yoklayıp durumu açıkça söyleriz. 404 yerine SPA'nın index.html'ini
-      // dönen sunucularda `link.onerror` çalışmaz, bu yüzden dosyanın varlığı
-      // değil etkisi ölçülür.
-      addEventListener("load", function () {
-        var d = document.documentElement;
-        if (getComputedStyle(d).getPropertyValue("--kt-app-bg-color").trim()) return;
-        var k = document.createElement("div");
-        k.setAttribute("role", "alert");
-        k.style.cssText =
-          "position:fixed;inset:0 0 auto 0;z-index:99999;padding:14px 18px;" +
-          "background:#f1416c;color:#fff;font:14px/1.5 system-ui,sans-serif";
-        k.innerHTML =
-          "<strong>Arayüz teması yüklenemedi.</strong> " +
-          "Sayfa bu yüzden biçimsiz görünüyor. Kuran kişi arayüz klasöründe " +
-          "<code>npm run tema:kur</code> çalıştırıp yeniden derlemeli " +
-          "(README &gt; Kurulum &gt; Tema).";
-        d.querySelector("body").prepend(k);
-      });
-    </script>
   </body>
 </html>

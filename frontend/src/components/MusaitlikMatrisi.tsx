@@ -238,7 +238,7 @@ export default function MusaitlikMatrisi({
                             s.includes(h.id) ? s.filter((x) => x !== h.id) : [...s, h.id],
                           )
                         }
-                        className="form-check-input h-4 w-4"
+                        className="h-4 w-4 rounded border-cizgi-guclu"
                       />
                       {h.name}
                     </label>

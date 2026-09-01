@@ -42,6 +42,5 @@ frontend/node_modules/
 frontend/dist/
 frontend/tsconfig.tsbuildinfo
 
-# Satın alınmış tema kaynağı — tescilli, depoya girmemeli (bkz. DEGISIKLIKLER/README).
+# Satın alınmış tema kaynağı — tescilli, herkese açık depoya girmemeli.
 Metronic/
-frontend/public/metronic/

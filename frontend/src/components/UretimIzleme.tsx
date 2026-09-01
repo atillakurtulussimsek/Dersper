@@ -83,7 +83,7 @@ export default function UretimIzleme({ deneme }: { deneme: Deneme }) {
           </div>
           <div className="h-2 overflow-hidden rounded-full bg-yuzey-alt">
             <div
-              className="h-full rounded-full bg-vurgu transition-all duration-500"
+              className="h-full rounded-full bg-murekkep transition-all duration-500"
               style={{ width: `${oran}%` }}
             />
           </div>

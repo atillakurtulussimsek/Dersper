@@ -31,7 +31,7 @@ Yapay zeka isteğe bağlıdır. Kendi API anahtarınızı Ayarlar'dan girersiniz
 |---|---|
 | Backend | Python 3.12 · FastAPI · SQLAlchemy · Alembic |
 | Çözücü | Google OR-Tools (CP-SAT) |
-| Frontend | React · TypeScript · Vite · Tailwind CSS · Metronic 8 (Bootstrap 5) |
+| Frontend | React · TypeScript · Vite · Tailwind CSS |
 | Veritabanı | MySQL 8 |
 | Yapay zeka | OpenAI SDK (özel `base_url` desteğiyle: OpenAI, Ollama, OpenRouter, uyumlu her servis). Model listesi sağlayıcıdan çekilir. |
 
@@ -56,28 +56,6 @@ Frontend bağımlılıkları:
 ```bash
 cd frontend && npm install
 ```
-
-### Tema (zorunlu)
-
-Arayüz **Metronic 8** (KeenThemes) üzerine kuruludur. Metronic tescilli bir üründür:
-dosyaları bu depoda **bulunmaz** ve buraya eklenemez. Kendi lisanslı kopyanızı
-edinmeniz gerekir — <https://keenthemes.com/metronic>.
-
-Klasörü depo köküne `Metronic/` olarak koyun, sonra:
-
-```bash
-cd frontend && npm run tema:kur
-```
-
-Başka bir yerdeyse yolunu verin:
-
-```bash
-METRONIC_DIZINI=/bir/yer/metronic npm run tema:kur
-```
-
-Betik yalnızca `assets/css/style.bundle.css` dosyasını `frontend/public/metronic/`
-altına kopyalar; ikonlar ve desenler o dosyanın içinde data-URI olduğu için
-başka bir varlık taşınmaz. Bu adım atlanırsa uygulama çalışır ama biçimsiz görünür.
 
 Sonra kök dizinden:
 
@@ -153,8 +131,3 @@ Sürüm sürüm geliştirme günlüğü: [DEGISIKLIKLER.md](DEGISIKLIKLER.md).
 
 [GNU Affero General Public License v3.0](LICENSE) — özgür yazılım. Değiştirip
 sunucunuzda çalıştırırsanız, kaynağı kullanıcılarınıza açmakla yükümlüsünüz.
-
-Bu lisans bu depodaki kodu kapsar. Arayüzün kullandığı **Metronic** teması buna
-dahil değildir: ayrı ve tescilli bir üründür, KeenThemes'ten lisanslanır, depoda
-bulunmaz ve AGPL kapsamında dağıtılmaz. Kurulumu yapan taraf kendi lisansından
-sorumludur.

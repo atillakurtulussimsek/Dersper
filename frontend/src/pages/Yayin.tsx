@@ -93,7 +93,7 @@ export default function Yayin() {
                   }}
                   className={clsx(
                     "rounded-md px-2.5 py-1 text-xs font-medium",
-                    bakis === b ? "bg-vurgu text-uzeri" : "text-murekkep-yumusak",
+                    bakis === b ? "bg-murekkep text-uzeri" : "text-murekkep-yumusak",
                   )}
                 >
                   {b === "sube" ? "Şube" : "Öğretmen"}
