@@ -613,7 +613,7 @@ export default function ProgramDetay() {
           <div className="h-14 w-36 rounded-md shadow-lg">
             <HucreIcerigi hucre={suruklenen.hucreler[0]} bakis={bakis} />
             {suruklenen.hucreler.length > 1 && (
-              <span className="sayisal mt-1 block rounded bg-murekkep px-1.5 py-0.5 text-center font-mono text-[10px] text-uzeri">
+              <span className="sayisal mt-1 block rounded bg-vurgu px-1.5 py-0.5 text-center font-mono text-[10px] text-uzeri">
                 {suruklenen.hucreler.length} saatlik blok
               </span>
             )}

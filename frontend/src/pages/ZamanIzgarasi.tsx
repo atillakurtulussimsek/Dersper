@@ -303,7 +303,7 @@ export default function ZamanIzgarasi() {
                   type="checkbox"
                   checked={g.is_active}
                   onChange={(e) => gunuDegistir(g.index, { is_active: e.target.checked })}
-                  className="h-4 w-4 rounded border-cizgi-guclu"
+                  className="form-check-input h-4 w-4"
                 />
                 Açık
               </label>
@@ -498,7 +498,7 @@ function SaatSatiri({
         className={clsx(
           "shrink-0 rounded-lg border p-2",
           saat.is_lunch
-            ? "border-cizgi-guclu bg-murekkep text-uzeri"
+            ? "border-vurgu bg-vurgu text-uzeri"
             : "border-cizgi-guclu bg-yuzey text-murekkep-silik hover:bg-yuzey-alt",
         )}
       >

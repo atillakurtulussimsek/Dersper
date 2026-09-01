@@ -30,7 +30,7 @@ function Segment<T extends string>({
           title={s.ipucu}
           className={clsx(
             "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
-            deger === s.id ? "bg-murekkep text-uzeri" : "text-murekkep-yumusak hover:bg-yuzey-alt",
+            deger === s.id ? "bg-vurgu text-uzeri" : "text-murekkep-yumusak hover:bg-yuzey-alt",
           )}
         >
           {s.etiket}
@@ -125,7 +125,7 @@ export default function ProgramAracCubugu({
               className={clsx(
                 "shrink-0 rounded-lg px-2.5 py-1 text-xs font-medium transition-colors",
                 a === seciliAnahtar
-                  ? "bg-murekkep text-uzeri"
+                  ? "bg-vurgu text-uzeri"
                   : "border border-cizgi-guclu bg-yuzey text-murekkep-yumusak hover:bg-yuzey-alt",
               )}
             >

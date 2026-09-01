@@ -36,7 +36,7 @@ export default function RenkSecici({
         className={clsx(
           "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors",
           rastgele
-            ? "border-murekkep bg-murekkep text-uzeri"
+            ? "border-vurgu bg-vurgu text-uzeri"
             : "border-cizgi-guclu bg-yuzey text-murekkep-yumusak hover:bg-yuzey-alt",
         )}
       >

@@ -80,7 +80,7 @@ export default function SurumGecmisi({
                   </p>
                 </div>
                 {bu ? (
-                  <span className="shrink-0 rounded-md bg-murekkep px-2 py-0.5 text-xs font-medium text-uzeri">
+                  <span className="shrink-0 rounded-md bg-vurgu px-2 py-0.5 text-xs font-medium text-uzeri">
                     şu an
                   </span>
                 ) : (

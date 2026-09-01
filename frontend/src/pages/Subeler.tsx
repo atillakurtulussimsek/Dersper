@@ -211,7 +211,7 @@ export default function Subeler() {
               type="checkbox"
               checked={form.is_active}
               onChange={(e) => setForm({ ...form, is_active: e.target.checked })}
-              className="h-4 w-4 rounded border-cizgi-guclu"
+              className="form-check-input h-4 w-4"
             />
             Aktif (pasif şubeler programa dahil edilmez)
           </label>

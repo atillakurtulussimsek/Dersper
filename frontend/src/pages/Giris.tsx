@@ -34,54 +34,54 @@ export default function Giris() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center p-4">
-      <form
-        onSubmit={gonder}
-        className="w-full max-w-sm space-y-5 rounded-xl border border-cizgi bg-yuzey p-8 shadow-sm"
-      >
-        <div>
-          <h1 className="font-baslik text-2xl font-semibold tracking-tight text-murekkep">
-            Dersper
-          </h1>
-          <p className="mt-1 text-sm text-murekkep-silik">
-            Kurum hesabınızla giriş yapın.
-          </p>
+    <div className="d-flex min-h-screen align-items-center justify-content-center p-4">
+      <form onSubmit={gonder} className="card w-full max-w-sm shadow-sm">
+        <div className="card-body p-10 space-y-5">
+          <div className="text-center">
+            <span className="symbol symbol-50px d-inline-block mb-4">
+              <span className="symbol-label bg-primary text-inverse-primary fw-bold fs-2">
+                D
+              </span>
+            </span>
+            <h1 className="fw-bold fs-2 text-gray-900 m-0">Dersper</h1>
+            <p className="text-muted fs-7 mt-1 mb-0">Kurum hesabınızla giriş yapın.</p>
+          </div>
+
+          {hata && <Uyari tur="hata">{hata}</Uyari>}
+
+          <Alan etiket="E-posta">
+            <Girdi
+              required
+              type="email"
+              value={eposta}
+              onChange={(e) => setEposta(e.target.value)}
+              autoComplete="username"
+            />
+          </Alan>
+
+          <Alan etiket="Parola">
+            <Girdi
+              required
+              type="password"
+              value={parola}
+              onChange={(e) => setParola(e.target.value)}
+              autoComplete="current-password"
+            />
+          </Alan>
+
+          <Buton type="submit" yukleniyor={gonderiliyor} className="w-full">
+            Giriş yap
+          </Buton>
+
+          {durum.data?.registration_open && (
+            <p className="text-center fs-7 text-muted mb-0">
+              Kurumunuz kayıtlı değil mi?{" "}
+              <Link to="/kayit" className="link-primary fw-semibold">
+                Kurum kaydı oluşturun
+              </Link>
+            </p>
+          )}
         </div>
-
-        {hata && <Uyari tur="hata">{hata}</Uyari>}
-
-        <Alan etiket="E-posta">
-          <Girdi
-            required
-            type="email"
-            value={eposta}
-            onChange={(e) => setEposta(e.target.value)}
-            autoComplete="username"
-          />
-        </Alan>
-
-        <Alan etiket="Parola">
-          <Girdi
-            required
-            type="password"
-            value={parola}
-            onChange={(e) => setParola(e.target.value)}
-            autoComplete="current-password"
-          />
-        </Alan>
-
-        <Buton type="submit" yukleniyor={gonderiliyor} className="w-full">
-          Giriş yap
-        </Buton>
-
-        {durum.data?.registration_open && (
-          <p className="text-center text-sm text-murekkep-silik">
-            Kurumunuz kayıtlı değil mi?{" "}
-            <Link to="/kayit" className="font-medium text-murekkep hover:underline">
-              Kurum kaydı oluşturun
-            </Link>
-          </p>
-        )}
       </form>
     </div>
   );
