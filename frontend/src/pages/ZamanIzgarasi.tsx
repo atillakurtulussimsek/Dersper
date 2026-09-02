@@ -17,7 +17,7 @@ import {
 } from "@dnd-kit/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Coffee, Download, GripVertical, Plus, Trash2, UtensilsCrossed,
+  AlarmClock, Coffee, Download, GripVertical, Plus, Trash2, UtensilsCrossed,
 } from "lucide-react";
 import clsx from "clsx";
 
@@ -25,8 +25,9 @@ import {
   Buton, Girdi, Kart, Kutu, SayfaBasligi, Secim, Uyari, Yukleniyor,
 } from "../components/ui";
 import { get, post, put } from "../lib/api";
+import { OLCUT_SECENEKLERI, saatSorunlari } from "../lib/cakisma";
 import { adlariTazele } from "../lib/izgara";
-import type { Donem, Gun } from "../lib/types";
+import type { CakismaOlcutu, Donem, Gun } from "../lib/types";
 
 interface TaslakSaat {
   /** Sunucudaki kaydın kimliği; yeni satırlarda null. */
@@ -58,6 +59,19 @@ export default function ZamanIzgarasi() {
 
   const donemler = useQuery({ queryKey: ["donemler"], queryFn: () => get<Donem[]>("/terms") });
   const gecmis = (donemler.data ?? []).filter((d) => !d.is_active);
+  const aktifDonem = (donemler.data ?? []).find((d) => d.is_active);
+
+  const olcut = useMutation({
+    mutationFn: (secilen: CakismaOlcutu) =>
+      put<Donem>(`/terms/${aktifDonem!.id}`, {
+        name: aktifDonem!.name,
+        starts_on: aktifDonem!.starts_on,
+        ends_on: aktifDonem!.ends_on,
+        block_building_switch: aktifDonem!.block_building_switch,
+        conflict_basis: secilen,
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["donemler"] }),
+  });
 
   const izgarayiAktar = useMutation({
     mutationFn: () => post<Gun[]>(`/timegrid/import/${kaynakId}`),
@@ -285,6 +299,46 @@ export default function ZamanIzgarasi() {
         </div>
       </Kutu>
 
+      {aktifDonem && (
+        <Kart
+          baslik="Çakışma neye göre ölçülsün?"
+          aciklama="Bir şube ya da öğretmen aynı anda iki yerde olamaz. “Aynı an”ın ne demek olduğunu buradan seçersiniz; hem program üretimi hem elle düzenleme bu seçime uyar."
+          sag={<AlarmClock className="h-4 w-4 text-murekkep-silik" />}
+        >
+          <div className="space-y-1.5">
+            {OLCUT_SECENEKLERI.map((se) => (
+              <label
+                key={se.id}
+                className={
+                  aktifDonem.conflict_basis === se.id
+                    ? "flex cursor-pointer gap-2.5 rounded-lg border border-cizgi-guclu bg-yuzey-alt px-3 py-2"
+                    : "flex cursor-pointer gap-2.5 rounded-lg border border-cizgi px-3 py-2 hover:bg-yuzey-alt"
+                }
+              >
+                <input
+                  type="radio"
+                  name="cakisma-olcutu"
+                  checked={aktifDonem.conflict_basis === se.id}
+                  disabled={olcut.isPending}
+                  onChange={() => olcut.mutate(se.id)}
+                  className="mt-0.5 h-4 w-4 border-cizgi-guclu"
+                />
+                <span className="text-sm">
+                  <span className="font-medium text-murekkep">{se.etiket}</span>
+                  <span className="text-murekkep-silik"> · {se.ozet}</span>
+                  <span className="mt-0.5 block text-xs leading-relaxed text-murekkep-silik">
+                    {se.aciklama}
+                  </span>
+                </span>
+              </label>
+            ))}
+          </div>
+          {olcut.error && (
+            <Uyari tur="hata">{(olcut.error as Error).message}</Uyari>
+          )}
+        </Kart>
+      )}
+
       <div className="grid gap-4 lg:grid-cols-2">
         {taslak.map((g) => (
           <Kart
@@ -312,6 +366,9 @@ export default function ZamanIzgarasi() {
             {!g.is_active ? (
               <p className="text-sm text-murekkep-silik">Kapalı günlere ders yerleştirilmez.</p>
             ) : (
+              <SaatDenetimi gun={g} olcut={aktifDonem?.conflict_basis} />
+            )}
+            {g.is_active && (
               <GunSaatleri
                 gun={g}
                 tasi={(kaynak, hedef) => satiriTasi(g.index, kaynak, hedef)}
@@ -325,6 +382,61 @@ export default function ZamanIzgarasi() {
           </Kart>
         ))}
       </div>
+    </div>
+  );
+}
+
+/** Girilen saatlerdeki tutarsızlıklar.
+ *
+ *  Saat bilgisi isteğe bağlıdır; girilmediğinde hiçbir şey söylenmez. Ama
+ *  girildiyse ve tutarsızsa sessiz kalmak yanlış olur: seçili ölçüte göre ya
+ *  beklenmedik bir çakışma doğar ya da gerçek bir çakışma görülmeden geçer.
+ */
+function SaatDenetimi({
+  gun,
+  olcut,
+}: {
+  gun: TaslakGun;
+  olcut?: CakismaOlcutu;
+}) {
+  const sorunlar = saatSorunlari(gun.periods);
+  if (!sorunlar.length) return null;
+
+  const cakisanlar = sorunlar.filter((s) => s.tur === "cakisma");
+  const otekiler = sorunlar.filter((s) => s.tur !== "cakisma");
+
+  return (
+    <div className="mb-3 space-y-2">
+      {cakisanlar.length > 0 && (
+        <Uyari tur={olcut === "saat" ? "bilgi" : "hata"}>
+          <span className="block font-medium">
+            {olcut === "saat"
+              ? "Bu saatler çakışma sayılacak:"
+              : "Bu saatler üst üste biniyor ama çakışma sayılmayacak:"}
+          </span>
+          <ul className="mt-1 list-disc space-y-0.5 pl-4">
+            {cakisanlar.map((c) => (
+              <li key={c.metin}>{c.metin}</li>
+            ))}
+          </ul>
+          {olcut !== "saat" && (
+            <span className="mt-1.5 block">
+              Ölçüt <b>ders saati</b> olduğu için yalnızca aynı satır çakışma sayılır;
+              aynı öğretmen bu iki satıra birden konabilir. Gerçek aralığa göre
+              denetlensin istiyorsanız yukarıdan <b>saat aralığı</b> ölçütünü seçin.
+            </span>
+          )}
+        </Uyari>
+      )}
+      {otekiler.length > 0 && (
+        <Uyari tur="hata">
+          <ul className="list-disc space-y-0.5 pl-4">
+            {otekiler.map((c) => (
+              <li key={c.metin}>{c.metin}</li>
+            ))}
+          </ul>
+        </Uyari>
+      )}
     </div>
   );
 }

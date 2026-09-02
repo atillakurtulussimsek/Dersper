@@ -7,8 +7,8 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
 from app import bloklar
 from app.models import (
-    Availability, GapPolicy, InstitutionType, SolveStatus, TimetableStatus,
-    VersionKind,
+    Availability, ConflictBasis, GapPolicy, InstitutionType, SolveStatus,
+    TimetableStatus, VersionKind,
 )
 
 
@@ -24,6 +24,8 @@ class TermIn(BaseModel):
     ends_on: date | None = None
     # Açıkken bir öğretmen bir günde tek binada ders verir.
     block_building_switch: bool = False
+    # Çakışma neye göre ölçülür: ızgaranın satırı mı, gerçek saat aralığı mı?
+    conflict_basis: ConflictBasis = ConflictBasis.DERS_SAATI
 
 
 class TermOut(ORMModel):
@@ -32,6 +34,7 @@ class TermOut(ORMModel):
     starts_on: date | None
     ends_on: date | None
     block_building_switch: bool = False
+    conflict_basis: ConflictBasis = ConflictBasis.DERS_SAATI
     created_at: datetime
     is_active: bool = False
     # Dönemde tanımlı kayıt sayıları — listede özet göstermek için.

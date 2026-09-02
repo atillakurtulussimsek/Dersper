@@ -8,6 +8,8 @@ Sert kısıtlar (v1):
   1. Her müfredat satırı haftalık saatinin tamamını alır.
   2. Bir şube aynı anda tek derste olur.
   3. Bir öğretmen aynı anda tek derste olur.
+     "Aynı an"ın ölçütünü kurum seçer: ızgaranın satırı mı, gerçek saat
+     aralığı mı (bkz. `app.cakisma` ve `Term.conflict_basis`).
   4. Öğretmenin ya da şubenin uygun olmadığı saatlere ders konmaz.
   5. Her blok gün içinde ardışık saatlere oturur, günü aşmaz. Blok uzunluklarını
      kullanıcı belirler (örn. 5 saatlik ders "2+2+1").
@@ -46,6 +48,8 @@ from dataclasses import dataclass, field
 
 from ortools.sat.python import cp_model
 
+from app import cakisma
+
 # Gevşetilmiş modelde yerleşemeyen her ders saatinin bedeli.
 CEZA_YERLESMEYEN = 1000
 # Esnek kipte günlük sınırın her bir saatlik aşımının bedeli.
@@ -75,6 +79,10 @@ class Slot:
     # Öğle arasından önce mi? Öğretmenlerin yarım gün sınırı buna dayanır.
     # Sınırı olan öğretmen yoksa değeri hiçbir şeyi etkilemez.
     sabah: bool = True
+    # Gün başından beri dakika. Yalnızca "saat" çakışma ölçütünde okunur;
+    # girilmemişse o satır yalnızca kendisiyle çakışır (bkz. app.cakisma).
+    baslangic: int | None = None
+    bitis: int | None = None
 
 
 @dataclass(frozen=True)
@@ -120,6 +128,9 @@ class SolveInput:
     # Öğretmen boşluklarına nasıl davranılacağı: "bosluklu" | "ideal" | "siki".
     # "ideal" hiçbir amaç eklemez — model saf sağlanabilirlik problemi kalır.
     bosluk_politikasi: str = "ideal"
+    # Çakışma neye göre ölçülür: "ders_saati" (ızgara satırı) | "saat"
+    # (gerçek aralık). Bkz. app.cakisma.
+    cakisma_olcutu: str = cakisma.DERS_SAATI
     # Günlük ders tekrar sınırı, öğretmen gün sınırı ve bina kuralı
     # aşılabilsin mi? Aşım cezalandırılır, yasak değildir.
     esnek_gunluk: bool = False
@@ -463,9 +474,13 @@ def _calistir(
                                _desen_etiketi(lesson))
 
     # (2) Şube çakışması
-    _tekil_kaynak(model, data.lessons, dolu, len(slots), lambda l: l.section_id)
+    es_zamanlilar = cakisma.gruplar(
+        [cakisma.Aralik(s.day_index, s.baslangic, s.bitis) for s in slots],
+        data.cakisma_olcutu,
+    )
+    _tekil_kaynak(model, data.lessons, dolu, es_zamanlilar, lambda l: l.section_id)
     # (3) Öğretmen çakışması
-    _tekil_kaynak(model, data.lessons, dolu, len(slots), lambda l: l.teacher_id)
+    _tekil_kaynak(model, data.lessons, dolu, es_zamanlilar, lambda l: l.teacher_id)
 
     # (10) Öğretmen gün sınırı. Günlük sınır (kural 6) gibi gevşek modelde de
     # sert kalır: orada gevşetilen tek şey "her saat yerleşmeli" kuralıdır.
@@ -797,16 +812,24 @@ def _gun_siniri(
     return asimlar
 
 
-def _tekil_kaynak(model, lessons, dolu, slot_sayisi, anahtar) -> None:
-    """Aynı kaynağı (şube ya da öğretmen) paylaşan dersler aynı saatte olamaz."""
-    gruplar: dict[int, list[int]] = {}
-    for li, lesson in enumerate(lessons):
-        gruplar.setdefault(anahtar(lesson), []).append(li)
+def _tekil_kaynak(model, lessons, dolu, es_zamanlilar, anahtar) -> None:
+    """Aynı kaynağı (şube ya da öğretmen) paylaşan dersler aynı anda olamaz.
 
-    for uyeler in gruplar.values():
-        if len(uyeler) < 2:
-            continue
-        for si in range(slot_sayisi):
-            cakisanlar = [dolu[(li, si)] for li in uyeler if (li, si) in dolu]
+    `es_zamanlilar`, aynı ana denk gelen slot kümeleridir (bkz. app.cakisma).
+    "ders_saati" ölçütünde her küme tek slottur ve kısıt eskisiyle birebir
+    aynıdır; "saat" ölçütünde saatleri üst üste binen slotlar aynı kümeye düşer.
+
+    Kaynağın tek dersi olsa bile küme taranır: "saat" ölçütünde tek bir dersin
+    iki bloğu, ayrı ama kesişen iki satıra düşebilir.
+    """
+    kaynaklar: dict[int, list[int]] = {}
+    for li, lesson in enumerate(lessons):
+        kaynaklar.setdefault(anahtar(lesson), []).append(li)
+
+    for uyeler in kaynaklar.values():
+        for kume in es_zamanlilar:
+            cakisanlar = [
+                dolu[(li, si)] for li in uyeler for si in kume if (li, si) in dolu
+            ]
             if len(cakisanlar) > 1:
                 model.AddAtMostOne(cakisanlar)

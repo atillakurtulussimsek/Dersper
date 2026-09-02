@@ -16,6 +16,9 @@ export interface OturumDurumu {
   registration_open: boolean;
 }
 
+/** Çakışma ölçütü — bkz. lib/cakisma.ts ve backend app/cakisma.py. */
+export type CakismaOlcutu = "ders_saati" | "saat";
+
 export interface Donem {
   id: number;
   name: string;
@@ -23,6 +26,8 @@ export interface Donem {
   ends_on: string | null;
   /** Açıkken bir öğretmen bir günde tek binada ders verir. */
   block_building_switch: boolean;
+  /** Çakışma neye göre ölçülür: ızgaranın satırı mı, gerçek saat aralığı mı? */
+  conflict_basis: CakismaOlcutu;
   created_at: string;
   is_active: boolean;
   counts: Record<string, number>;

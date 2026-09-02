@@ -55,6 +55,15 @@ class GapPolicy(str, enum.Enum):
     SIKI = "siki"           # boşluk en aza indirilir — gün sıkışır
 
 
+class ConflictBasis(str, enum.Enum):
+    """Çakışma neye göre ölçülür (bkz. `app.cakisma`).
+
+    Kurum seçer: ızgaranın satırı mı esastır, gerçek saat aralığı mı?
+    """
+    DERS_SAATI = "ders_saati"   # Salı 3. ders yalnızca Salı 3. dersle çakışır
+    SAAT = "saat"               # 09:00-09:40 ile 09:20-10:00 çakışır
+
+
 class SolveStatus(str, enum.Enum):
     BEKLIYOR = "bekliyor"
     CALISIYOR = "calisiyor"
@@ -108,6 +117,14 @@ class Term(Base, SoftDelete):
     # Açıkken bir öğretmen bir günde tek binada ders verir: binaların dersleri
     # ayrı günlere toplanır, gün içinde bina değiştirmek gerekmez.
     block_building_switch: Mapped[bool] = mapped_column(Boolean, default=False)
+    # "Aynı an" neye göre belirlenir: ızgaranın satırına mı, saat aralığına mı?
+    # Düzenli tek ızgarası olan okulda satır zaten saatin kendisidir; saatleri
+    # üst üste binebilen ızgaralarda (vardiya, farklı ders süreleri) aralık
+    # ölçütü gerekir.
+    conflict_basis: Mapped[ConflictBasis] = mapped_column(
+        Enum(ConflictBasis), default=ConflictBasis.DERS_SAATI,
+        server_default=ConflictBasis.DERS_SAATI.name,
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 

@@ -5,6 +5,11 @@ Dersper'in geliştirme günlüğü. Her değişiklik tek cümleyle, en yeni sür
 öncesinde ikinci hane özellik, üçüncü hane düzeltme demektir. Uygulamanın
 sürümü arayüzde yan menünün altında yazar.
 
+## 0.13.0 — 2026-09-02
+
+- Çakışma ölçütü kurumun seçimine bırakıldı: ızgaranın satırı (1., 2., 3. ders) ya da gerçek saat aralığı (1. ders 09:00–09:40); seçim hem program üretimini hem elle düzenlemeyi bağlar.
+- Zaman ızgarası, saatleri üst üste binen, sırası ters ya da yarım girilmiş satırları uyarıyor.
+
 ## 0.12.2 — 2026-09-01
 
 - Ders programı ekranı sadeleşti: sürüm geçmişi, geçmiş çalıştırmalar ve yayın bölümleri katlanır hâle geldi, özet sayımlar araç çubuğuna taşındı, kullanım notları tek satıra indi.

@@ -28,6 +28,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
+from app import cakisma
 from app import bloklar, surumler
 from app.models import (
     Assignment, Availability, CurriculumEntry, Day, Period, Section,
@@ -45,6 +46,9 @@ class Saat:
     gun_adi: str
     ad: str
     ders_mi: bool          # teneffüs/öğle arası değil ve günü açık
+    # Gün başından beri dakika; yalnızca "saat" çakışma ölçütünde okunur.
+    baslangic: int | None = None
+    bitis: int | None = None
 
 
 def saatleri_oku(db: Session, donem: Term) -> dict[int, Saat]:
@@ -62,6 +66,8 @@ def saatleri_oku(db: Session, donem: Term) -> dict[int, Saat]:
                 gun_adi=gun.name,
                 ad=p.name,
                 ders_mi=gun.is_active and not p.is_break,
+                baslangic=cakisma.dakikaya(p.start_time),
+                bitis=cakisma.dakikaya(p.end_time),
             )
     return saatler
 
@@ -177,6 +183,19 @@ class Duzenleyici:
         self.doluluk: dict[int, list[Assignment]] = defaultdict(list)
         for a in self.atamalar:
             self.doluluk[a.period_id].append(a)
+        # period_id -> onunla aynı ana denk gelen period_id'ler (kendisi dahil).
+        # Ölçütü kurum seçer; çözücü de aynı yerden okur (bkz. app.cakisma).
+        kimlikler = list(self.saatler)
+        self.es_zamanlilar = cakisma.ortusenler(
+            kimlikler,
+            [
+                cakisma.Aralik(self.saatler[k].gun_index,
+                               self.saatler[k].baslangic,
+                               self.saatler[k].bitis)
+                for k in kimlikler
+            ],
+            donem.conflict_basis.value,
+        )
 
     # --- Denetimler ---
 
@@ -207,16 +226,25 @@ class Duzenleyici:
             return f"{entry.teacher.full_name} bu saatte müsait değil."
         if saat.id in self.sube_kapali.get(entry.section_id, set()):
             return f"{entry.section.name} şubesi bu saate kapalı."
-        for diger in self.doluluk.get(saat.id, []):
-            if diger.id in yoksay:
-                continue
-            if diger.entry.section_id == entry.section_id:
-                return (f"{entry.section.name} şubesinin o saatte "
-                        f"{diger.entry.subject.name} dersi var.")
-            if diger.entry.teacher_id == entry.teacher_id:
-                return (f"{entry.teacher.full_name} o saatte "
-                        f"{diger.entry.section.name} şubesinde.")
+        for pid in sorted(self.es_zamanlilar.get(saat.id, {saat.id})):
+            # Başka bir satırla çakışıyorsa gerekçe onu da söylemeli; yoksa
+            # kullanıcı boş görünen bir hücrenin neden reddedildiğini anlamaz.
+            nerede = "o saatte" if pid == saat.id else f"{self._nerede(pid)} saatinde"
+            for diger in self.doluluk.get(pid, []):
+                if diger.id in yoksay:
+                    continue
+                if diger.entry.section_id == entry.section_id:
+                    return (f"{entry.section.name} şubesinin {nerede} "
+                            f"{diger.entry.subject.name} dersi var.")
+                if diger.entry.teacher_id == entry.teacher_id:
+                    return (f"{entry.teacher.full_name} {nerede} "
+                            f"{diger.entry.section.name} şubesinde.")
         return None
+
+    def _nerede(self, period_id: int) -> str:
+        """Çakışılan satırın adı — "Salı 4. ders" gibi."""
+        saat = self.saatler.get(period_id)
+        return f"{saat.gun_adi} {saat.ad}" if saat else "başka bir"
 
     def hedefleri_degerlendir(
         self, entry: CurriculumEntry, uzunluk: int, yoksay: set[int]

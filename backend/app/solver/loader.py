@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app import bloklar
+from app import cakisma
 from app.models import (
     Availability, CurriculumEntry, Day, Section, SectionAvailability, Teacher,
     TeacherAvailability, Term,
@@ -58,6 +59,8 @@ def slotlari_yukle(db: Session, donem: Term) -> list[Slot]:
                 day_name=gun.name,
                 period_name=p.name,
                 sabah=sabah_mi(saatler, p),
+                baslangic=cakisma.dakikaya(p.start_time),
+                bitis=cakisma.dakikaya(p.end_time),
             ))
     return slots
 
