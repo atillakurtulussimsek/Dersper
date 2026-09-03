@@ -559,6 +559,7 @@ export default function ProgramDetay() {
       {hucreler.length > 0 && id && <ProgramUyarilari timetableId={id} />}
 
       <SurumGecmisi
+        timetableId={Number(id)}
         surumler={surumler.data ?? []}
         yukleniyor={surumler.isLoading}
         simdiki={izgaraSorgu.data?.version ?? null}

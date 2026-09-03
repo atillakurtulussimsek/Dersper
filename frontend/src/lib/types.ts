@@ -201,6 +201,34 @@ export interface Surum {
   created_at: string;
 }
 
+export interface FarkKonum {
+  period_id: number;
+  gun: string;
+  saat: string;
+  gun_index: number;
+  period_index: number;
+}
+
+export type FarkTuru = "tasindi" | "cikti" | "eklendi" | "kilitlendi" | "kilit_acildi";
+
+export interface FarkDegisikligi {
+  tur: FarkTuru;
+  entry_id: number;
+  sube: string;
+  ders: string;
+  ogretmen: string;
+  kaynak: FarkKonum | null;
+  hedef: FarkKonum | null;
+}
+
+/** İki sürüm arasındaki fark: A'dan B'ye. */
+export interface SurumFarki {
+  a: Surum;
+  b: Surum;
+  ozet: { tasindi: number; cikti: number; eklendi: number; kilit: number; degisen_ders: number };
+  degisiklikler: FarkDegisikligi[];
+}
+
 /** Sürüklenen ders için tek bir saatin değerlendirmesi. */
 export interface Hedef {
   period_id: number;

@@ -205,3 +205,117 @@ def baslangici_guvence_al(db: Session, program: Timetable) -> None:
     if var_mi is not None:
         return
     surum_yaz(db, program, VersionKind.ILK, "Başlangıç")
+
+
+# --- Sürüm farkı ---
+
+def _surum_numarasiyla(db: Session, program: Timetable, number: int) -> TimetableVersion:
+    surum = db.scalar(
+        select(TimetableVersion).where(
+            TimetableVersion.timetable_id == program.id,
+            TimetableVersion.number == number,
+        )
+    )
+    if surum is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"v{number} sürümü bulunamadı.")
+    return surum
+
+
+def fark(db: Session, program: Timetable, a_no: int, b_no: int) -> dict:
+    """İki sürüm arasında ne değişti? A'dan B'ye giden değişiklikler.
+
+    Fark ders (müfredat satırı) bazında okunur: aynı dersin bir saati gidip
+    başka bir saati geldiyse bu bir TAŞIMAdır, ayrı ayrı "çıktı" ve "eklendi"
+    değil. Eşleme gün/saat sırasına göre yapılır; bir dersin üç saati birden
+    yer değiştirdiyse üç taşıma görünür. Eşleşmeden kalanlar çıkan ya da
+    eklenen saatlerdir. Aynı yerde duran ama kilidi değişen saat ayrıca
+    listelenir.
+
+    Silinmiş ders ya da ders saati sürümde hâlâ duruyor olabilir; adları
+    silinmiş kayıttan okunur, yoksa "silinmiş" yazılır.
+    """
+    from collections import defaultdict
+
+    from app.duzenle import saatleri_oku
+
+    a = _surum_numarasiyla(db, program, a_no)
+    b = _surum_numarasiyla(db, program, b_no)
+    saatler = saatleri_oku(db, program.term)
+
+    def konum(period_id: int) -> dict:
+        s = saatler.get(period_id)
+        if s is None:
+            return {"period_id": period_id, "gun": "silinmiş", "saat": "saat",
+                    "gun_index": 99, "period_index": 99}
+        # Izgaranın satır numarası ve sürüm etiketiyle aynı dil: "6. saat".
+        # Saatin kendi adı ("5. ders") teneffüsleri saymaz; aynı ekranda iki
+        # ayrı sayı görünmesin.
+        return {"period_id": s.id, "gun": s.gun_adi, "saat": f"{s.period_index + 1}. saat",
+                "gun_index": s.gun_index, "period_index": s.period_index}
+
+    def sira(period_id: int) -> tuple[int, int]:
+        k = konum(period_id)
+        return (k["gun_index"], k["period_index"])
+
+    # entry_id -> {period_id: kilitli}
+    def yerlesim(surum: TimetableVersion) -> dict[int, dict[int, bool]]:
+        d: dict[int, dict[int, bool]] = defaultdict(dict)
+        for e, p, k in surum.placements or []:
+            d[e][p] = bool(k)
+        return d
+
+    ya, yb = yerlesim(a), yerlesim(b)
+    entry_ids = set(ya) | set(yb)
+    entries = {
+        e.id: e for e in db.scalars(
+            select(CurriculumEntry).where(CurriculumEntry.id.in_(entry_ids))
+        )
+    } if entry_ids else {}
+
+    def etiket(entry_id: int) -> dict:
+        e = entries.get(entry_id)
+        if e is None:
+            return {"entry_id": entry_id, "sube": "silinmiş ders", "ders": "",
+                    "ogretmen": ""}
+        return {
+            "entry_id": entry_id,
+            "sube": " + ".join(sb.name for sb in e.sections),
+            "ders": e.subject.name,
+            "ogretmen": e.teacher.full_name,
+        }
+
+    degisiklikler: list[dict] = []
+    for entry_id in entry_ids:
+        eski, yeni = ya.get(entry_id, {}), yb.get(entry_id, {})
+        gidenler = sorted((p for p in eski if p not in yeni), key=sira)
+        gelenler = sorted((p for p in yeni if p not in eski), key=sira)
+        kim = etiket(entry_id)
+
+        for g, y in zip(gidenler, gelenler):
+            degisiklikler.append({**kim, "tur": "tasindi",
+                                  "kaynak": konum(g), "hedef": konum(y)})
+        for g in gidenler[len(gelenler):]:
+            degisiklikler.append({**kim, "tur": "cikti",
+                                  "kaynak": konum(g), "hedef": None})
+        for y in gelenler[len(gidenler):]:
+            degisiklikler.append({**kim, "tur": "eklendi",
+                                  "kaynak": None, "hedef": konum(y)})
+        for p in eski.keys() & yeni.keys():
+            if eski[p] != yeni[p]:
+                degisiklikler.append({**kim,
+                                      "tur": "kilitlendi" if yeni[p] else "kilit_acildi",
+                                      "kaynak": konum(p), "hedef": konum(p)})
+
+    # Okunur sıra: önce türe göre, sonra şube/ders, sonra zamana göre.
+    tur_sirasi = {"tasindi": 0, "cikti": 1, "eklendi": 2, "kilitlendi": 3, "kilit_acildi": 3}
+    degisiklikler.sort(key=lambda d: (
+        tur_sirasi[d["tur"]], d["sube"], d["ders"],
+        sira((d["kaynak"] or d["hedef"])["period_id"]),
+    ))
+
+    sayim = {t: 0 for t in ("tasindi", "cikti", "eklendi", "kilit")}
+    for d in degisiklikler:
+        sayim["kilit" if d["tur"].startswith("kilit") else d["tur"]] += 1
+    sayim["degisen_ders"] = len({d["entry_id"] for d in degisiklikler})
+
+    return {"a": a, "b": b, "ozet": sayim, "degisiklikler": degisiklikler}

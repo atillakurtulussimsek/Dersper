@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from datetime import date, datetime, time
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
 from app import bloklar
@@ -461,6 +463,33 @@ class VersionOut(ORMModel):
     label: str
     placed: int
     created_at: datetime
+
+
+class DiffKonum(BaseModel):
+    period_id: int
+    gun: str
+    saat: str
+    gun_index: int
+    period_index: int
+
+
+class DiffDegisiklik(BaseModel):
+    tur: Literal["tasindi", "cikti", "eklendi", "kilitlendi", "kilit_acildi"]
+    entry_id: int
+    sube: str
+    ders: str
+    ogretmen: str
+    kaynak: DiffKonum | None
+    hedef: DiffKonum | None
+
+
+class VersionDiffOut(BaseModel):
+    """İki sürüm arasındaki fark: A'dan B'ye."""
+    a: VersionOut
+    b: VersionOut
+    # tasindi / cikti / eklendi / kilit sayıları ve etkilenen ders sayısı.
+    ozet: dict[str, int]
+    degisiklikler: list[DiffDegisiklik]
 
 
 class WarningOut(BaseModel):

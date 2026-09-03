@@ -19,7 +19,8 @@ from app import surumler
 from app.duzenle import Duzenleyici
 from app.schemas import (
     AssignmentMove, GridCell, PendingOut, PlaceIn, SolveRunOut, TargetOut,
-    TimetableGrid, TimetableIn, TimetableOut, TimetableUpdate, VersionOut,
+    TimetableGrid, TimetableIn, TimetableOut, TimetableUpdate, VersionDiffOut,
+    VersionOut,
     WarningIgnoreIn, WarningOut,
 )
 from app.uyarilar import uyarilari_hesapla
@@ -383,6 +384,19 @@ def surumler_listesi(
         .where(TimetableVersion.timetable_id == t.id)
         .order_by(TimetableVersion.number.desc())
     ))
+
+
+@router.get("/{timetable_id}/versions/{a}/diff/{b}", response_model=VersionDiffOut)
+def surum_farki(
+    timetable_id: int,
+    a: int,
+    b: int,
+    db: Session = Depends(get_db),
+    donem: Term = Depends(aktif_donem),
+) -> dict:
+    """v{a}'dan v{b}'ye ne değişti: taşınan, çıkan, eklenen ve kilidi değişen saatler."""
+    t = _programi_getir(db, timetable_id, donem)
+    return surumler.fark(db, t, a, b)
 
 
 @router.post("/{timetable_id}/versions/{number}/restore", response_model=TimetableGrid)

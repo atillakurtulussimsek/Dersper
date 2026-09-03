@@ -5,6 +5,10 @@ Dersper'in geliştirme günlüğü. Her değişiklik tek cümleyle, en yeni sür
 öncesinde ikinci hane özellik, üçüncü hane düzeltme demektir. Uygulamanın
 sürümü arayüzde yan menünün altında yazar.
 
+## 0.15.0 — 2026-09-03
+
+- Sürüm farkı: sürüm geçmişinde "Fark" ile iki sürüm arasında hangi dersin nereden nereye taşındığı, hangisinin çıktığı ya da eklendiği ve kilit değişiklikleri listeleniyor; yön çevrilebiliyor.
+
 ## 0.14.1 — 2026-09-03
 
 - Ortak ders hücrede belli oluyor: ders adının yanında (çarşafta köşede) küçük bir kişiler simgesi, alt satırda ve ipucunda birlikte işleyen şubeler.
