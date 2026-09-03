@@ -27,6 +27,25 @@ const ISARET: Record<Musaitlik, string> = {
   tercih: "★",
 };
 
+export type KopyaSozleri = {
+  tekil: string;        // "şube"
+  cogul: string;        // "şubeler"
+  cogulIlgi: string;    // "şubelerin"
+  cogulYonelme: string; // "şubelere"
+  tekilIlgi: string;    // "şubenin"
+  tekilYonelme: string; // "şubeye"
+};
+
+export const SUBE_SOZLERI: KopyaSozleri = {
+  tekil: "şube", cogul: "şubeler", cogulIlgi: "şubelerin", cogulYonelme: "şubelere",
+  tekilIlgi: "şubenin", tekilYonelme: "şubeye",
+};
+
+export const OGRETMEN_SOZLERI: KopyaSozleri = {
+  tekil: "öğretmen", cogul: "öğretmenler", cogulIlgi: "öğretmenlerin",
+  cogulYonelme: "öğretmenlere", tekilIlgi: "öğretmenin", tekilYonelme: "öğretmene",
+};
+
 export default function MusaitlikMatrisi({
   baslik,
   yol,
@@ -34,6 +53,8 @@ export default function MusaitlikMatrisi({
   gunler,
   kapat,
   kopyaHedefleri,
+  kopyaAlani = "section_ids",
+  kopyaSozleri = SUBE_SOZLERI,
 }: {
   /** Kutunun başlığı, örn. "Ayşe Yılmaz · müsaitlik" */
   baslik: string;
@@ -44,6 +65,11 @@ export default function MusaitlikMatrisi({
   kapat: () => void;
   /** Verilirse tabloyu başka kayıtlara kopyalama seçeneği açılır. */
   kopyaHedefleri?: { id: number; name: string }[];
+  /** Kopya isteğindeki alan adı; şube için varsayılan, öğretmende "teacher_ids". */
+  kopyaAlani?: "section_ids" | "teacher_ids";
+  /** Hedeflerin adı, gereken çekimleriyle — ek yapıştırmak Türkçede
+   *  ünlü/ünsüz uyumunu bozar ("öğretmenye"). */
+  kopyaSozleri?: KopyaSozleri;
 }) {
   const qc = useQueryClient();
   const [kopyaModu, setKopyaModu] = useState(false);
@@ -86,14 +112,14 @@ export default function MusaitlikMatrisi({
       await kaydetIstegi();
       return post<{ copied_to: string[]; cells: number }>(
         `${yol}/availability/copy`,
-        { section_ids: hedefler },
+        { [kopyaAlani]: hedefler },
       );
     },
     onSuccess: (veri) => {
       qc.invalidateQueries({ queryKey: ["musaitlik"] });
       setKopyaSonucu(
-        `${veri.copied_to.join(", ")} şubelerine kopyalandı ` +
-          `(${veri.cells} işaretli saat). Bu şubelerin önceki planı silindi.`,
+        `${veri.copied_to.join(", ")} — ${veri.copied_to.length} ${kopyaSozleri.tekilYonelme} kopyalandı ` +
+          `(${veri.cells} işaretli saat). Önceki planları silindi.`,
       );
       setHedefler([]);
       setKopyaModu(false);
@@ -199,16 +225,16 @@ export default function MusaitlikMatrisi({
         {kopyaModu && kopyaHedefleri && (
           <div className="space-y-3 rounded-lg border border-cizgi p-4">
             <Uyari tur="hata">
-              Seçtiğiniz şubelerin mevcut müsaitlik tablosu <b>tamamen silinir</b> ve
+              Seçtiğiniz {kopyaSozleri.cogulIlgi} mevcut müsaitlik tablosu <b>tamamen silinir</b> ve
               yerine bu tablo yazılır. Birleştirme yapılmaz.
             </Uyari>
 
             {!kopyaHedefleri.length ? (
-              <p className="text-sm text-murekkep-silik">Kopyalanacak başka şube yok.</p>
+              <p className="text-sm text-murekkep-silik">Kopyalanacak başka {kopyaSozleri.tekil} yok.</p>
             ) : (
               <>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-murekkep-yumusak">Hedef şubeler</span>
+                  <span className="text-sm font-medium text-murekkep-yumusak">Hedef {kopyaSozleri.cogul}</span>
                   <Buton
                     tur="sade"
                     onClick={() =>
@@ -259,7 +285,7 @@ export default function MusaitlikMatrisi({
                 yukleniyor={kopyala.isPending}
                 onClick={() => kopyala.mutate()}
               >
-                {hedefler.length} şubenin planını değiştir
+                {hedefler.length} {kopyaSozleri.tekilIlgi} planını değiştir
               </Buton>
             </div>
           </div>
@@ -277,7 +303,7 @@ export default function MusaitlikMatrisi({
                 setKopyaModu(true);
               }}
             >
-              <Copy className="h-4 w-4" /> Başka şubelere kopyala
+              <Copy className="h-4 w-4" /> Başka {kopyaSozleri.cogulYonelme} kopyala
             </Buton>
           )}
           <Buton tur="ikincil" onClick={kapat}>

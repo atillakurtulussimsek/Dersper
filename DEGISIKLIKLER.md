@@ -5,6 +5,10 @@ Dersper'in geliştirme günlüğü. Her değişiklik tek cümleyle, en yeni sür
 öncesinde ikinci hane özellik, üçüncü hane düzeltme demektir. Uygulamanın
 sürümü arayüzde yan menünün altında yazar.
 
+## 0.19.0 — 2026-09-03
+
+- Öğretmen müsaitliği başka öğretmenlere toplu kopyalanabiliyor: müsaitlik penceresinde "Başka öğretmenlere kopyala", hedefleri seçip tek adımda uygular (şubelerdeki gibi).
+
 ## 0.18.1 — 2026-09-03
 
 - Ders atamasında şube seçimi sadeleşti: eklenen şube etiket olarak seçili gelir, ortak ders için "+ Şube ekle" ile aranabilir listeden başka şube katılır.

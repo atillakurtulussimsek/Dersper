@@ -277,6 +277,11 @@ class AvailabilityCopyIn(BaseModel):
     section_ids: list[int] = Field(min_length=1)
 
 
+class TeacherAvailabilityCopyIn(BaseModel):
+    """Bir öğretmenin müsaitlik tablosunu başka öğretmenlere kopyalar."""
+    teacher_ids: list[int] = Field(min_length=1)
+
+
 class AvailabilityCopyOut(BaseModel):
     # Kopyalanan şube adları
     copied_to: list[str]

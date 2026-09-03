@@ -22,7 +22,7 @@ from app.models import (
     TeacherAvailability, Term,
 )
 from app.schemas import (
-    SectionOrderIn,
+    SectionOrderIn, TeacherAvailabilityCopyIn,
     AvailabilityCell, AvailabilityCopyIn, AvailabilityCopyOut, AvailabilityUpdate,
     BuildingIn, BuildingOut, ClosedAvailabilityOut, CurriculumCopyIn,
     CurriculumCopyOut, CurriculumIn, CurriculumOut, ImportIn, ImportOut, SectionIn,
@@ -267,6 +267,45 @@ def musaitlik_kaydet(
     _musaitlik_yaz(db, TeacherAvailability, "teacher_id", teacher_id, payload,
                    _donem_saatleri(db, donem))
     return musaitlik(teacher_id, db, donem)
+
+
+@router.post("/teachers/{teacher_id}/availability/copy",
+             response_model=AvailabilityCopyOut)
+def ogretmen_musaitligini_kopyala(
+    teacher_id: int,
+    payload: TeacherAvailabilityCopyIn,
+    db: Session = Depends(get_db),
+    donem: Term = Depends(aktif_donem),
+) -> AvailabilityCopyOut:
+    """Kaynak öğretmenin müsaitlik tablosunu hedef öğretmenlere aynen yazar.
+
+    Aynı saatlerde okulda olan bir öğretmen grubu (yarı zamanlılar, ortak
+    ders veren branş) için tek tek işaretlemek yerine. Hedeflerin önceki
+    işaretlemeleri tamamen silinir; birleştirme yapılmaz.
+    """
+    _getir(db, Teacher, teacher_id, "Öğretmen", donem)
+    hucreler = _musaitlik_oku(db, TeacherAvailability, TeacherAvailability.teacher_id,
+                              teacher_id)
+
+    hedefler = [
+        t for t in db.scalars(
+            _donemin(Teacher, donem).where(Teacher.id.in_(payload.teacher_ids))
+        )
+        if t.id != teacher_id
+    ]
+    if not hedefler:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND, "Kopyalanacak geçerli bir hedef öğretmen yok."
+        )
+
+    gecerli = _donem_saatleri(db, donem)
+    for hedef in hedefler:
+        _musaitlik_yaz(db, TeacherAvailability, "teacher_id", hedef.id,
+                       AvailabilityUpdate(cells=hucreler), gecerli)
+
+    return AvailabilityCopyOut(
+        copied_to=sorted(h.full_name for h in hedefler), cells=len(hucreler)
+    )
 
 
 # --- Binalar ---

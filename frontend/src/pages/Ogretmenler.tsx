@@ -4,7 +4,7 @@ import { CalendarCheck, Download, Pencil, Plus, Trash2, Wand2 } from "lucide-rea
 
 import GecmisDonemdenAktar from "../components/GecmisDonemdenAktar";
 import RenkSecici from "../components/RenkSecici";
-import MusaitlikMatrisi from "../components/MusaitlikMatrisi";
+import MusaitlikMatrisi, { OGRETMEN_SOZLERI } from "../components/MusaitlikMatrisi";
 import {
   Alan, BosDurum, Buton, CokSatir, Girdi, Kart, Kutu, SayfaBasligi, Secim, Tablo,
   Uyari, Yukleniyor,
@@ -366,6 +366,11 @@ export default function Ogretmenler() {
           yol={`/teachers/${musaitlikIcin.id}`}
           aciklama="Öğretmenin derse girebileceği saatleri işaretleyin."
           gunler={izgara.data ?? []}
+          kopyaHedefleri={(liste.data ?? [])
+            .filter((t) => t.id !== musaitlikIcin.id)
+            .map((t) => ({ id: t.id, name: t.full_name }))}
+          kopyaAlani="teacher_ids"
+          kopyaSozleri={OGRETMEN_SOZLERI}
           kapat={() => setMusaitlikIcin(null)}
         />
       )}
