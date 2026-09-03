@@ -5,6 +5,10 @@ Dersper'in geliştirme günlüğü. Her değişiklik tek cümleyle, en yeni sür
 öncesinde ikinci hane özellik, üçüncü hane düzeltme demektir. Uygulamanın
 sürümü arayüzde yan menünün altında yazar.
 
+## 0.16.0 — 2026-09-03
+
+- Ders programında sağ tık menüsü (dokunmatikte tek dokunuş): "Taşı…" hedef saati listeden seçtiriyor, ayrıca kilitle / kilidi aç ve rafa al; raftaki blokta "Yerleştir…" — küçük ekranda sürüklemenin yerine geçer.
+
 ## 0.15.0 — 2026-09-03
 
 - Sürüm farkı: sürüm geçmişinde "Fark" ile iki sürüm arasında hangi dersin nereden nereye taşındığı, hangisinin çıktığı ya da eklendiği ve kilit değişiklikleri listeleniyor; yön çevrilebiliyor.

@@ -11,8 +11,9 @@ import {
 } from "@dnd-kit/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "react-router-dom";
-import { Copy, Globe, Play, Redo2, Undo2 } from "lucide-react";
+import { Copy, Globe, Inbox, Lock, LockOpen, MoveRight, Play, Redo2, Undo2 } from "lucide-react";
 
+import { BaglamMenusu, HedefSecici, type MenuOgesi } from "../components/BaglamMenusu";
 import BekleyenDersler from "../components/BekleyenDersler";
 import CarsafIzgarasi from "../components/CarsafIzgarasi";
 import GecmisCalistirmalar from "../components/GecmisCalistirmalar";
@@ -244,13 +245,21 @@ export default function ProgramDetay() {
   );
   const bloklar = useMemo(() => bloklariCikar(hucreler), [hucreler]);
 
-  /** Sürüklenen öğeyi tanımlayan sorgu dizesi; hedefleri sunucuya bu sorar. */
+  // Sağ tık menüsü ve "Taşı…/Yerleştir…" seçicisi. Menü ekrandaki konumu ve
+  // hangi öğeye ait olduğunu tutar; seçici, hedeflerini sürüklemeyle aynı
+  // sorgudan alır — kurallar iki yolda da aynı.
+  const [menu, setMenu] = useState<{ x: number; y: number; oge: Suruklenen } | null>(null);
+  const [secim, setSecim] = useState<Suruklenen | null>(null);
+
+  /** Hedefleri sorulacak öğe: sürüklenen ya da menüden seçilen. */
+  const hedefOgesi = suruklenen ?? secim;
+  /** Öğeyi tanımlayan sorgu dizesi; hedefleri sunucuya bu sorar. */
   const hedefSorgusu =
-    suruklenen === null
+    hedefOgesi === null
       ? null
-      : suruklenen.tur === "hucre"
-        ? `assignment_id=${suruklenen.assignmentId}`
-        : `curriculum_entry_id=${suruklenen.entryId}&uzunluk=${suruklenen.uzunluk}`;
+      : hedefOgesi.tur === "hucre"
+        ? `assignment_id=${hedefOgesi.assignmentId}`
+        : `curriculum_entry_id=${hedefOgesi.entryId}&uzunluk=${hedefOgesi.uzunluk}`;
 
   const hedefSorgu = useQuery({
     queryKey: ["hedefler", id, hedefSorgusu],
@@ -265,6 +274,68 @@ export default function ProgramDetay() {
     for (const h of hedefSorgu.data ?? []) harita.set(h.period_id, h);
     return harita;
   }, [hedefSorgu.data]);
+
+  function hucreMenusu(e: { clientX: number; clientY: number }, hucre: Hucre) {
+    const blok = bloklar.get(hucre.assignment_id) ?? [hucre];
+    setMenu({
+      x: e.clientX, y: e.clientY,
+      oge: { tur: "hucre", assignmentId: hucre.assignment_id, hucreler: blok },
+    });
+  }
+
+  function rafMenusu(e: { clientX: number; clientY: number }, blok: BekleyenBlok) {
+    setMenu({
+      x: e.clientX, y: e.clientY,
+      oge: {
+        tur: "bekleyen",
+        entryId: blok.curriculum_entry_id,
+        uzunluk: blok.uzunluk,
+        etiket: `${blok.subject_name} · ${subeEtiketi(blok)}`,
+        renk: blok.subject_color,
+      },
+    });
+  }
+
+  /** Menünün seçenekleri; hücre ile raftaki blok için farklı. */
+  function menuOgeleri(oge: Suruklenen): MenuOgesi[] {
+    if (oge.tur === "bekleyen") {
+      return [{
+        etiket: "Yerleştir…",
+        simge: <MoveRight className="h-4 w-4" />,
+        sec: () => setSecim(oge),
+      }];
+    }
+    const kilitli = oge.hucreler[0]?.is_locked ?? false;
+    return [
+      {
+        etiket: "Taşı…",
+        simge: <MoveRight className="h-4 w-4" />,
+        devre: kilitli || duzenlemeSuruyor,
+        sec: () => setSecim(oge),
+      },
+      {
+        etiket: kilitli ? "Kilidi aç" : "Kilitle",
+        simge: kilitli ? <LockOpen className="h-4 w-4" /> : <Lock className="h-4 w-4" />,
+        devre: duzenlemeSuruyor,
+        sec: () => kilitle.mutate(oge.assignmentId),
+      },
+      {
+        etiket: "Rafa al (programdan çıkar)",
+        simge: <Inbox className="h-4 w-4" />,
+        tehlike: true,
+        devre: kilitli || duzenlemeSuruyor,
+        sec: () => izgaradanAl.mutate(oge.assignmentId),
+      },
+    ];
+  }
+
+  function hedefSecildi(periodId: number) {
+    const oge = secim;
+    setSecim(null);
+    if (!oge) return;
+    if (oge.tur === "hucre") tasi.mutate({ atama: oge.assignmentId, saat: periodId });
+    else yerlestir.mutate({ entryId: oge.entryId, saat: periodId, uzunluk: oge.uzunluk });
+  }
 
   function suruklemeBasladi(e: DragStartEvent) {
     const kimlik = String(e.active.id);
@@ -536,13 +607,15 @@ export default function ProgramDetay() {
                   hedefler={hedefler}
                   suruklenen={suruklenen}
                   kilitle={(atama) => kilitle.mutate(atama)}
+                  menuAc={hucreMenusu}
                 />
               )}
               <Ipucu>
                 Hücreyi sürükleyerek taşıyın — blok bütün taşınır. Dolu bir hücreye
                 bırakmak iki dersi yer değiştirir. Aşağıdaki rafa bırakmak dersi
                 programdan çıkarır. Çift tıklamak kilitler; kilitli dersler yeniden
-                üretimde yerinde kalır.
+                üretimde yerinde kalır. Sürüklemek zorsa (küçük ekran) hücreye sağ
+                tıklayın ya da dokunun: menüden taşır, kilitler, rafa alırsınız.
               </Ipucu>
             </>
           )}
@@ -553,6 +626,7 @@ export default function ProgramDetay() {
         <BekleyenDersler
           bloklar={bekleyenler.data ?? []}
           suruklenen={suruklenen}
+          menuAc={rafMenusu}
         />
       )}
 
@@ -603,6 +677,39 @@ export default function ProgramDetay() {
         </Kart>
       )}
       </div>
+
+      {menu && (
+        <BaglamMenusu
+          x={menu.x}
+          y={menu.y}
+          baslik={
+            menu.oge.tur === "hucre"
+              ? `${menu.oge.hucreler[0]?.subject_name ?? ""} · ${
+                  menu.oge.hucreler[0] ? subeEtiketi(menu.oge.hucreler[0]) : ""
+                }`
+              : menu.oge.etiket
+          }
+          ogeler={menuOgeleri(menu.oge)}
+          kapat={() => setMenu(null)}
+        />
+      )}
+
+      <HedefSecici
+        acik={secim !== null}
+        kapat={() => setSecim(null)}
+        baslik={
+          secim?.tur === "hucre"
+            ? `Taşı: ${secim.hucreler[0]?.subject_name ?? ""} · ${
+                secim.hucreler[0] ? subeEtiketi(secim.hucreler[0]) : ""
+              }`
+            : `Yerleştir: ${secim?.etiket ?? ""}`
+        }
+        gunler={gunler.data ?? []}
+        hedefler={hedefler}
+        yukleniyor={secim !== null && hedefSorgu.isLoading}
+        uzunluk={secim?.tur === "hucre" ? secim.hucreler.length : (secim?.uzunluk ?? 1)}
+        sec={hedefSecildi}
+      />
 
       {/* Sürüklenen şey imlecin peşinde: hangi dersin taşındığı hep görünür. */}
       <DragOverlay dropAnimation={null}>

@@ -14,6 +14,7 @@ import clsx from "clsx";
 import { Kart } from "./ui";
 import { dersZemini } from "../lib/renkler";
 import type { BekleyenBlok, Suruklenen } from "../lib/types";
+import { dokunmatikMi } from "./BaglamMenusu";
 
 /** Aynı dersin aynı uzunluktaki blokları tek kartta toplanır; birden çoksa
  *  sayısı yazılır. Ayrı ayrı göstermek aynı kimlikte iki sürüklenebilir
@@ -33,10 +34,12 @@ function Blok({
   blok,
   adet,
   suruklenenMi,
+  menuAc,
 }: {
   blok: BekleyenBlok;
   adet: number;
   suruklenenMi: boolean;
+  menuAc?: (e: { clientX: number; clientY: number }, blok: BekleyenBlok) => void;
 }) {
   const kimlik = `b:${blok.curriculum_entry_id}:${blok.uzunluk}`;
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: kimlik });
@@ -46,7 +49,15 @@ function Blok({
       ref={setNodeRef}
       {...listeners}
       {...attributes}
-      title={`${blok.section_name} · ${blok.subject_name} · ${blok.teacher_name} — ${blok.uzunluk} saat. Izgaraya sürükleyin.`}
+      onContextMenu={(e) => {
+        if (!menuAc) return;
+        e.preventDefault();
+        menuAc(e, blok);
+      }}
+      onClick={(e) => {
+        if (menuAc && dokunmatikMi()) menuAc(e, blok);
+      }}
+      title={`${blok.section_name} · ${blok.subject_name} · ${blok.teacher_name} — ${blok.uzunluk} saat. Izgaraya sürükleyin ya da sağ tıklayın.`}
       className={clsx(
         "cursor-grab rounded-md px-2 py-1.5 active:cursor-grabbing",
         (isDragging || suruklenenMi) && "opacity-30",
@@ -71,9 +82,11 @@ function Blok({
 export default function BekleyenDersler({
   bloklar,
   suruklenen,
+  menuAc,
 }: {
   bloklar: BekleyenBlok[];
   suruklenen: Suruklenen | null;
+  menuAc?: (e: { clientX: number; clientY: number }, blok: BekleyenBlok) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: "raf" });
   const izgaradanGeliyor = suruklenen?.tur === "hucre";
@@ -122,6 +135,7 @@ export default function BekleyenDersler({
                 key={`${blok.curriculum_entry_id}:${blok.uzunluk}`}
                 blok={blok}
                 adet={adet}
+                menuAc={menuAc}
                 suruklenenMi={
                   suruklenen?.tur === "bekleyen" &&
                   suruklenen.entryId === blok.curriculum_entry_id &&

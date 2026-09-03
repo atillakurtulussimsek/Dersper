@@ -19,6 +19,7 @@ import { bloklariCikar } from "../lib/hucreler";
 import { dersZemini } from "../lib/renkler";
 import type { DersSaati, Gun, Hedef, Hucre, Suruklenen } from "../lib/types";
 import { ortakNotu, subeEtiketi, subeyeAit } from "../lib/cakisma";
+import { dokunmatikMi } from "./BaglamMenusu";
 
 export type Bakis = "sube" | "ogretmen";
 
@@ -62,12 +63,14 @@ function Surukle({
   bakis,
   blokBoyu,
   kilitle,
+  menuAc,
   suruklenenMi,
 }: {
   hucre: Hucre;
   bakis: Bakis;
   blokBoyu: number;
   kilitle?: (id: number) => void;
+  menuAc?: (e: { clientX: number; clientY: number }, hucre: Hucre) => void;
   suruklenenMi: boolean;
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
@@ -84,10 +87,19 @@ function Surukle({
       {...listeners}
       {...attributes}
       onDoubleClick={() => kilitle?.(hucre.assignment_id)}
+      // Masaüstünde sağ tık; dokunmatikte (sağ tık yok) tek dokunuş.
+      onContextMenu={(e) => {
+        if (!menuAc) return;
+        e.preventDefault();
+        menuAc(e, hucre);
+      }}
+      onClick={(e) => {
+        if (menuAc && dokunmatikMi()) menuAc(e, hucre);
+      }}
       title={
         hucre.is_locked
           ? `${hucre.subject_name} · ${kim} — kilitli, çift tıklayarak açın`
-          : `${hucre.subject_name} · ${kim}${blokNotu} — sürükleyerek taşıyın, çift tıklayarak kilitleyin`
+          : `${hucre.subject_name} · ${kim}${blokNotu} — sürükleyerek taşıyın, sağ tıkla menüyü açın`
       }
       className={clsx(
         "h-full w-full transition-opacity",
@@ -147,6 +159,7 @@ export default function ProgramIzgarasi({
   hedefler,
   suruklenen,
   kilitle,
+  menuAc,
 }: {
   gunler: Gun[];
   hucreler: Hucre[];
@@ -159,6 +172,8 @@ export default function ProgramIzgarasi({
   hedefler?: Map<number, Hedef>;
   suruklenen?: Suruklenen | null;
   kilitle?: (assignmentId: number) => void;
+  /** Hücrede sağ tık / dokunma menüsü. */
+  menuAc?: (e: { clientX: number; clientY: number }, hucre: Hucre) => void;
 }) {
   const aktifGunler = gunler.filter((g) => g.is_active);
   const enFazla = Math.max(
@@ -276,6 +291,7 @@ export default function ProgramIzgarasi({
                     >
                       {h && (
                         <Surukle
+                          menuAc={menuAc}
                           hucre={h}
                           bakis={bakis}
                           blokBoyu={bloklar.get(h.assignment_id)?.length ?? 1}
