@@ -17,6 +17,7 @@ import {
   Alan, BosDurum, Buton, Girdi, Kart, Kutu, Rozet, SayfaBasligi, Secim, Tablo,
   Uyari, Yukleniyor,
 } from "../components/ui";
+import { CokluSecim } from "../components/CokluSecim";
 import GecmisDonemdenAktar from "../components/GecmisDonemdenAktar";
 import MufredatKopyala from "../components/MufredatKopyala";
 import { get } from "../lib/api";
@@ -399,39 +400,24 @@ export default function DersAtamalari() {
             etiket="Şubeler"
             ipucu={
               form.section_ids.length > 1
-                ? "Birden fazla şube seçili: bu ders birleşik işlenir — tek öğretmen, tek saat, seçili şubelerin hepsi."
-                : "Beden eğitimi gibi birlikte işlenen dersler için birden fazla şube seçebilirsiniz."
+                ? "Birden fazla şube seçili: bu ders ortak işlenir — tek öğretmen, tek saat, seçili şubelerin hepsi."
+                : "Beden eğitimi gibi ortak işlenen dersler için başka şube ekleyebilirsiniz."
             }
           >
-            <div className="max-h-44 space-y-1 overflow-y-auto rounded-lg border border-cizgi p-2">
-              {subeler.data?.map((s) => (
-                <label
-                  key={s.id}
-                  className="flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm hover:bg-yuzey-alt"
-                >
-                  <input
-                    type="checkbox"
-                    checked={form.section_ids.includes(s.id)}
-                    onChange={() =>
-                      setForm({
-                        ...form,
-                        // Sıra şube listesinin sırasıdır; ilk seçili asıl şube olur.
-                        section_ids: form.section_ids.includes(s.id)
-                          ? form.section_ids.filter((x) => x !== s.id)
-                          : (subeler.data ?? [])
-                              .filter((x) => x.id === s.id || form.section_ids.includes(x.id))
-                              .map((x) => x.id),
-                      })
-                    }
-                    className="h-4 w-4 rounded border-cizgi-guclu"
-                  />
-                  <span className="font-medium">{s.name}</span>
-                  {!s.is_active && (
-                    <span className="text-xs text-murekkep-silik">pasif</span>
-                  )}
-                </label>
-              ))}
-            </div>
+            {/* İlk etiket asıl şubedir (eklediğimiz şube); "+ Şube ekle" ile
+                ortak ders için başka şubeler katılır. */}
+            <CokluSecim
+              secenekler={(subeler.data ?? []).map((s) => ({
+                id: s.id,
+                etiket: s.name,
+                not: s.is_active ? undefined : "pasif",
+              }))}
+              secili={form.section_ids}
+              degistir={(ids) => setForm({ ...form, section_ids: ids })}
+              ekleEtiketi="Şube ekle"
+              arama="Şube ara…"
+              bos="Şube seçin"
+            />
           </Alan>
 
           <Alan etiket="Ders">
