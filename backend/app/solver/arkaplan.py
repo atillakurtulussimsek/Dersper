@@ -47,9 +47,8 @@ EN_UZUN_ARA_SN = 30.0
 # kalınca başvurmak.
 KATI_DENEME_SAYISI = 3
 
-# Çelişki çözümlemesi birkaç çözüm çalıştırır (çekirdek + her aday için bir
-# sınama). Kısa tutulur: amaç en iyi programı bulmak değil, nedeni söylemek.
-CELISKI_SURE_SN = 5.0
+# Çelişki çözümlemesinin süresi modele göre çözücüde belirlenir
+# (engine.tani_butcesi): sabit kısa süre büyük okulda boş liste veriyordu.
 
 # Çalışan işlerin durdurma bayrakları: run_id -> Event
 _calisanlar: dict[int, threading.Event] = {}
@@ -172,7 +171,7 @@ def _dongu(run_id: int, term_id: int, dur: threading.Event) -> None:
                             ogretmen_yarim_gun=gun_sinirlari,
                             bina_gecisi_engelle=donem.block_building_switch,
                             cakisma_olcutu=donem.conflict_basis.value,
-                        ), sure_sn=CELISKI_SURE_SN)
+                        ), devam=lambda: not dur.is_set())
                     except Exception:
                         # Çözümleme başarısız olursa üretim sürsün; rapor yine
                         # de yerleşemeyenleri gösterir.
@@ -189,8 +188,17 @@ def _dongu(run_id: int, term_id: int, dur: threading.Event) -> None:
                     _bitir(db, run_id, SolveStatus.BASARILI, son_rapor, baslangic)
                     return
 
-                # Kanıtlanmış çözümsüzlükte yeniden denemek sonuç vermez;
-                # kullanıcı istediği için durmuyoruz ama boşuna dönmüyoruz.
+                # Sert model de esnek model de çözümsüzlüğü KANITLADIYSA hiçbir
+                # tohum işe yaramaz: en iyi gevşek yerleşimi yazıp bitiririz.
+                # Kullanıcı saatlerce dönen bir iş yerine nedenini görsün.
+                if sonuc.proven_infeasible and sonuc.esnek_proven_infeasible:
+                    if en_iyi:
+                        _yerlesimleri_yaz(run_id, en_iyi, kilitli, gereken)
+                    _bitir(db, run_id, SolveStatus.COZUMSUZ, son_rapor, baslangic)
+                    return
+
+                # Yalnız sert model kanıtlıysa esnek modele geçilir (yukarıda
+                # `esnek = True`); o da kanıtlarsa bir sonraki tur biter.
                 if sonuc.proven_infeasible:
                     ara = min(ara * 2, EN_UZUN_ARA_SN)
                 else:

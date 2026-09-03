@@ -5,6 +5,11 @@ Dersper'in geliştirme günlüğü. Her değişiklik tek cümleyle, en yeni sür
 öncesinde ikinci hane özellik, üçüncü hane düzeltme demektir. Uygulamanın
 sürümü arayüzde yan menünün altında yazar.
 
+## 0.20.1 — 2026-09-03
+
+- Büyük okullarda "program neden kurulamadı" önerileri boş kalıyordu: çelişki araması artık modele göre süre alıyor ve büyük modelde hızlı kanıtla silme yöntemine geçiyor (hangi öğretmenin/şubenin kısıtları çelişkiye katılıyor, tek başına hangisi yeter); süre yetmeyen sınamalar "bilinmiyor" diye işaretleniyor, kesin çelişki çıkmazsa en sıkışık kaynaklar listeleniyor.
+- Sert ve esnek model çözümsüzlüğü kanıtladıysa üretim döngüsü artık saatlerce dönmüyor; en iyi gevşek yerleşimi yazıp "çözümsüz" olarak bitiyor.
+
 ## 0.20.0 — 2026-09-03
 
 - Kısıtlamalar ekranı: programı bağlayan kurallar tek yerde toplanıyor; bina kuralı Binalar'dan, çakışma ölçütü Zaman Izgarası'ndan buraya taşındı, eski yerlerinde yönlendirme bırakıldı.

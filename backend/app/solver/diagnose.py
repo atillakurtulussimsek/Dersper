@@ -323,9 +323,72 @@ def rapor_olustur(
         "yerlesmeyenler": yerlesmeyenler,
         # Çözümsüzlük kanıtlandığında: hangi kısıtlar BİRLİKTE çelişiyor ve
         # hangisini tek başına değiştirmek yetiyor.
+        "sikisiklik": sikisiklik_onerileri(slots, lessons, unplaced),
         "celiskiler": [
             {"tur": c.tur, "metin": c.metin, "oneri": c.oneri,
              "tek_basina_yeterli": c.tek_basina_yeterli}
             for c in (celisenler or [])
         ],
     }
+
+
+def sikisiklik_onerileri(
+    slots: list[Slot], lessons: list[Lesson], unplaced: dict[int, int]
+) -> list[dict]:
+    """Yerleşemeyen derslerin en sıkışık kaynakları — çekirdek bulunamadığında.
+
+    Kesin bir çelişki kanıtı yoksa bile gevşek çözüm hangi derslerin dışarıda
+    kaldığını söyler. O derslerin öğretmeni ve şubesi için "yük / açık saat"
+    oranına bakılır: oran yüksekse o kaynağın müsaitliğini açmak ya da yükünü
+    azaltmak en olası çıkış yoludur. Kanıt değildir; öyle de sunulur.
+    """
+    if not unplaced:
+        return []
+    from app.solver.engine import sube_ciftleri
+
+    toplam = len(slots)
+    ogretmen_yuk: dict[int, int] = defaultdict(int)
+    sube_yuk: dict[int, int] = defaultdict(int)
+    for l in lessons:
+        ogretmen_yuk[l.teacher_id] += l.weekly_hours
+        for si, _ in sube_ciftleri(l):
+            sube_yuk[si] += l.weekly_hours
+
+    ders_by_id = {l.entry_id: l for l in lessons}
+    adaylar: dict[tuple[str, int], dict] = {}
+    for entry_id in unplaced:
+        l = ders_by_id.get(entry_id)
+        if l is None:
+            continue
+        ogr_acik = toplam - len(l.blocked_period_ids)
+        oran = ogretmen_yuk[l.teacher_id] / ogr_acik if ogr_acik else 9.9
+        adaylar.setdefault(("ogretmen", l.teacher_id), {
+            "tur": "ogretmen", "oran": oran, "ad": l.teacher_name,
+            "yuk": ogretmen_yuk[l.teacher_id], "acik": ogr_acik,
+        })
+        for si, ad in sube_ciftleri(l):
+            # Şubenin kapalı saatleri dersin section_blocked kümesinde (birleşik
+            # derste birleşim); yaklaşık ama yön doğru.
+            sb_acik = toplam - len(l.section_blocked_period_ids)
+            adaylar.setdefault(("sube", si), {
+                "tur": "sube", "oran": sube_yuk[si] / sb_acik if sb_acik else 9.9,
+                "ad": ad, "yuk": sube_yuk[si], "acik": sb_acik,
+            })
+
+    sirali = sorted(adaylar.values(), key=lambda a: -a["oran"])[:6]
+    sonuc = []
+    for a in sirali:
+        # Hiç açık saati olmayan kaynakta yüzde anlamsız: 100 üstü gösterilir.
+        yuzde = min(round(a["oran"] * 100), 999) if a["acik"] else 999
+        acik = f"{a['acik']} açık saati var" if a["acik"] else "hiç açık saati yok"
+        metin = f"{a['ad']}: haftalık {a['yuk']} saat yükü, {acik}"
+        if a["acik"]:
+            metin += f" (%{yuzde})"
+        if a["tur"] == "ogretmen":
+            oneri = (f"{a['ad']} öğretmeninin müsaitlik matrisinde birkaç saat açın "
+                     f"ya da yükünü başka öğretmene aktarın")
+        else:
+            oneri = (f"{a['ad']} şubesinin kapalı saatlerini azaltın ya da haftalık "
+                     f"ders saatini düşürün")
+        sonuc.append({"tur": a["tur"], "metin": metin, "oneri": oneri, "oran": yuzde})
+    return sonuc

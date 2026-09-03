@@ -702,3 +702,34 @@ def test_celiski_gereksiz_kisiti_listeye_almaz():
     dersler.append(ders(2, 2, 11, "Türkçe", 2))     # rahat, çelişkisiz
     celisenler = celiskiyi_bul(SolveInput(slots=slots, lessons=dersler), sure_sn=10)
     assert not any("Türkçe" in c.metin for c in celisenler)
+
+
+def test_buyuk_modelde_silme_yontemi_sorumlu_ogretmeni_bulur(monkeypatch):
+    """Varsayım çekirdeği yerine silme: tamamen kapalı öğretmen tek başına yeter."""
+    from app.solver import engine
+
+    monkeypatch.setattr(engine, "KUCUK_MODEL", 0)
+    slots = izgara()
+    hepsi = frozenset(s.period_id for s in slots)
+    kapali = ders(1, 1, 10, "Matematik", 2, kapali=hepsi)   # Öğretmen 10 hiç müsait değil
+    rahat = ders(2, 2, 11, "Türkçe", 2)
+    sonuc = engine.celiskiyi_bul(SolveInput(slots=slots, lessons=[kapali, rahat],
+                                            time_limit_seconds=5))
+    assert sonuc, "silme yöntemi boş döndü"
+    assert sonuc[0].tur in ("ogretmen", "sube")
+    assert "Öğretmen 10" in sonuc[0].metin or "1-A" in sonuc[0].metin
+    assert sonuc[0].tek_basina_yeterli is True
+    # Rahat öğretmen listede yok: onun kısıtları çıkınca da çözümsüz.
+    assert not any("Öğretmen 11" in c.metin for c in sonuc)
+
+
+def test_kucuk_modelde_varsayim_yolu_calisir():
+    from app.solver import engine
+
+    slots = izgara()
+    hepsi = frozenset(s.period_id for s in slots)
+    kapali = ders(1, 1, 10, "Matematik", 2, kapali=hepsi)
+    sonuc = engine.celiskiyi_bul(SolveInput(slots=slots, lessons=[kapali],
+                                            time_limit_seconds=5))
+    assert sonuc and sonuc[0].tur in ("musaitlik", "yuk")
+    assert sonuc[0].tek_basina_yeterli in (True, False, None)

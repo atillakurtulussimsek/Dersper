@@ -270,11 +270,20 @@ export interface Bulgu {
 }
 
 /** Çözümsüzlükte çelişen tek bir kısıt ve çözüm önerisi. */
+export interface Sikisiklik {
+  tur: "ogretmen" | "sube";
+  metin: string;
+  oneri: string;
+  /** yük / açık saat, yüzde. */
+  oran: number;
+}
+
 export interface Celiski {
   tur: string;
   metin: string;
   oneri: string;
-  tek_basina_yeterli: boolean;
+  /** true: yalnız bunu değiştirmek yeter · false: yetmez · null: bilinmiyor. */
+  tek_basina_yeterli: boolean | null;
 }
 
 export interface Rapor {
@@ -291,6 +300,8 @@ export interface Rapor {
   };
   bulgular: Bulgu[];
   celiskiler: Celiski[];
+  /** Kesin çelişki yoksa: yerleşemeyen derslerin en sıkışık kaynakları. */
+  sikisiklik?: Sikisiklik[];
   yerlesmeyenler: {
     sube: string;
     ders: string;

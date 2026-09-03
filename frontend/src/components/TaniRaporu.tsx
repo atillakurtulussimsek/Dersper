@@ -45,7 +45,12 @@ export default function TaniRaporu({ deneme }: { deneme: Deneme }) {
   const uyarilar = rapor.bulgular.filter((b) => b.onem === "uyari");
   const celiskiler = rapor.celiskiler ?? [];
   // Tek başına değiştirmesi yeten kısıtlar önce: kullanıcının en kısa çıkışı.
-  const cikislar = celiskiler.filter((c) => c.tek_basina_yeterli);
+  const cikislar = celiskiler.filter((c) => c.tek_basina_yeterli === true);
+  const belirsizler = celiskiler.filter((c) => c.tek_basina_yeterli === null);
+  // Ne kesin engel ne çelişki çekirdeği varsa gevşek çözümden türeyen
+  // ipuçları gösterilir; kesin bir neden varken "bulunamadı" demek yanlış olur.
+  const sikisiklik =
+    celiskiler.length === 0 && engeller.length === 0 ? (rapor.sikisiklik ?? []) : [];
 
   return (
     <div className="space-y-4">
@@ -108,6 +113,51 @@ export default function TaniRaporu({ deneme }: { deneme: Deneme }) {
                   </ul>
                 </div>
               )}
+              {cikislar.length === 0 && belirsizler.length > 0 && (
+                <p className="text-xs text-murekkep-silik">
+                  Tek başına hangisinin yeteceği sınanamadı (süre yetmedi); listedekilerden
+                  birini gevşetip yeniden üretmeyi deneyin.
+                </p>
+              )}
+              {cikislar.length === 0 && belirsizler.length === 0 && (
+                <p className="text-xs text-murekkep-silik">
+                  Hiçbiri tek başına yetmiyor; birden fazlasını birlikte gevşetmek gerekir.
+                </p>
+              )}
+            </div>
+          )}
+
+          {sikisiklik.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-murekkep">
+                Kesin bir çelişki bulunamadı; yerleşemeyen derslerin en sıkışık noktaları:
+              </p>
+              <ul className="space-y-1.5">
+                {sikisiklik.map((k, i) => (
+                  <li
+                    key={i}
+                    className="flex gap-2.5 rounded-lg border border-cizgi bg-yuzey-alt px-3 py-2"
+                  >
+                    <span
+                      className={
+                        k.oran >= 90
+                          ? "sayisal mt-0.5 shrink-0 rounded-md bg-hata-zemin px-1.5 text-xs font-semibold text-hata"
+                          : "sayisal mt-0.5 shrink-0 rounded-md bg-uyari-zemin px-1.5 text-xs font-semibold text-uyari"
+                      }
+                    >
+                      {k.oran > 100 ? "%100+" : `%${k.oran}`}
+                    </span>
+                    <span className="text-sm">
+                      <span className="text-murekkep">{k.metin}</span>
+                      <span className="mt-0.5 block text-xs text-murekkep-silik">{k.oneri}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-xs text-murekkep-silik">
+                Oran = haftalık yük / açık saat. %100'e yaklaştıkça o kaynağa ders sığdırmak
+                zorlaşır; en yüksek olandan başlayın.
+              </p>
             </div>
           )}
 

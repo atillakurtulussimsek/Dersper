@@ -67,6 +67,9 @@ CEZA_BINA_GECISI = 40
 # yapılmış bir anlaşma. Çözücü zorunlu kalmadıkça bu sınırı bozmamalı.
 CEZA_GUN_SINIRI = 40
 VARSAYILAN_SURE_SN = 30.0
+# Varsayım çekirdeği (tanı kipi) için iş parçacığı sayısı. Tek iş parçacığı
+# kesin çalışır ama büyük modelde süre yetmez; deneyle ayarlanır.
+TANI_ISCI = 1
 
 
 @dataclass(frozen=True)
@@ -153,7 +156,9 @@ class Celisen:
     tur: str
     metin: str
     oneri: str
-    tek_basina_yeterli: bool = False
+    # True: yalnız bunu değiştirmek yeter. False: yetmez. None: sınama süresi
+    # yetmedi, bilinmiyor — "yetmez" demek yanlış olurdu.
+    tek_basina_yeterli: bool | None = False
 
 
 class _Kisitlar:
@@ -210,6 +215,9 @@ class SolveOutput:
     relaxations: list[tuple[int, int, int, int]] = field(default_factory=list)
     # Çözümsüzlükte çelişen kısıtlar (yalnızca tanı kipinde dolar).
     celisenler: list[Celisen] = field(default_factory=list)
+    # Esnek (günlük sınırı cezalı) model de çözümsüz olduğunu KANITLADI mı?
+    # İkisi birden kanıtlıysa yeniden denemek hiçbir tohumla sonuç vermez.
+    esnek_proven_infeasible: bool = False
 
 
 def sube_ciftleri(lesson: Lesson) -> tuple[tuple[int, str], ...]:
@@ -321,13 +329,16 @@ def solve(data: SolveInput) -> SolveOutput:
     if sert.ok:
         return sert
 
+    esnek_kanit = False
     if data.esnek_gunluk:
         esnek = _calistir(data, gevsek=False, esnek_gunluk=True)
         if esnek.ok:
             return esnek
+        esnek_kanit = esnek.status_name == "INFEASIBLE"
 
     gevsek = _calistir(data, gevsek=True)
     gevsek.proven_infeasible = sert.status_name == "INFEASIBLE"
+    gevsek.esnek_proven_infeasible = esnek_kanit
     return gevsek
 
 
@@ -336,41 +347,162 @@ def solve(data: SolveInput) -> SolveOutput:
 EN_FAZLA_ADAY = 6
 
 
-def celiskiyi_bul(data: SolveInput, sure_sn: float = 5.0) -> list[Celisen]:
+def tani_butcesi(ders_sayisi: int) -> float:
+    """Varsayım çekirdeği için süre: modelle büyür (en az 10, en çok 60 sn)."""
+    return min(60.0, max(10.0, 0.5 * ders_sayisi))
+
+
+# Bu kadar ders satırına kadar varsayım çekirdeği (kesin ve küçük liste)
+# denenir; üstünde doğrudan silme yöntemine geçilir. Ölçüm: 227 satırlık
+# okulda varsayımlı model 8 iş parçacığıyla 45 sn'de bile karar veremedi,
+# düz model ise çözümsüzlüğü 2,6 sn'de kanıtladı.
+KUCUK_MODEL = 60
+# Silme yöntemindeki tek bir sınamanın süresi ve tüm çözümlemenin tavanı.
+SINAMA_SN = 20.0
+COZUMLEME_TAVANI_SN = 240.0
+
+
+def etiket_gruplari(data: SolveInput) -> list[tuple[Celisen, frozenset[Celisen]]]:
+    """Kullanıcı-değiştirilebilir kısıtları kaynağa göre öbekler.
+
+    Her öğretmen ve her şube bir öbektir: o kaynağın derslerine ait yük,
+    müsaitlik, günlük sınır ve dağılım etiketleri (+ öğretmende gün sınırı).
+    Öbeğin başlığı, çözümlemede kullanıcıya gösterilecek `Celisen`'dir.
+    En sıkışık kaynak (yük / açık saat) başa gelir: sınama sırası budur.
+    """
+    toplam = len(data.slots)
+    ogretmen: dict[int, dict] = {}
+    sube: dict[int, dict] = {}
+    for l in data.lessons:
+        etiketler = [_yuk_etiketi(l), _gunluk_etiketi(l), _desen_etiketi(l)]
+        m = _musaitlik_etiketi(l)
+        if m is not None:
+            etiketler.append(m)
+        o = ogretmen.setdefault(l.teacher_id, {
+            "ad": l.teacher_name, "yuk": 0, "acik": toplam - len(l.blocked_period_ids),
+            "etiketler": set(),
+        })
+        o["yuk"] += l.weekly_hours
+        o["etiketler"].update(etiketler)
+        for si, ad in sube_ciftleri(l):
+            sb = sube.setdefault(si, {
+                "ad": ad, "yuk": 0, "acik": toplam - len(l.section_blocked_period_ids),
+                "etiketler": set(),
+            })
+            sb["yuk"] += l.weekly_hours
+            sb["etiketler"].update(etiketler)
+    for tid, yarim in data.ogretmen_yarim_gun.items():
+        if tid in ogretmen:
+            ogretmen[tid]["etiketler"].add(
+                _gun_siniri_etiketi(tid, ogretmen[tid]["ad"], yarim))
+
+    def oran(k: dict) -> float:
+        return k["yuk"] / k["acik"] if k["acik"] else 9.9
+
+    gruplar: list[tuple[float, Celisen, frozenset[Celisen]]] = []
+    for k in ogretmen.values():
+        gruplar.append((oran(k), Celisen(
+            tur="ogretmen",
+            metin=(f"{k['ad']} (öğretmen): haftalık {k['yuk']} saat yük, "
+                   f"{k['acik']} açık saat — kısıtları çelişkiye katılıyor"),
+            oneri=(f"{k['ad']} müsaitlik matrisinde saat açın, yükünü başka "
+                   f"öğretmene aktarın ya da gün sınırını yükseltin"),
+        ), frozenset(k["etiketler"])))
+    for k in sube.values():
+        gruplar.append((oran(k), Celisen(
+            tur="sube",
+            metin=(f"{k['ad']} (şube): haftalık {k['yuk']} saat yük, "
+                   f"{k['acik']} açık saat — kısıtları çelişkiye katılıyor"),
+            oneri=(f"{k['ad']} şubesinin kapalı saatlerini azaltın ya da "
+                   f"derslerinin haftalık saatini / dağılımını gevşetin"),
+        ), frozenset(k["etiketler"])))
+    gruplar.sort(key=lambda g: -g[0])
+    return [(baslik, kume) for _, baslik, kume in gruplar]
+
+
+def _sinama_sonucu(sonuc: SolveOutput) -> bool | None:
+    """Kısıt(lar) çıkınca program kuruldu mu? True / False / bilinmiyor."""
+    if sonuc.ok:
+        return True
+    if sonuc.status_name == "INFEASIBLE":
+        return False
+    return None
+
+
+def celiskiyi_bul(
+    data: SolveInput,
+    sure_sn: float | None = None,
+    devam=None,
+) -> list[Celisen]:
     """Program neden kurulamıyor? Çelişen kısıtları ve çözüm önerilerini döner.
 
-    İki adım:
-      1. Kullanıcının değiştirebileceği kısıtlar varsayım anahtarlarının
-         arkasına alınır; CP-SAT çözümsüzlükte hangilerinin BİRLİKTE çelişki
-         ürettiğini söyler. Gereksiz kısıtları kendisi eler, yani liste kısadır.
-      2. Çekirdekteki her kısıt sırayla modelden çıkarılıp yeniden çözülür.
-         Tek başına çıkarmak yetiyorsa "bunu değiştirmeniz yeterli" denir —
-         kullanıcıya somut bir çıkış yolu göstermenin tek dürüst yolu bu.
+    Küçük modelde (bkz. KUCUK_MODEL) varsayım çekirdeği: kullanıcının
+    değiştirebileceği kısıtlar anahtarların arkasına alınır, CP-SAT hangilerinin
+    BİRLİKTE çeliştiğini söyler; sonra her aday tek tek çıkarılıp sınanır.
 
-    Çekirdek küçük olduğu için (genelde 2–5 kısıt) ikinci adım da hızlıdır.
+    Büyük modelde bu yol tıkanıyor (anahtarlar ön işlemeyi zayıflatıyor, süre
+    yetmiyor). Orada SİLME yöntemi: düz model çözümsüzlüğü hızla kanıtlıyorsa
+    her öğretmenin ve her şubenin kısıtları sırayla çıkarılıp yeniden
+    kanıtlanmaya çalışılır. Kanıt sürüyorsa o kaynak çelişkinin parçası
+    değildir; program kurulursa tek başına o kaynak yeter; süre biterse
+    "bilinmiyor" ama kuşkulu (listede kalır). Sınama sırası en sıkışık
+    kaynaktan başlar; `devam()` yanlış dönerse (kullanıcı durdurdu) çözümleme
+    olduğu yerde kesilir.
     """
-    ilk = SolveInput(**{**data.__dict__, "time_limit_seconds": sure_sn})
-    sonuc = _calistir(ilk, gevsek=False, tani=True)
-    if not sonuc.celisenler:
+    import time as _t
+
+    devam = devam or (lambda: True)
+
+    if len(data.lessons) <= KUCUK_MODEL:
+        cekirdek_sn = sure_sn if sure_sn is not None else tani_butcesi(len(data.lessons))
+        ilk = SolveInput(**{**data.__dict__, "time_limit_seconds": cekirdek_sn})
+        sonuc = _calistir(ilk, gevsek=False, tani=True)
+        if sonuc.celisenler:
+            sinama_sn = min(60.0, cekirdek_sn)
+            sonuclar: list[Celisen] = []
+            for aday in sonuc.celisenler[:EN_FAZLA_ADAY]:
+                if not devam():
+                    break
+                sinama = _calistir(
+                    SolveInput(**{**data.__dict__, "time_limit_seconds": sinama_sn}),
+                    gevsek=False, atlanan=aday,
+                )
+                sonuclar.append(Celisen(
+                    tur=aday.tur, metin=aday.metin, oneri=aday.oneri,
+                    tek_basina_yeterli=_sinama_sonucu(sinama),
+                ))
+            return sonuclar
+
+    # Silme yöntemi. Önce düz modelin çözümsüzlüğü kanıtladığından emin ol;
+    # kanıt yoksa (yalnız süre bitti) silmeyle bir şey söylenemez.
+    baslangic = _t.monotonic()
+    kanit = _calistir(SolveInput(**{**data.__dict__, "time_limit_seconds": SINAMA_SN}),
+                      gevsek=False)
+    if kanit.status_name != "INFEASIBLE":
         return []
 
-    # Her adayı tek tek çıkar: yalnız o değişse program kurulur mu?
-    sonuclar: list[Celisen] = []
-    for aday in sonuc.celisenler[:EN_FAZLA_ADAY]:
+    sonuclar = []
+    for baslik, kume in etiket_gruplari(data):
+        if not devam() or _t.monotonic() - baslangic > COZUMLEME_TAVANI_SN:
+            break
+        if len(sonuclar) >= EN_FAZLA_ADAY:
+            break
         sinama = _calistir(
-            SolveInput(**{**data.__dict__, "time_limit_seconds": sure_sn}),
-            gevsek=False, tani=True, atlanan=aday,
+            SolveInput(**{**data.__dict__, "time_limit_seconds": SINAMA_SN}),
+            gevsek=False, atlanan=kume,
         )
-        sonuclar.append(
-            Celisen(tur=aday.tur, metin=aday.metin, oneri=aday.oneri,
-                    tek_basina_yeterli=sinama.ok)
-        )
+        yeter = _sinama_sonucu(sinama)
+        if yeter is False:
+            # Bu kaynak çıkınca da çözümsüz: çelişkinin parçası değil.
+            continue
+        sonuclar.append(Celisen(tur=baslik.tur, metin=baslik.metin,
+                                oneri=baslik.oneri, tek_basina_yeterli=yeter))
     return sonuclar
 
 
 def _calistir(
     data: SolveInput, *, gevsek: bool, esnek_gunluk: bool = False,
-    tani: bool = False, atlanan: Celisen | None = None,
+    tani: bool = False, atlanan: "Celisen | frozenset[Celisen] | None" = None,
 ) -> SolveOutput:
     """Modeli kurar ve çözer.
 
@@ -388,8 +520,13 @@ def _calistir(
     kisit = _Kisitlar(model, tani)
 
     def gecerli(etiket: Celisen | None) -> bool:
-        """Bu kısıt kurulacak mı? (sınama sırasında biri dışarıda bırakılır)"""
-        return atlanan is None or etiket != atlanan
+        """Bu kısıt kurulacak mı? Sınamada bir etiket ya da bir etiket kümesi
+        dışarıda bırakılır (küme: bir öğretmenin/şubenin bütün kısıtları)."""
+        if atlanan is None:
+            return True
+        if isinstance(atlanan, frozenset):
+            return etiket not in atlanan
+        return etiket != atlanan
 
     # y[(lesson_idx, blok_idx)] -> {baslangic_slot_idx: BoolVar}
     baslangic: dict[tuple[int, int], dict[int, cp_model.IntVar]] = {}
@@ -547,8 +684,8 @@ def _calistir(
 
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = data.time_limit_seconds
-    # Çelişki çekirdeği tek iş parçacığında güvenilir biçimde çıkarılır.
-    solver.parameters.num_workers = 1 if tani else 8
+    # Çelişki çekirdeği için iş parçacığı sayısı (bkz. TANI_ISCI).
+    solver.parameters.num_workers = TANI_ISCI if tani else 8
     solver.parameters.random_seed = data.seed
     status = solver.Solve(model)
     gecen = _time.monotonic() - basla
