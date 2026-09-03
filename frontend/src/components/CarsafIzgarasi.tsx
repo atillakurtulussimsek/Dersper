@@ -21,6 +21,7 @@ import { Lock } from "lucide-react";
 import { dersZemini } from "../lib/renkler";
 import type { DersSaati, Gun, Hucre } from "../lib/types";
 import type { Bakis } from "./ProgramIzgarasi";
+import { subeEtiketi } from "../lib/cakisma";
 
 /** Ad sütununun genişliği ve bir ders saatinin en az genişliği (px).
  *
@@ -54,7 +55,7 @@ function ust(hucre: Hucre): string {
 function alt(hucre: Hucre, bakis: Bakis): string {
   return bakis === "sube"
     ? hucre.teacher_short || hucre.teacher_name
-    : hucre.section_name;
+    : subeEtiketi(hucre);
 }
 
 /** İki hücre aynı ders atamasının parçası mı?
@@ -114,7 +115,7 @@ function DersHucresi({
   gunbas: boolean;
 }) {
   const { hucre, kilitli, genislik } = parca;
-  const kim = bakis === "sube" ? hucre.teacher_name : hucre.section_name;
+  const kim = bakis === "sube" ? hucre.teacher_name : subeEtiketi(hucre);
   return (
     <td
       colSpan={genislik}
@@ -167,15 +168,20 @@ export default function CarsafIzgarasi({
   // Satırlar yerleşmiş derslerden çıkar: ad, kimlik ve hücre haritası.
   const satirlar = new Map<string, { id: number; hucreler: Map<string, Hucre> }>();
   for (const h of hucreler) {
-    const ad = bakis === "sube" ? h.section_name : h.teacher_name;
-    let satir = satirlar.get(ad);
-    if (!satir) {
-      satirlar.set(ad, (satir = {
-        id: bakis === "sube" ? h.section_id : h.teacher_id,
-        hucreler: new Map(),
-      }));
+    // Birleşik ders her şubesinin satırına düşer; öğretmen görünümünde tektir.
+    const adlar = bakis === "sube"
+      ? (h.section_names?.length ? h.section_names : [h.section_name])
+      : [h.teacher_name];
+    for (const ad of adlar) {
+      let satir = satirlar.get(ad);
+      if (!satir) {
+        satirlar.set(ad, (satir = {
+          id: bakis === "sube" ? h.section_id : h.teacher_id,
+          hucreler: new Map(),
+        }));
+      }
+      satir.hucreler.set(`${h.day_index}:${h.period_index}`, h);
     }
-    satir.hucreler.set(`${h.day_index}:${h.period_index}`, h);
   }
   const sirali = [...satirlar.entries()].sort((a, b) => a[0].localeCompare(b[0], "tr"));
 

@@ -302,11 +302,42 @@ class Section(Base, SoftDelete):
     )
 
 
-class CurriculumEntry(Base, SoftDelete):
-    """Bir şubede, bir dersin, bir öğretmenle haftalık yükü.
+class CurriculumEntrySection(Base):
+    """Birleşik dersin ek şubeleri.
 
-    Şube–ders eşsizliği uygulama katmanında, silinmemiş satırlar üzerinde
-    denetlenir; veritabanı kısıtı yumuşak silmeyle bağdaşmaz.
+    Bir müfredat satırı normalde tek şubeye aittir (`CurriculumEntry.section_id`).
+    Birleşik derslerde — beden eğitimi, din kültürü, seçmeliler — birden fazla
+    şube aynı saatte, aynı öğretmenle ders görür. O şubeler burada durur; asıl
+    şube satırın kendisindedir, yani bu tablo yalnızca *ek* olanları tutar.
+
+    Ayrı bir tablo olmasının sebebi kısmi birleşmedir: bir şube aynı dersi hem
+    birleşik hem ayrı alabilir (2 saat 9-A+9-B birlikte, 1 saat ayrı). Bu da
+    şube–ders eşsizliğini ortadan kaldırır; toplam saat denetimi onun yerini
+    alır (bkz. app/routers/catalog.py).
+    """
+    __tablename__ = "curriculum_entry_sections"
+    __table_args__ = (
+        UniqueConstraint("entry_id", "section_id", name="uq_entry_section"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    entry_id: Mapped[int] = mapped_column(
+        ForeignKey("curriculum_entries.id", ondelete="CASCADE")
+    )
+    section_id: Mapped[int] = mapped_column(
+        ForeignKey("sections.id", ondelete="CASCADE")
+    )
+
+    section: Mapped[Section] = relationship()
+
+
+class CurriculumEntry(Base, SoftDelete):
+    """Bir şubede (ya da birleşik derslerde birkaç şubede), bir dersin, bir
+    öğretmenle haftalık yükü.
+
+    `section_id` asıl şubedir; birleşik derste ek şubeler `extra_sections`
+    içindedir. Çakışma, gösterim ve müsaitlik hep `section_ids` üzerinden
+    yürür — asıl/ek ayrımı yalnızca saklama biçimidir, kural değildir.
     """
     __tablename__ = "curriculum_entries"
     # Kaldırılan benzersiz kısıtın yerine: section_id yabancı anahtarı indeks ister.
@@ -324,6 +355,22 @@ class CurriculumEntry(Base, SoftDelete):
     section: Mapped[Section] = relationship(back_populates="curriculum")
     subject: Mapped[Subject] = relationship()
     teacher: Mapped[Teacher] = relationship()
+    extra_sections: Mapped[list[CurriculumEntrySection]] = relationship(
+        cascade="all, delete-orphan", lazy="selectin"
+    )
+
+    @property
+    def sections(self) -> list[Section]:
+        """Dersi birlikte gören şubeler; asıl şube başta."""
+        return [self.section] + [e.section for e in self.extra_sections]
+
+    @property
+    def section_ids(self) -> list[int]:
+        return [self.section_id] + [e.section_id for e in self.extra_sections]
+
+    @property
+    def birlesik(self) -> bool:
+        return bool(self.extra_sections)
 
 
 class Timetable(Base, SoftDelete):

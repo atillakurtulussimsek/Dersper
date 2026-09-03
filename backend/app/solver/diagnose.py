@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 
-from app.solver.engine import Lesson, Slot, _gune_gore
+from app.solver.engine import Lesson, Slot, _gune_gore, sube_ciftleri
 
 
 def _gun_adlari(slots: list[Slot]) -> dict[int, str]:
@@ -111,9 +111,12 @@ def on_kontrol(
     sube_adi: dict[int, str] = {}
     sube_kapali: dict[int, frozenset[int]] = {}
     for l in lessons:
-        sube_yuku[l.section_id] += l.weekly_hours
-        sube_adi[l.section_id] = l.section_name
-        sube_kapali[l.section_id] = l.section_blocked_period_ids
+        # Birleşik ders her şubenin yükünü ayrı ayrı doldurur: 9-A+9-B ortak
+        # beden dersi ikisinin de haftalık saatinden yer alır.
+        for si, ad in sube_ciftleri(l):
+            sube_yuku[si] += l.weekly_hours
+            sube_adi[si] = ad
+            sube_kapali[si] = l.section_blocked_period_ids
 
     for sid, yuk in sube_yuku.items():
         kapali = sube_kapali.get(sid, frozenset())

@@ -311,6 +311,10 @@ class SectionOut(ORMModel):
 
 class CurriculumIn(BaseModel):
     section_id: int
+    # Birleşik ders: bu satırı `section_id` ile birlikte gören ek şubeler.
+    # Beden eğitimi, din kültürü ve seçmeliler sık sık böyle okutulur —
+    # tek öğretmen, tek saat, birkaç şube. Boşsa ders tek şubeliktir.
+    extra_section_ids: list[int] = []
     subject_id: int
     teacher_id: int
     weekly_hours: int = Field(ge=1, le=40)
@@ -325,6 +329,10 @@ class CurriculumIn(BaseModel):
             self.block_pattern = bloklar.duzenle(self.block_pattern, self.weekly_hours)
         except bloklar.DesenHatasi as e:
             raise ValueError(str(e)) from e
+        ek = [x for x in self.extra_section_ids if x != self.section_id]
+        if len(set(ek)) != len(ek):
+            raise ValueError("Aynı şube birden fazla kez seçilemez.")
+        self.extra_section_ids = ek
         return self
 
 
@@ -345,6 +353,8 @@ class CurriculumOut(ORMModel):
     subject: SubjectOut
     teacher: TeacherOut
     section: SectionOut
+    # Dersi birlikte gören şubeler; asıl şube başta. Tek şubeliyse tek elemanlı.
+    sections: list[SectionOut] = []
 
 
 class CurriculumCopyOut(BaseModel):
@@ -419,8 +429,12 @@ class GridCell(BaseModel):
     period_id: int
     day_index: int
     period_index: int
+    # Asıl şube. Birleşik derste hücre yine tektir; tüm şubeler aşağıdadır.
     section_id: int
     section_name: str
+    # Dersi birlikte gören şubeler. Tek şubeliyse tek elemanlı.
+    section_ids: list[int] = []
+    section_names: list[str] = []
     subject_name: str
     subject_short: str | None
     subject_color: str

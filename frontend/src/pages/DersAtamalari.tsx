@@ -14,18 +14,20 @@ import { useQuery } from "@tanstack/react-query";
 import { Copy, Download, Pencil, Plus, Trash2 } from "lucide-react";
 
 import {
-  Alan, BosDurum, Buton, Girdi, Kart, Kutu, SayfaBasligi, Secim, Tablo,
+  Alan, BosDurum, Buton, Girdi, Kart, Kutu, Rozet, SayfaBasligi, Secim, Tablo,
   Uyari, Yukleniyor,
 } from "../components/ui";
 import GecmisDonemdenAktar from "../components/GecmisDonemdenAktar";
 import MufredatKopyala from "../components/MufredatKopyala";
 import { get } from "../lib/api";
+import { subeEtiketi } from "../lib/cakisma";
 import { desenCoz, desenEtiketi, desenOnerileri } from "../lib/bloklar";
 import { hataMetni, useKaynak, useListe } from "../lib/hooks";
 import type { Ders, Gun, MufredatSatiri, Ogretmen, Sube } from "../lib/types";
 
 const BOS = {
-  section_id: 0,
+  /** Dersi birlikte gören şubeler. Birden fazlaysa ders birleşiktir. */
+  section_ids: [] as number[],
   subject_id: 0,
   teacher_id: 0,
   weekly_hours: 4,
@@ -96,7 +98,7 @@ export default function DersAtamalari() {
     setForm(
       m
         ? {
-            section_id: m.section_id,
+            section_ids: (m.sections?.length ? m.sections : [m.section]).map((x) => x.id),
             subject_id: m.subject_id,
             teacher_id: m.teacher_id,
             weekly_hours: m.weekly_hours,
@@ -106,7 +108,7 @@ export default function DersAtamalari() {
         : {
             ...BOS,
             // Hangi bakıştaysanız o taraf hazır gelir; öbürü seçilir.
-            section_id: seciliSube ?? subeler.data?.[0]?.id ?? 0,
+            section_ids: [seciliSube ?? subeler.data?.[0]?.id ?? 0].filter(Boolean),
             teacher_id:
               bakis === "ogretmen"
                 ? (seciliOgretmen ?? 0)
@@ -119,9 +121,16 @@ export default function DersAtamalari() {
 
   async function kaydet(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.section_id || !form.teacher_id) return;
-    if (duzenlenen) await kaynak.guncelle.mutateAsync({ id: duzenlenen.id, veri: form });
-    else await kaynak.ekle.mutateAsync(form);
+    if (!form.section_ids.length || !form.teacher_id) return;
+    // Sunucu asıl şube + ek şubeler bekler; ilk seçili olan asıldır.
+    const { section_ids, ...geri } = form;
+    const veri = {
+      ...geri,
+      section_id: section_ids[0],
+      extra_section_ids: section_ids.slice(1),
+    };
+    if (duzenlenen) await kaynak.guncelle.mutateAsync({ id: duzenlenen.id, veri });
+    else await kaynak.ekle.mutateAsync(veri);
     await mufredat.refetch();
     setAcik(false);
   }
@@ -278,6 +287,13 @@ export default function DersAtamalari() {
                           style={{ background: m.subject.color }}
                         />
                         <span className="font-medium">{m.subject.name}</span>
+                        {m.sections?.length > 1 && (
+                          <Rozet>
+                            {bakis === "sube"
+                              ? `${m.sections.length} şube birlikte`
+                              : "birleşik"}
+                          </Rozet>
+                        )}
                       </span>
                     </td>
                     <td className="px-3 py-2.5 text-murekkep-yumusak">
@@ -291,7 +307,10 @@ export default function DersAtamalari() {
                         </span>
                       ) : (
                         <span className="font-medium text-murekkep">
-                          {m.section.name}
+                          {subeEtiketi({
+                            section_name: m.section.name,
+                            section_names: m.sections?.map((x) => x.name),
+                          })}
                         </span>
                       )}
                     </td>
@@ -376,18 +395,43 @@ export default function DersAtamalari() {
         <form onSubmit={kaydet} className="space-y-4">
           {/* Şube ve öğretmen ikisi de burada seçilir; hangi bakıştaysanız o
               taraf hazır gelir. Böylece atama iki taraftan da yapılabiliyor. */}
-          <Alan etiket="Şube">
-            <Secim
-              value={form.section_id}
-              onChange={(e) => setForm({ ...form, section_id: Number(e.target.value) })}
-            >
+          <Alan
+            etiket="Şubeler"
+            ipucu={
+              form.section_ids.length > 1
+                ? "Birden fazla şube seçili: bu ders birleşik işlenir — tek öğretmen, tek saat, seçili şubelerin hepsi."
+                : "Beden eğitimi gibi birlikte işlenen dersler için birden fazla şube seçebilirsiniz."
+            }
+          >
+            <div className="max-h-44 space-y-1 overflow-y-auto rounded-lg border border-cizgi p-2">
               {subeler.data?.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                  {s.is_active ? "" : " · pasif"}
-                </option>
+                <label
+                  key={s.id}
+                  className="flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm hover:bg-yuzey-alt"
+                >
+                  <input
+                    type="checkbox"
+                    checked={form.section_ids.includes(s.id)}
+                    onChange={() =>
+                      setForm({
+                        ...form,
+                        // Sıra şube listesinin sırasıdır; ilk seçili asıl şube olur.
+                        section_ids: form.section_ids.includes(s.id)
+                          ? form.section_ids.filter((x) => x !== s.id)
+                          : (subeler.data ?? [])
+                              .filter((x) => x.id === s.id || form.section_ids.includes(x.id))
+                              .map((x) => x.id),
+                      })
+                    }
+                    className="h-4 w-4 rounded border-cizgi-guclu"
+                  />
+                  <span className="font-medium">{s.name}</span>
+                  {!s.is_active && (
+                    <span className="text-xs text-murekkep-silik">pasif</span>
+                  )}
+                </label>
               ))}
-            </Secim>
+            </div>
           </Alan>
 
           <Alan etiket="Ders">

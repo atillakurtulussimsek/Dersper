@@ -107,3 +107,26 @@ export function saatSorunlari(saatler: DenetlenenSaat[]): SaatSorunu[] {
 
   return sorunlar;
 }
+
+/** Bir hücre ya da müfredat satırı bu şubeye ait mi?
+ *
+ *  Birleşik derste satır birden fazla şubeye aittir; eşitlik yerine üyelik
+ *  sorulur. Eski kayıtlarda liste boş gelebilir, o zaman asıl şubeye bakılır.
+ */
+export function subeyeAit(
+  kayit: { section_name: string; section_names?: string[] },
+  sube: string,
+): boolean {
+  return kayit.section_names?.length
+    ? kayit.section_names.includes(sube)
+    : kayit.section_name === sube;
+}
+
+/** Birleşik dersin şube etiketi: "9-A + 9-B". */
+export function subeEtiketi(
+  kayit: { section_name: string; section_names?: string[] },
+): string {
+  return kayit.section_names?.length
+    ? kayit.section_names.join(" + ")
+    : kayit.section_name;
+}

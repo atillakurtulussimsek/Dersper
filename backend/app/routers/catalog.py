@@ -10,14 +10,14 @@ kayıtlar listelenir, seçilenler aktif döneme kopyalanır.
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.db import get_db
 from app.deps import aktif_donem, current_user
 from app.models import (
-    Availability, Building, CurriculumEntry, Period, Section, SectionAvailability,
-    Subject, Teacher, TeacherAvailability, Term,
+    Availability, Building, CurriculumEntry, CurriculumEntrySection, Period,
+    Section, SectionAvailability, Subject, Teacher, TeacherAvailability, Term,
 )
 from app.schemas import (
     AvailabilityCell, AvailabilityCopyIn, AvailabilityCopyOut, AvailabilityUpdate,
@@ -641,6 +641,8 @@ def _mufredat_sorgusu(donem: Term):
             selectinload(CurriculumEntry.subject),
             selectinload(CurriculumEntry.teacher),
             selectinload(CurriculumEntry.section),
+            selectinload(CurriculumEntry.extra_sections)
+            .selectinload(CurriculumEntrySection.section),
         )
     )
 
@@ -659,7 +661,14 @@ def mufredat(
     """
     sorgu = _mufredat_sorgusu(donem)
     if section_id is not None:
-        sorgu = sorgu.where(CurriculumEntry.section_id == section_id)
+        # Birleşik derste şube ek şube olabilir; o zaman da bu şubenin dersidir.
+        sorgu = sorgu.where(or_(
+            CurriculumEntry.section_id == section_id,
+            CurriculumEntry.id.in_(
+                select(CurriculumEntrySection.entry_id)
+                .where(CurriculumEntrySection.section_id == section_id)
+            ),
+        ))
     if teacher_id is not None:
         sorgu = sorgu.where(CurriculumEntry.teacher_id == teacher_id)
     return list(db.scalars(
@@ -668,23 +677,38 @@ def mufredat(
     ))
 
 
-def _atama_var_mi(db: Session, section_id: int, subject_id: int, teacher_id: int,
+def _atama_var_mi(db: Session, subeler: set[int], subject_id: int, teacher_id: int,
                   haric: int | None = None) -> bool:
-    """Aynı şube–ders–öğretmen üçlüsü zaten var mı?
+    """Aynı şube kümesi–ders–öğretmen bileşimi zaten var mı?
 
     Bir derse birden fazla öğretmen girebilir (örneğin İngilizce'nin 2 saati bir,
     2 saati başka öğretmende); bu yüzden şube–ders çifti tek başına engel değildir.
-    Engellenen, birebir aynı üçlünün tekrarıdır.
+
+    Şube kümesine bakılır, tek şubeye değil: bir şube aynı dersi hem birleşik
+    hem ayrı alabilir (2 saat 9-A+9-B birlikte, 1 saat 9-A tek). Bunlar farklı
+    kümelerdir ve ikisi de meşrudur. Engellenen, birebir aynı bileşimin
+    tekrarıdır.
     """
-    sorgu = select(CurriculumEntry.id).where(
-        CurriculumEntry.section_id == section_id,
-        CurriculumEntry.subject_id == subject_id,
-        CurriculumEntry.teacher_id == teacher_id,
-        CurriculumEntry.deleted_at.is_(None),
+    sorgu = (
+        select(CurriculumEntry)
+        .where(
+            CurriculumEntry.subject_id == subject_id,
+            CurriculumEntry.teacher_id == teacher_id,
+            CurriculumEntry.deleted_at.is_(None),
+        )
+        .options(selectinload(CurriculumEntry.extra_sections))
     )
     if haric is not None:
         sorgu = sorgu.where(CurriculumEntry.id != haric)
-    return db.scalar(sorgu.limit(1)) is not None
+    return any(set(e.section_ids) == subeler for e in db.scalars(sorgu))
+
+
+def _ek_subeleri_yaz(db: Session, e: CurriculumEntry, ek: list[int],
+                     donem: Term) -> None:
+    """Birleşik dersin ek şubelerini kurar; hepsi bu döneme ait olmalı."""
+    for sid in ek:
+        _getir(db, Section, sid, "Şube", donem)
+    e.extra_sections = [CurriculumEntrySection(section_id=sid) for sid in ek]
 
 
 @router.post("/curriculum", response_model=CurriculumOut,
@@ -697,14 +721,19 @@ def mufredat_ekle(
     _getir(db, Section, payload.section_id, "Şube", donem)
     _getir(db, Subject, payload.subject_id, "Ders", donem)
     _getir(db, Teacher, payload.teacher_id, "Öğretmen", donem)
-    if _atama_var_mi(db, payload.section_id, payload.subject_id, payload.teacher_id):
+    subeler = {payload.section_id, *payload.extra_section_ids}
+    if _atama_var_mi(db, subeler, payload.subject_id, payload.teacher_id):
         raise HTTPException(
             status.HTTP_409_CONFLICT,
-            "Bu şubede bu ders bu öğretmenle zaten tanımlı. "
-            "Aynı dersi başka bir öğretmenle ekleyebilirsiniz.",
+            "Bu şube bileşiminde bu ders bu öğretmenle zaten tanımlı. "
+            "Aynı dersi başka bir öğretmenle ya da başka bir şube bileşimiyle "
+            "ekleyebilirsiniz.",
         )
 
-    e = CurriculumEntry(**payload.model_dump())
+    alanlar = payload.model_dump()
+    ek = alanlar.pop("extra_section_ids")
+    e = CurriculumEntry(**alanlar)
+    _ek_subeleri_yaz(db, e, ek, donem)
     db.add(e)
     db.commit()
     db.refresh(e)
@@ -743,6 +772,14 @@ def mufredat_kopyala(
 
     for hedef in sorted(hedefler, key=lambda s: s.name):
         for kaynak in kaynaklar:
+            # Birleşik ders kopyalanmaz: hangi şubelerle birleşeceği kopyanın
+            # kendi kararıdır, kaynağınkini taşımak yanlış olur.
+            if kaynak.extra_sections:
+                atlananlar.append(
+                    f"{hedef.name} · {kaynak.subject.name}: birleşik ders "
+                    f"kopyalanamaz, hedef şubeler için ayrıca tanımlayın."
+                )
+                continue
             if hedef.id == kaynak.section_id:
                 atlananlar.append(
                     f"{hedef.name} · {kaynak.subject.name}: kaynak şubenin kendisi."
@@ -855,14 +892,17 @@ def mufredat_guncelle(
     _getir(db, Section, payload.section_id, "Şube", donem)
     _getir(db, Subject, payload.subject_id, "Ders", donem)
     _getir(db, Teacher, payload.teacher_id, "Öğretmen", donem)
-    if _atama_var_mi(db, payload.section_id, payload.subject_id, payload.teacher_id,
-                     haric=e.id):
+    subeler = {payload.section_id, *payload.extra_section_ids}
+    if _atama_var_mi(db, subeler, payload.subject_id, payload.teacher_id, haric=e.id):
         raise HTTPException(
             status.HTTP_409_CONFLICT,
-            "Bu şubede bu ders bu öğretmenle zaten tanımlı.",
+            "Bu şube bileşiminde bu ders bu öğretmenle zaten tanımlı.",
         )
-    for alan, deger in payload.model_dump().items():
+    alanlar = payload.model_dump()
+    ek = alanlar.pop("extra_section_ids")
+    for alan, deger in alanlar.items():
         setattr(e, alan, deger)
+    _ek_subeleri_yaz(db, e, ek, donem)
     db.commit()
     db.refresh(e)
     return e

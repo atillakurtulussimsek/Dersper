@@ -6,7 +6,8 @@ saatlerine yerleşir.
 
 Sert kısıtlar (v1):
   1. Her müfredat satırı haftalık saatinin tamamını alır.
-  2. Bir şube aynı anda tek derste olur.
+  2. Bir şube aynı anda tek derste olur. Birleşik ders (bir satırda birden
+     fazla şube) tüm şubelerini aynı anda meşgul eder.
   3. Bir öğretmen aynı anda tek derste olur.
      "Aynı an"ın ölçütünü kurum seçer: ızgaranın satırı mı, gerçek saat
      aralığı mı (bkz. `app.cakisma` ve `Term.conflict_basis`).
@@ -89,6 +90,7 @@ class Slot:
 class Lesson:
     """Çözücünün gördüğü haliyle bir müfredat satırı."""
     entry_id: int
+    # Asıl şube; iletilerde bu ad geçer.
     section_id: int
     section_name: str
     teacher_id: int
@@ -100,6 +102,10 @@ class Lesson:
     max_per_day: int
     # Şubenin dersliğinin bulunduğu bina. None = binasız (kural uygulanmaz).
     building_id: int | None = None
+    # Dersi birlikte gören şubeler: (kimlik, ad) çiftleri, tanım sırasında.
+    # Birleşik derste birden fazladır ve hepsi aynı anda meşgul olur. Boşsa
+    # `section_id`/`section_name` tek başına geçerlidir.
+    sections: tuple[tuple[int, str], ...] = ()
     # Öğretmenin uygun OLMADIĞI period_id kümesi
     blocked_period_ids: frozenset[int] = frozenset()
     # Şubenin uygun OLMADIĞI period_id kümesi
@@ -206,8 +212,23 @@ class SolveOutput:
     celisenler: list[Celisen] = field(default_factory=list)
 
 
+def sube_ciftleri(lesson: Lesson) -> tuple[tuple[int, str], ...]:
+    """Dersi gören şubeler, (kimlik, ad) olarak. Birleşik değilse tek eleman."""
+    return lesson.sections or ((lesson.section_id, lesson.section_name),)
+
+
+def subeleri(lesson: Lesson) -> frozenset[int]:
+    """Dersi gören şube kimlikleri."""
+    return frozenset(si for si, _ in sube_ciftleri(lesson))
+
+
+def sube_etiketi(lesson: Lesson) -> str:
+    """İletilerde geçen şube adı: birleşik derste "9-A + 9-B"."""
+    return " + ".join(ad for _, ad in sube_ciftleri(lesson))
+
+
 def _ders_adi(lesson: Lesson) -> str:
-    return f"{lesson.section_name} · {lesson.subject_name}"
+    return f"{sube_etiketi(lesson)} · {lesson.subject_name}"
 
 
 def _yuk_etiketi(lesson: Lesson) -> Celisen:
@@ -225,16 +246,16 @@ def _musaitlik_etiketi(lesson: Lesson) -> Celisen | None:
     if not ogretmen and not sube:
         return None
     if ogretmen and sube:
-        metin = (f"{lesson.teacher_name} ve {lesson.section_name} "
+        metin = (f"{lesson.teacher_name} ve {sube_etiketi(lesson)} "
                  f"için kapatılmış saatler")
-        oneri = (f"{lesson.teacher_name} ya da {lesson.section_name} "
+        oneri = (f"{lesson.teacher_name} ya da {sube_etiketi(lesson)} "
                  f"müsaitlik matrisinde birkaç saat açın")
     elif ogretmen:
         metin = f"{lesson.teacher_name} için kapatılmış saatler"
         oneri = f"{lesson.teacher_name} müsaitlik matrisinde birkaç saat açın"
     else:
-        metin = f"{lesson.section_name} için kapatılmış saatler"
-        oneri = f"{lesson.section_name} müsaitlik matrisinde birkaç saat açın"
+        metin = f"{sube_etiketi(lesson)} için kapatılmış saatler"
+        oneri = f"{sube_etiketi(lesson)} müsaitlik matrisinde birkaç saat açın"
     return Celisen(tur="musaitlik", metin=metin, oneri=oneri)
 
 
@@ -478,9 +499,10 @@ def _calistir(
         [cakisma.Aralik(s.day_index, s.baslangic, s.bitis) for s in slots],
         data.cakisma_olcutu,
     )
-    _tekil_kaynak(model, data.lessons, dolu, es_zamanlilar, lambda l: l.section_id)
+    _tekil_kaynak(model, data.lessons, dolu, es_zamanlilar, subeleri)
     # (3) Öğretmen çakışması
-    _tekil_kaynak(model, data.lessons, dolu, es_zamanlilar, lambda l: l.teacher_id)
+    _tekil_kaynak(model, data.lessons, dolu, es_zamanlilar,
+                  lambda l: (l.teacher_id,))
 
     # (10) Öğretmen gün sınırı. Günlük sınır (kural 6) gibi gevşek modelde de
     # sert kalır: orada gevşetilen tek şey "her saat yerleşmeli" kuralıdır.
@@ -812,8 +834,11 @@ def _gun_siniri(
     return asimlar
 
 
-def _tekil_kaynak(model, lessons, dolu, es_zamanlilar, anahtar) -> None:
+def _tekil_kaynak(model, lessons, dolu, es_zamanlilar, anahtarlar) -> None:
     """Aynı kaynağı (şube ya da öğretmen) paylaşan dersler aynı anda olamaz.
+
+    `anahtarlar` bir dersin hangi kaynakları tuttuğunu söyler; birleşik ders
+    birden fazla şubeyi aynı anda meşgul ettiği için çoğuldur.
 
     `es_zamanlilar`, aynı ana denk gelen slot kümeleridir (bkz. app.cakisma).
     "ders_saati" ölçütünde her küme tek slottur ve kısıt eskisiyle birebir
@@ -824,7 +849,8 @@ def _tekil_kaynak(model, lessons, dolu, es_zamanlilar, anahtar) -> None:
     """
     kaynaklar: dict[int, list[int]] = {}
     for li, lesson in enumerate(lessons):
-        kaynaklar.setdefault(anahtar(lesson), []).append(li)
+        for kimlik in anahtarlar(lesson):
+            kaynaklar.setdefault(kimlik, []).append(li)
 
     for uyeler in kaynaklar.values():
         for kume in es_zamanlilar:

@@ -31,9 +31,9 @@ from sqlalchemy.orm import Session, selectinload
 from app import cakisma
 from app import bloklar, surumler
 from app.models import (
-    Assignment, Availability, CurriculumEntry, Day, Period, Section,
-    SectionAvailability, Teacher, TeacherAvailability, Term, Timetable,
-    VersionKind,
+    Assignment, Availability, CurriculumEntry, CurriculumEntrySection, Day,
+    Period, Section, SectionAvailability, Teacher, TeacherAvailability, Term,
+    Timetable, VersionKind,
 )
 
 
@@ -141,6 +141,9 @@ def _atamalari_oku(db: Session, timetable_id: int) -> list[Assignment]:
             selectinload(Assignment.entry).selectinload(CurriculumEntry.section),
             selectinload(Assignment.entry).selectinload(CurriculumEntry.teacher),
             selectinload(Assignment.entry).selectinload(CurriculumEntry.subject),
+            selectinload(Assignment.entry)
+            .selectinload(CurriculumEntry.extra_sections)
+            .selectinload(CurriculumEntrySection.section),
         )
         .where(Assignment.timetable_id == timetable_id)
     ))
@@ -166,6 +169,19 @@ def _kapali_saatler(db: Session, donem: Term) -> tuple[dict[int, set[int]], dict
     ):
         sube[row.section_id].add(row.period_id)
     return ogretmen, sube
+
+
+def _subeler(entry: CurriculumEntry) -> list:
+    """Dersi gören şubeler; birleşik değilse tek elemanlı."""
+    return [entry.section] + [x.section for x in entry.extra_sections]
+
+
+def _sube_kimlikleri(entry: CurriculumEntry) -> set[int]:
+    return {sb.id for sb in _subeler(entry)}
+
+
+def _sube_etiketi(entry: CurriculumEntry) -> str:
+    return " + ".join(sb.name for sb in _subeler(entry))
 
 
 class Duzenleyici:
@@ -224,8 +240,9 @@ class Duzenleyici:
             return "Bu saate ders konmaz (teneffüs ya da kapalı gün)."
         if saat.id in self.ogretmen_kapali.get(entry.teacher_id, set()):
             return f"{entry.teacher.full_name} bu saatte müsait değil."
-        if saat.id in self.sube_kapali.get(entry.section_id, set()):
-            return f"{entry.section.name} şubesi bu saate kapalı."
+        for sb in _subeler(entry):
+            if saat.id in self.sube_kapali.get(sb.id, set()):
+                return f"{sb.name} şubesi bu saate kapalı."
         for pid in sorted(self.es_zamanlilar.get(saat.id, {saat.id})):
             # Başka bir satırla çakışıyorsa gerekçe onu da söylemeli; yoksa
             # kullanıcı boş görünen bir hücrenin neden reddedildiğini anlamaz.
@@ -233,12 +250,16 @@ class Duzenleyici:
             for diger in self.doluluk.get(pid, []):
                 if diger.id in yoksay:
                     continue
-                if diger.entry.section_id == entry.section_id:
-                    return (f"{entry.section.name} şubesinin {nerede} "
+                # Birleşik ders şubelerinin hepsini tutar; kesişen tek şube
+                # bile çakışmadır.
+                ortak = _sube_kimlikleri(entry) & _sube_kimlikleri(diger.entry)
+                if ortak:
+                    ad = next(sb.name for sb in _subeler(entry) if sb.id in ortak)
+                    return (f"{ad} şubesinin {nerede} "
                             f"{diger.entry.subject.name} dersi var.")
                 if diger.entry.teacher_id == entry.teacher_id:
                     return (f"{entry.teacher.full_name} {nerede} "
-                            f"{diger.entry.section.name} şubesinde.")
+                            f"{_sube_etiketi(diger.entry)} şubesinde.")
         return None
 
     def _nerede(self, period_id: int) -> str:
@@ -457,6 +478,8 @@ class Duzenleyici:
                 selectinload(CurriculumEntry.section),
                 selectinload(CurriculumEntry.teacher),
                 selectinload(CurriculumEntry.subject),
+                selectinload(CurriculumEntry.extra_sections)
+                .selectinload(CurriculumEntrySection.section),
             )
             .where(CurriculumEntry.id == entry_id,
                    CurriculumEntry.deleted_at.is_(None),
@@ -514,6 +537,8 @@ class Duzenleyici:
                 selectinload(CurriculumEntry.section),
                 selectinload(CurriculumEntry.teacher),
                 selectinload(CurriculumEntry.subject),
+                selectinload(CurriculumEntry.extra_sections)
+                .selectinload(CurriculumEntrySection.section),
             )
             .where(Section.term_id == self.donem.id,
                    CurriculumEntry.deleted_at.is_(None))

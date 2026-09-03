@@ -123,6 +123,8 @@ export interface MufredatSatiri {
   subject: Ders;
   teacher: Ogretmen;
   section: Sube;
+  /** Dersi birlikte gören şubeler; asıl şube başta. Birden fazlaysa birleşik. */
+  sections: Sube[];
 }
 
 /** Öğretmenin dersleri arasındaki boşluğa nasıl davranılacağı. */
@@ -152,6 +154,9 @@ export interface Hucre {
   period_index: number;
   section_id: number;
   section_name: string;
+  /** Dersi birlikte gören şubeler. Birden fazlaysa birleşik ders. */
+  section_ids: number[];
+  section_names: string[];
   subject_name: string;
   subject_short: string | null;
   subject_color: string;

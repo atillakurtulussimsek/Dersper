@@ -18,12 +18,13 @@ import clsx from "clsx";
 import { bloklariCikar } from "../lib/hucreler";
 import { dersZemini } from "../lib/renkler";
 import type { DersSaati, Gun, Hedef, Hucre, Suruklenen } from "../lib/types";
+import { subeEtiketi, subeyeAit } from "../lib/cakisma";
 
 export type Bakis = "sube" | "ogretmen";
 
 /** Hücrenin alt satırı: şube bakışında öğretmen, öğretmen bakışında şube. */
 function altSatir(hucre: Hucre, bakis: Bakis): string {
-  return bakis === "sube" ? hucre.teacher_name : hucre.section_name;
+  return bakis === "sube" ? hucre.teacher_name : subeEtiketi(hucre);
 }
 
 export function HucreIcerigi({ hucre, bakis }: { hucre: Hucre; bakis: Bakis }) {
@@ -156,7 +157,7 @@ export default function ProgramIzgarasi({
   );
 
   const benimkiler = hucreler.filter((h) =>
-    bakis === "sube" ? h.section_name === anahtar : h.teacher_name === anahtar,
+    bakis === "sube" ? subeyeAit(h, anahtar) : h.teacher_name === anahtar,
   );
   const yerlesim = new Map<string, Hucre>();
   for (const h of benimkiler) yerlesim.set(`${h.day_index}:${h.period_index}`, h);

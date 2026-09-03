@@ -9,7 +9,8 @@ from sqlalchemy.orm import Session, selectinload
 from app import bloklar
 from app import cakisma
 from app.models import (
-    Availability, CurriculumEntry, Day, Section, SectionAvailability, Teacher,
+    Availability, CurriculumEntry, CurriculumEntrySection, Day, Section,
+    SectionAvailability, Teacher,
     TeacherAvailability, Term,
 )
 from app.solver.engine import Lesson, Slot
@@ -105,33 +106,51 @@ def dersleri_yukle(
         .join(Section, Section.id == CurriculumEntry.section_id)
         .where(Section.term_id == donem.id, CurriculumEntry.deleted_at.is_(None))
     )
-    if section_ids is not None:
-        sorgu = sorgu.where(CurriculumEntry.section_id.in_(section_ids))
     entries = db.scalars(
         sorgu.options(
             selectinload(CurriculumEntry.section),
             selectinload(CurriculumEntry.subject),
             selectinload(CurriculumEntry.teacher),
+            selectinload(CurriculumEntry.extra_sections)
+            .selectinload(CurriculumEntrySection.section),
         )
     )
+    kapsam = None if section_ids is None else set(section_ids)
     dersler: list[Lesson] = []
     for e in entries:
-        if not e.section.is_active or not e.subject.is_active or not e.teacher.is_active:
+        subeler = [e.section] + [x.section for x in e.extra_sections]
+        # Birleşik derste şubelerden biri kapsam dışıysa ders yine alınır:
+        # dersin kaybolması, kapsamdaki şubenin saatinin eksik kalması demek
+        # olurdu. Kapsam dışı şubenin kendi dersleri modelde olmadığı için
+        # yanlış bir çakışma da doğmaz.
+        if kapsam is not None and not any(sb.id in kapsam for sb in subeler):
             continue
-        if e.section.is_deleted or e.subject.is_deleted or e.teacher.is_deleted:
+        if not e.subject.is_active or not e.teacher.is_active:
             continue
+        if e.subject.is_deleted or e.teacher.is_deleted:
+            continue
+        if any(not sb.is_active or sb.is_deleted for sb in subeler):
+            continue
+
+        # Birleşik ders tek bir yerde işlenir; şubeler farklı binalardaysa o
+        # yer belirsizdir, bina kuralı bu derse uygulanmaz.
+        binalar = {sb.building_id for sb in subeler}
         dersler.append(Lesson(
             entry_id=e.id,
             section_id=e.section_id,
             section_name=e.section.name,
+            sections=tuple((sb.id, sb.name) for sb in subeler),
             teacher_id=e.teacher_id,
             teacher_name=e.teacher.full_name,
             subject_name=e.subject.name,
             weekly_hours=e.weekly_hours,
             blocks=tuple(bloklar.coz(e.block_pattern, e.weekly_hours)),
             max_per_day=e.max_per_day,
-            building_id=e.section.building_id,
+            building_id=binalar.pop() if len(binalar) == 1 else None,
             blocked_period_ids=frozenset(ogretmen_kapali.get(e.teacher_id, set())),
-            section_blocked_period_ids=frozenset(sube_kapali.get(e.section_id, set())),
+            # Şubelerden herhangi biri kapalıysa birleşik ders o saate konamaz.
+            section_blocked_period_ids=frozenset().union(
+                *(sube_kapali.get(sb.id, set()) for sb in subeler)
+            ),
         ))
     return dersler

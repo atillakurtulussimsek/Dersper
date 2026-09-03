@@ -5,6 +5,11 @@ Dersper'in geliştirme günlüğü. Her değişiklik tek cümleyle, en yeni sür
 öncesinde ikinci hane özellik, üçüncü hane düzeltme demektir. Uygulamanın
 sürümü arayüzde yan menünün altında yazar.
 
+## 0.14.0 — 2026-09-03
+
+- Birleşik dersler: ders atamasında birden fazla şube seçilirse ders o şubelere birlikte işlenir — tek öğretmen, tek saat; her şubenin programında görünür, çözücü ve elle düzenleme şubelerin hepsini o saatte dolu sayar.
+- Bir şube aynı dersi hem birleşik hem ayrı alabilir (2 saat ortak, 1 saat kendi); "bir şubede bir ders bir kez" kuralı şube bileşimine göre işler.
+
 ## 0.13.0 — 2026-09-02
 
 - Çakışma ölçütü kurumun seçimine bırakıldı: ızgaranın satırı (1., 2., 3. ders) ya da gerçek saat aralığı (1. ders 09:00–09:40); seçim hem program üretimini hem elle düzenlemeyi bağlar.

@@ -11,8 +11,9 @@ from sqlalchemy.orm import Session, selectinload
 from app.db import get_db
 from app.deps import aktif_donem, current_user
 from app.models import (
-    Assignment, CurriculumEntry, Day, Period, Section, SolveRun, SolveStatus, Term,
-    Timetable, TimetableStatus, TimetableVersion, VersionKind,
+    Assignment, CurriculumEntry, CurriculumEntrySection, Day, Period, Section,
+    SolveRun, SolveStatus, Term, Timetable, TimetableStatus, TimetableVersion,
+    VersionKind,
 )
 from app import surumler
 from app.duzenle import Duzenleyici
@@ -49,6 +50,9 @@ def izgara_hucreleri(db: Session, timetable_id: int) -> list[GridCell]:
             selectinload(Assignment.entry).selectinload(CurriculumEntry.section),
             selectinload(Assignment.entry).selectinload(CurriculumEntry.subject),
             selectinload(Assignment.entry).selectinload(CurriculumEntry.teacher),
+            selectinload(Assignment.entry)
+            .selectinload(CurriculumEntry.extra_sections)
+            .selectinload(CurriculumEntrySection.section),
         )
         .where(Assignment.timetable_id == timetable_id)
     )
@@ -58,6 +62,9 @@ def izgara_hucreleri(db: Session, timetable_id: int) -> list[GridCell]:
         if konum is None:
             continue
         gun_index, ders_index = konum
+        # Birleşik ders tek hücredir; her şubenin ızgarasında görünmesini
+        # `section_ids` sağlar (arayüz üyeliğe bakar, eşitliğe değil).
+        subeler = [a.entry.section] + [x.section for x in a.entry.extra_sections]
         hucreler.append(GridCell(
             assignment_id=a.id,
             period_id=a.period_id,
@@ -65,6 +72,8 @@ def izgara_hucreleri(db: Session, timetable_id: int) -> list[GridCell]:
             period_index=ders_index,
             section_id=a.entry.section_id,
             section_name=a.entry.section.name,
+            section_ids=[sb.id for sb in subeler],
+            section_names=[sb.name for sb in subeler],
             subject_name=a.entry.subject.name,
             subject_short=a.entry.subject.short_code,
             subject_color=a.entry.subject.color,

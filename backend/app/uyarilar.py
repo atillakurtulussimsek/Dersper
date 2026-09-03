@@ -191,7 +191,9 @@ def uyarilari_hesapla(db: Session, program: Timetable) -> list[dict]:
     for (entry_id, gun), saatler_listesi in sorted(gunluk.items()):
         e = satirlar[entry_id]
         saatler_listesi.sort()
-        etiket = f"{e.section.name} · {e.subject.name}"
+        # Birleşik derste uyarı tüm şubeleri ilgilendirir; adı öyle yazılır.
+        sube_adi = " + ".join(sb.name for sb in e.sections)
+        etiket = f"{sube_adi} · {e.subject.name}"
         gun_adi = gun_adlari[gun]
 
         if len(saatler_listesi) > e.max_per_day:
@@ -206,7 +208,7 @@ def uyarilari_hesapla(db: Session, program: Timetable) -> list[dict]:
                     f"Program başka türlü tamamlanamadığı için sınır esnetildi; "
                     f"araya başka dersler konarak saatler ayrıldı."
                 ),
-                "sube": e.section.name,
+                "sube": sube_adi,
                 "ders": e.subject.name,
                 "ogretmen": e.teacher.full_name,
                 "gun": gun_adi,
@@ -231,7 +233,7 @@ def uyarilari_hesapla(db: Session, program: Timetable) -> list[dict]:
                     f"günü {_en_uzun_dizi(saatler_listesi)} saat kesintisiz. "
                     f"Aralarına başka bir ders koymak daha yararlı olur."
                 ),
-                "sube": e.section.name,
+                "sube": sube_adi,
                 "ders": e.subject.name,
                 "ogretmen": e.teacher.full_name,
                 "gun": gun_adi,

@@ -31,6 +31,7 @@ import type {
   BekleyenBlok, BoslukPolitikasi, Deneme, Gun, Hedef, Hucre, Izgara,
   KapaliSaatler, Program, Suruklenen, Sube, Surum,
 } from "../lib/types";
+import { subeEtiketi, subeyeAit } from "../lib/cakisma";
 
 const DURUM = {
   taslak: { etiket: "Taslak", tur: "notr" },
@@ -203,7 +204,9 @@ export default function ProgramDetay() {
   const hucreler = izgaraSorgu.data?.cells ?? [];
   const anahtarlar = useMemo(() => {
     const set = new Set(
-      hucreler.map((h) => (bakis === "sube" ? h.section_name : h.teacher_name)),
+      hucreler.flatMap((h) =>
+        bakis === "sube" ? (h.section_names?.length ? h.section_names : [h.section_name]) : [h.teacher_name],
+      ),
     );
     return [...set].sort((a, b) => a.localeCompare(b, "tr"));
   }, [hucreler, bakis]);
@@ -212,7 +215,7 @@ export default function ProgramDetay() {
   const seciliHucreler = useMemo(
     () =>
       hucreler.filter((h) =>
-        bakis === "sube" ? h.section_name === seciliAnahtar : h.teacher_name === seciliAnahtar,
+        bakis === "sube" ? subeyeAit(h, seciliAnahtar) : h.teacher_name === seciliAnahtar,
       ),
     [hucreler, bakis, seciliAnahtar],
   );
@@ -225,7 +228,7 @@ export default function ProgramDetay() {
     let bosluk = 0;
     for (const a of anahtarlar) {
       const kendi = hucreler.filter((h) =>
-        bakis === "sube" ? h.section_name === a : h.teacher_name === a,
+        bakis === "sube" ? subeyeAit(h, a) : h.teacher_name === a,
       );
       bosluk += ozetCikar(kendi, gunler.data ?? []).bosluk;
     }
@@ -280,7 +283,7 @@ export default function ProgramDetay() {
       tur: "bekleyen",
       entryId: Number(entryId),
       uzunluk: Number(uzunluk),
-      etiket: `${blok.subject_name} · ${blok.section_name}`,
+      etiket: `${blok.subject_name} · ${subeEtiketi(blok)}`,
       renk: blok.subject_color,
     });
   }
