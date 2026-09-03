@@ -64,6 +64,12 @@ class ConflictBasis(str, enum.Enum):
     SAAT = "saat"               # 09:00-09:40 ile 09:20-10:00 çakışır
 
 
+class SectionOrder(str, enum.Enum):
+    """Şubelerin listelerde hangi sırayla dizildiği (bkz. `app.siralama`)."""
+    AD = "ad"       # sınıf seviyesi + doğal ad sırası (9-A < 10-A)
+    ELLE = "elle"   # kullanıcının sürükleyip kaydettiği sıra
+
+
 class SolveStatus(str, enum.Enum):
     BEKLIYOR = "bekliyor"
     CALISIYOR = "calisiyor"
@@ -124,6 +130,11 @@ class Term(Base, SoftDelete):
     conflict_basis: Mapped[ConflictBasis] = mapped_column(
         Enum(ConflictBasis), default=ConflictBasis.DERS_SAATI,
         server_default=ConflictBasis.DERS_SAATI.name,
+    )
+    # Şubeler nasıl sıralanır: ada göre (doğal) ya da elle verilen sırayla.
+    section_order: Mapped[SectionOrder] = mapped_column(
+        Enum(SectionOrder), default=SectionOrder.AD,
+        server_default=SectionOrder.AD.name,
     )
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
@@ -291,6 +302,8 @@ class Section(Base, SoftDelete):
         ForeignKey("buildings.id", ondelete="SET NULL")
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Elle sıralamadaki yeri; NULL = sırası verilmemiş (sona düşer).
+    sort_order: Mapped[int | None] = mapped_column(Integer)
 
     building: Mapped[Building | None] = relationship()
 

@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.db import get_db
+from app import siralama
 from app.models import Day, Institution, Term, Timetable, TimetableStatus
 from app.routers.timetables import izgara_hucreleri
 from app.schemas import DayOut, TimetableGrid, TimetableOut
@@ -25,8 +26,11 @@ def _yayin(db: Session, token: str) -> Timetable:
 @router.get("/timetables/{token}", response_model=TimetableGrid)
 def yayindaki_program(token: str, db: Session = Depends(get_db)) -> TimetableGrid:
     t = _yayin(db, token)
-    return TimetableGrid(timetable=TimetableOut.model_validate(t),
-                         cells=izgara_hucreleri(db, t.id))
+    return TimetableGrid(
+        timetable=TimetableOut.model_validate(t),
+        cells=izgara_hucreleri(db, t.id),
+        section_names=[s.name for s in siralama.sirali_subeler(db, t.term)],
+    )
 
 
 @router.get("/timetables/{token}/timegrid", response_model=list[DayOut])

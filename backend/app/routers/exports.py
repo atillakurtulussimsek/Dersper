@@ -14,6 +14,7 @@ from app.models import (
     Availability, Day, Institution, Section, SectionAvailability, Teacher,
     TeacherAvailability, Term, Timetable,
 )
+from app import siralama
 from app.routers.timetables import izgara_hucreleri
 
 router = APIRouter(prefix="/timetables/{timetable_id}/export", tags=["çıktı"],
@@ -39,12 +40,22 @@ def _izgara_yapisi(db: Session, donem: Term) -> tuple[list[Day], list[int]]:
 
 
 def _tablolar(db: Session, timetable_id: int, bakis: str) -> dict[str, dict]:
-    """Anahtar (şube adı ya da öğretmen adı) -> {(gun, ders): hücre}"""
+    """Anahtar (şube adı ya da öğretmen adı) -> {(gun, ders): hücre}
+
+    Şube tabloları kurumun seçtiği şube sırasıyla dizilir (bkz. app.siralama);
+    ekrandaki şeritler ve çarşafla aynı sıra. Öğretmenler ada göre.
+    """
     hucreler = izgara_hucreleri(db, timetable_id)
     gruplar: dict[str, dict] = defaultdict(dict)
     for h in hucreler:
-        anahtar = h.section_name if bakis == "sube" else h.teacher_name
-        gruplar[anahtar][(h.day_index, h.period_index)] = h
+        # Birleşik ders her şubesinin tablosunda görünür.
+        anahtarlar = (h.section_names or [h.section_name]) if bakis == "sube" else [h.teacher_name]
+        for anahtar in anahtarlar:
+            gruplar[anahtar][(h.day_index, h.period_index)] = h
+    if bakis == "sube":
+        t = db.get(Timetable, timetable_id)
+        sira = siralama.ad_sirasi(siralama.sirali_subeler(db, t.term), t.term.section_order.value)
+        return dict(sorted(gruplar.items(), key=lambda kv: (sira.get(kv[0], 10**6), kv[0])))
     return dict(sorted(gruplar.items()))
 
 

@@ -28,6 +28,8 @@ export interface Donem {
   block_building_switch: boolean;
   /** Çakışma neye göre ölçülür: ızgaranın satırı mı, gerçek saat aralığı mı? */
   conflict_basis: CakismaOlcutu;
+  /** Şubeler ada göre mi, elle verilen sırayla mı dizilir? */
+  section_order: "ad" | "elle";
   created_at: string;
   is_active: boolean;
   counts: Record<string, number>;
@@ -108,8 +110,10 @@ export interface Sube {
   student_count: number | null;
   /** Dersliğinin bulunduğu bina; null = tek binalı kurum. */
   building_id: number | null;
-  is_active: boolean;
+  is_active: boolean;  /** Elle sıralamadaki yeri; null = sırası verilmemiş. */
+  sort_order: number | null;
 }
+
 
 export interface MufredatSatiri {
   id: number;
@@ -187,8 +191,10 @@ export interface Izgara {
   can_undo: boolean;
   can_redo: boolean;
   /** Programın durduğu sürüm numarası. */
-  version: number | null;
+  version: number | null;  /** Dönemin şubeleri, kurumun seçtiği sırayla. */
+  section_names: string[];
 }
+
 
 export type SurumTuru = "ilk" | "uretim" | "elle";
 

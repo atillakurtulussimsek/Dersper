@@ -33,6 +33,7 @@ import type {
   KapaliSaatler, Program, Suruklenen, Sube, Surum,
 } from "../lib/types";
 import { subeEtiketi, subeyeAit } from "../lib/cakisma";
+import { siraKarsilastirici } from "../lib/siralama";
 
 const DURUM = {
   taslak: { etiket: "Taslak", tur: "notr" },
@@ -209,8 +210,13 @@ export default function ProgramDetay() {
         bakis === "sube" ? (h.section_names?.length ? h.section_names : [h.section_name]) : [h.teacher_name],
       ),
     );
-    return [...set].sort((a, b) => a.localeCompare(b, "tr"));
-  }, [hucreler, bakis]);
+    // Şubeler kurumun seçtiği sırayla (sunucudan gelir); öğretmenler ada göre.
+    return [...set].sort(
+      bakis === "sube"
+        ? siraKarsilastirici(izgaraSorgu.data?.section_names ?? [])
+        : (a, b) => a.localeCompare(b, "tr"),
+    );
+  }, [hucreler, bakis, izgaraSorgu.data?.section_names]);
 
   const seciliAnahtar = anahtar && anahtarlar.includes(anahtar) ? anahtar : anahtarlar[0];
   const seciliHucreler = useMemo(
@@ -581,6 +587,7 @@ export default function ProgramDetay() {
                 gunler={gunler.data ?? []}
                 hucreler={hucreler}
                 bakis={bakis}
+                subeSirasi={izgaraSorgu.data?.section_names ?? []}
                 kapali={
                   bakis === "sube" ? kapali.data?.sections : kapali.data?.teachers
                 }

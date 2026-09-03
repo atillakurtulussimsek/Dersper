@@ -15,7 +15,7 @@ from app.models import (
     SolveRun, SolveStatus, Term, Timetable, TimetableStatus, TimetableVersion,
     VersionKind,
 )
-from app import surumler
+from app import siralama, surumler
 from app.duzenle import Duzenleyici
 from app.schemas import (
     AssignmentMove, GridCell, PendingOut, PlaceIn, SolveRunOut, TargetOut,
@@ -263,6 +263,7 @@ def _izgara(db: Session, t: Timetable) -> TimetableGrid:
     return TimetableGrid(
         timetable=TimetableOut.model_validate(t),
         cells=izgara_hucreleri(db, t.id),
+        section_names=[s.name for s in siralama.sirali_subeler(db, t.term)],
         can_undo=surumler.onceki_surum(db, t) is not None,
         can_redo=surumler.sonraki_surum(db, t) is not None,
         version=simdiki.number if simdiki else None,

@@ -15,11 +15,14 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.db import get_db
 from app.deps import aktif_donem, current_user
+from app import siralama
 from app.models import (
     Availability, Building, CurriculumEntry, CurriculumEntrySection, Period,
-    Section, SectionAvailability, Subject, Teacher, TeacherAvailability, Term,
+    Section, SectionAvailability, SectionOrder, Subject, Teacher,
+    TeacherAvailability, Term,
 )
 from app.schemas import (
+    SectionOrderIn,
     AvailabilityCell, AvailabilityCopyIn, AvailabilityCopyOut, AvailabilityUpdate,
     BuildingIn, BuildingOut, ClosedAvailabilityOut, CurriculumCopyIn,
     CurriculumCopyOut, CurriculumIn, CurriculumOut, ImportIn, ImportOut, SectionIn,
@@ -445,9 +448,32 @@ def ders_aktar(
 def subeler(
     db: Session = Depends(get_db), donem: Term = Depends(aktif_donem)
 ) -> list[Section]:
-    return list(
-        db.scalars(_donemin(Section, donem).order_by(Section.grade_level, Section.name))
-    )
+    return siralama.sirali_subeler(db, donem)
+
+
+@router.put("/sections/order", response_model=list[SectionOut])
+def sube_sirasini_kaydet(
+    payload: SectionOrderIn,
+    db: Session = Depends(get_db),
+    donem: Term = Depends(aktif_donem),
+) -> list[Section]:
+    """Şubelerin elle sırasını yazar ve dönemi elle sıraya alır.
+
+    Listede olmayan şubeler sıradan sonra, ada göre gelir. Başka dönemin şubesi
+    listede olamaz.
+    """
+    subeler = {s.id: s for s in db.scalars(_donemin(Section, donem))}
+    yabanci = [i for i in payload.ids if i not in subeler]
+    if yabanci:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Şube bulunamadı.")
+    for sira, sid in enumerate(dict.fromkeys(payload.ids)):
+        subeler[sid].sort_order = sira
+    for s in subeler.values():
+        if s.id not in payload.ids:
+            s.sort_order = None
+    donem.section_order = SectionOrder.ELLE
+    db.commit()
+    return siralama.sirali_subeler(db, donem)
 
 
 def _binayi_dogrula(db: Session, building_id: int | None, donem: Term) -> None:
@@ -579,9 +605,7 @@ def aktarilabilir_subeler(
     term_id: int, db: Session = Depends(get_db), donem: Term = Depends(aktif_donem)
 ) -> list[Section]:
     kaynak = _kaynak_donem(db, term_id, donem)
-    return list(
-        db.scalars(_donemin(Section, kaynak).order_by(Section.grade_level, Section.name))
-    )
+    return siralama.sirali_subeler(db, kaynak)
 
 
 @router.post("/sections/import", response_model=ImportOut,

@@ -22,6 +22,7 @@ import { dersZemini } from "../lib/renkler";
 import type { DersSaati, Gun, Hucre } from "../lib/types";
 import type { Bakis } from "./ProgramIzgarasi";
 import { ortakNotu, subeEtiketi } from "../lib/cakisma";
+import { siraKarsilastirici } from "../lib/siralama";
 
 /** Ad sütununun genişliği ve bir ders saatinin en az genişliği (px).
  *
@@ -155,12 +156,15 @@ export default function CarsafIzgarasi({
   gunler,
   hucreler,
   bakis,
+  subeSirasi,
   kapali,
   ac,
 }: {
   gunler: Gun[];
   hucreler: Hucre[];
   bakis: Bakis;
+  /** Şube adları, kurumun seçtiği sırayla (ızgara yanıtından). */
+  subeSirasi?: string[];
   /** Kayıt kimliği -> kapalı ders saati kimlikleri. */
   kapali?: Record<number, number[]>;
   /** Satır adına tıklanınca çağrılır; ayrı sayfa görünümüne geçmek için. */
@@ -191,7 +195,10 @@ export default function CarsafIzgarasi({
       satir.hucreler.set(`${h.day_index}:${h.period_index}`, h);
     }
   }
-  const sirali = [...satirlar.entries()].sort((a, b) => a[0].localeCompare(b[0], "tr"));
+  // Şube satırları kurumun seçtiği sırayla; öğretmen satırları ada göre.
+  const karsilastir =
+    bakis === "sube" ? siraKarsilastirici(subeSirasi ?? []) : (a: string, b: string) => a.localeCompare(b, "tr");
+  const sirali = [...satirlar.entries()].sort((a, b) => karsilastir(a[0], b[0]));
 
   return (
     // Dikey kaydırma satır sayısı arttığında devreye girer; başlıklar ve ad

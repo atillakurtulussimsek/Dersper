@@ -5,6 +5,10 @@ Dersper'in geliştirme günlüğü. Her değişiklik tek cümleyle, en yeni sür
 öncesinde ikinci hane özellik, üçüncü hane düzeltme demektir. Uygulamanın
 sürümü arayüzde yan menünün altında yazar.
 
+## 0.17.0 — 2026-09-03
+
+- Şube sırası kurumun seçimine bırakıldı: ada göre doğal sıra (9-A, 9-B, 10-A) ya da Şubeler sayfasında sürükleyip kaydedilen elle sıra; aynı sıra listelerde, atama ve program şeritlerinde, çarşafta, yayın sayfasında ve çıktılarda geçerli.
+
 ## 0.16.0 — 2026-09-03
 
 - Ders programında sağ tık menüsü (dokunmatikte tek dokunuş): "Taşı…" hedef saati listeden seçtiriyor, ayrıca kilitle / kilidi aç ve rafa al; raftaki blokta "Yerleştir…" — küçük ekranda sürüklemenin yerine geçer.

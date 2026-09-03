@@ -8,6 +8,7 @@ import ProgramIzgarasi, { type Bakis } from "../components/ProgramIzgarasi";
 import { Kart, Secim, Uyari, Yukleniyor } from "../components/ui";
 import { get } from "../lib/api";
 import type { Gun, Izgara } from "../lib/types";
+import { siraKarsilastirici } from "../lib/siralama";
 
 export default function Yayin() {
   const { token } = useParams();
@@ -41,8 +42,16 @@ export default function Yayin() {
 
   const hucreler = izgara.data!.cells;
   const anahtarlar = [
-    ...new Set(hucreler.map((h) => (bakis === "sube" ? h.section_name : h.teacher_name))),
-  ].sort((a, b) => a.localeCompare(b, "tr"));
+    ...new Set(
+      hucreler.flatMap((h) =>
+        bakis === "sube" ? (h.section_names?.length ? h.section_names : [h.section_name]) : [h.teacher_name],
+      ),
+    ),
+  ].sort(
+    bakis === "sube"
+      ? siraKarsilastirici(izgara.data!.section_names ?? [])
+      : (a, b) => a.localeCompare(b, "tr"),
+  );
   const secili = anahtar && anahtarlar.includes(anahtar) ? anahtar : anahtarlar[0];
 
   // Yayın sayfası girişsizdir; günleri okuyamazsak hücrelerden çıkarım yaparız.

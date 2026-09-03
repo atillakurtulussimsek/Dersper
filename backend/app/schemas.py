@@ -9,8 +9,8 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
 from app import bloklar
 from app.models import (
-    Availability, ConflictBasis, GapPolicy, InstitutionType, SolveStatus,
-    TimetableStatus, VersionKind,
+    Availability, ConflictBasis, GapPolicy, InstitutionType, SectionOrder,
+    SolveStatus, TimetableStatus, VersionKind,
 )
 
 
@@ -28,6 +28,8 @@ class TermIn(BaseModel):
     block_building_switch: bool = False
     # Çakışma neye göre ölçülür: ızgaranın satırı mı, gerçek saat aralığı mı?
     conflict_basis: ConflictBasis = ConflictBasis.DERS_SAATI
+    # Şubeler ada göre mi, elle verilen sırayla mı dizilir?
+    section_order: SectionOrder = SectionOrder.AD
 
 
 class TermOut(ORMModel):
@@ -37,10 +39,16 @@ class TermOut(ORMModel):
     ends_on: date | None
     block_building_switch: bool = False
     conflict_basis: ConflictBasis = ConflictBasis.DERS_SAATI
+    section_order: SectionOrder = SectionOrder.AD
     created_at: datetime
     is_active: bool = False
     # Dönemde tanımlı kayıt sayıları — listede özet göstermek için.
     counts: dict[str, int] = {}
+
+
+class SectionOrderIn(BaseModel):
+    """Şubelerin elle sırası: kimlikler, istenen sırayla."""
+    ids: list[int] = Field(min_length=1)
 
 
 class ImportIn(BaseModel):
@@ -309,6 +317,7 @@ class SectionOut(ORMModel):
     student_count: int | None
     building_id: int | None
     is_active: bool
+    sort_order: int | None = None
 
 
 class CurriculumIn(BaseModel):
@@ -449,6 +458,9 @@ class GridCell(BaseModel):
 class TimetableGrid(BaseModel):
     timetable: TimetableOut
     cells: list[GridCell]
+    # Dönemin şubeleri, kurumun seçtiği sırayla. Şeritler, çarşaf satırları ve
+    # yayın sayfası bu sırayı kullanır — hepsi tek yerden.
+    section_names: list[str] = []
     # Geri/ileri alınacak sürüm var mı — arayüz düğmeleri buna göre açılır.
     can_undo: bool = False
     can_redo: bool = False
