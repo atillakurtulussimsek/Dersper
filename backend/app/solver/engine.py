@@ -399,22 +399,38 @@ def etiket_gruplari(data: SolveInput) -> list[tuple[Celisen, frozenset[Celisen]]
     def oran(k: dict) -> float:
         return k["yuk"] / k["acik"] if k["acik"] else 9.9
 
+    def pay_metni(k: dict) -> str:
+        """Yükün açık saate göre durumu — uyarının asıl gerekçesi.
+
+        "24 saat yük, 24 açık saat" tek başına çelişki gibi okunmaz; sorun
+        boşluk payının sıfır olması: öğretmenler başka şubelerle çakışınca
+        kaydıracak saat kalmıyor. Bunu açıkça söylemek gerekir.
+        """
+        pay = k["acik"] - k["yuk"]
+        if k["acik"] == 0:
+            return f"haftalık {k['yuk']} saat yükü var ama hiç açık saati yok"
+        if pay <= 0:
+            return (f"haftalık {k['yuk']} saat yükü {k['acik']} açık saate tam sığıyor, "
+                    f"boşluk payı yok")
+        return (f"haftalık {k['yuk']} saat yükü, {k['acik']} açık saat, yalnızca "
+                f"{pay} saat pay")
+
     gruplar: list[tuple[float, Celisen, frozenset[Celisen]]] = []
     for k in ogretmen.values():
         gruplar.append((oran(k), Celisen(
             tur="ogretmen",
-            metin=(f"{k['ad']} (öğretmen): haftalık {k['yuk']} saat yük, "
-                   f"{k['acik']} açık saat — kısıtları çelişkiye katılıyor"),
-            oneri=(f"{k['ad']} müsaitlik matrisinde saat açın, yükünü başka "
-                   f"öğretmene aktarın ya da gün sınırını yükseltin"),
+            metin=(f"{k['ad']} (öğretmen): {pay_metni(k)} — kısıtları kaldırılınca "
+                   f"program kuruluyor"),
+            oneri=(f"{k['ad']} için müsaitlik matrisinde birkaç saat açın, bir dersini "
+                   f"başka öğretmene verin ya da gün sınırını yükseltin"),
         ), frozenset(k["etiketler"])))
     for k in sube.values():
         gruplar.append((oran(k), Celisen(
             tur="sube",
-            metin=(f"{k['ad']} (şube): haftalık {k['yuk']} saat yük, "
-                   f"{k['acik']} açık saat — kısıtları çelişkiye katılıyor"),
-            oneri=(f"{k['ad']} şubesinin kapalı saatlerini azaltın ya da "
-                   f"derslerinin haftalık saatini / dağılımını gevşetin"),
+            metin=(f"{k['ad']} (şube): {pay_metni(k)} — kısıtları kaldırılınca "
+                   f"program kuruluyor"),
+            oneri=(f"{k['ad']} şubesinde bir dersi başka öğretmene verin, kapalı "
+                   f"saatlerini azaltın ya da bir dersin haftalık saatini düşürün"),
         ), frozenset(k["etiketler"])))
     gruplar.sort(key=lambda g: -g[0])
     return [(baslik, kume) for _, baslik, kume in gruplar]

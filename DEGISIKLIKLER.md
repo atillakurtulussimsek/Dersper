@@ -5,6 +5,10 @@ Dersper'in geliştirme günlüğü. Her değişiklik tek cümleyle, en yeni sür
 öncesinde ikinci hane özellik, üçüncü hane düzeltme demektir. Uygulamanın
 sürümü arayüzde yan menünün altında yazar.
 
+## 0.20.2 — 2026-09-03
+
+- Çelişki raporunda kaynak satırları gerekçesini söylüyor: "24 saat yük 24 açık saate tam sığıyor, boşluk payı yok — kısıtları kaldırılınca program kuruluyor"; başlık da "her biri tek tek sınandı" diye netleşti.
+
 ## 0.20.1 — 2026-09-03
 
 - Büyük okullarda "program neden kurulamadı" önerileri boş kalıyordu: çelişki araması artık modele göre süre alıyor ve büyük modelde hızlı kanıtla silme yöntemine geçiyor (hangi öğretmenin/şubenin kısıtları çelişkiye katılıyor, tek başına hangisi yeter); süre yetmeyen sınamalar "bilinmiyor" diye işaretleniyor, kesin çelişki çıkmazsa en sıkışık kaynaklar listeleniyor.
