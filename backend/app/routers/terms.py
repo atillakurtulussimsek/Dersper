@@ -17,7 +17,8 @@ from app.deps import aktif_kurum, current_user
 from app.models import (
     CurriculumEntry, Day, Institution, Section, Subject, Teacher, Term, Timetable,
 )
-from app.schemas import TermIn, TermOut
+from app import donem_kopya
+from app.schemas import TermCopyIn, TermCopyOut, TermIn, TermOut
 from app.varsayilanlar import varsayilan_izgara
 
 router = APIRouter(prefix="/terms", tags=["dönem"], dependencies=[Depends(current_user)])
@@ -113,6 +114,26 @@ def donem_guncelle(
     db.commit()
     db.refresh(donem)
     return _cikti(db, donem, inst)
+
+
+@router.post("/{term_id}/copy", response_model=TermCopyOut,
+             status_code=status.HTTP_201_CREATED)
+def donemi_kopyala(
+    term_id: int,
+    payload: TermCopyIn,
+    db: Session = Depends(get_db),
+    inst: Institution = Depends(aktif_kurum),
+) -> TermCopyOut:
+    """Dönemin tamamını yeni bir döneme kopyalar (programlar hariç)."""
+    kaynak = _getir(db, term_id, inst)
+    yeni, sayim = donem_kopya.donemi_kopyala(
+        db, kaynak, payload.name, payload.starts_on, payload.ends_on
+    )
+    if payload.activate:
+        inst.active_term_id = yeni.id
+    db.commit()
+    db.refresh(yeni)
+    return TermCopyOut(term=_cikti(db, yeni, inst), copied=sayim)
 
 
 @router.post("/{term_id}/activate", response_model=TermOut)

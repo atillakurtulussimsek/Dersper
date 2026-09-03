@@ -5,6 +5,10 @@ Dersper'in geliştirme günlüğü. Her değişiklik tek cümleyle, en yeni sür
 öncesinde ikinci hane özellik, üçüncü hane düzeltme demektir. Uygulamanın
 sürümü arayüzde yan menünün altında yazar.
 
+## 0.18.0 — 2026-09-03
+
+- Dönem kopyalama: Dönemler sayfasından bir dönemin tamamı — zaman ızgarası, binalar, öğretmenler ve şubeler (müsaitlikleriyle), dersler, ders atamaları (birleşikler dahil) ve dönem ayarları — tek adımda yeni döneme kopyalanıyor; programlar kopyalanmıyor.
+
 ## 0.17.0 — 2026-09-03
 
 - Şube sırası kurumun seçimine bırakıldı: ada göre doğal sıra (9-A, 9-B, 10-A) ya da Şubeler sayfasında sürükleyip kaydedilen elle sıra; aynı sıra listelerde, atama ve program şeritlerinde, çarşafta, yayın sayfasında ve çıktılarda geçerli.

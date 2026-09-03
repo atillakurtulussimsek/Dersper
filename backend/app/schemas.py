@@ -51,6 +51,21 @@ class SectionOrderIn(BaseModel):
     ids: list[int] = Field(min_length=1)
 
 
+class TermCopyIn(BaseModel):
+    """Dönemin tamamının kopyası: yeni ad ve isteğe bağlı tarihler."""
+    name: str = Field(min_length=1, max_length=150)
+    starts_on: date | None = None
+    ends_on: date | None = None
+    # Kopya hemen çalışılan dönem olsun mu?
+    activate: bool = True
+
+
+class TermCopyOut(BaseModel):
+    term: "TermOut"
+    # Neyin kaç tane kopyalandığı — kullanıcıya özet.
+    copied: dict[str, int]
+
+
 class ImportIn(BaseModel):
     """Geçmiş dönemden seçili kayıtları aktif döneme aktarır."""
     term_id: int
