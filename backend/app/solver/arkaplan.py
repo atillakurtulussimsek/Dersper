@@ -25,7 +25,10 @@ from app.models import (
     Assignment, SolveRun, SolveStatus, Term, Timetable, TimetableStatus, VersionKind,
 )
 from app.solver.diagnose import rapor_olustur
-from app.solver.engine import STRATEJILER, SolveInput, celiskiyi_bul, solve
+from app.solver import yerel
+from app.solver.engine import (
+    CPSAT_STRATEJILERI, STRATEJILER, SolveInput, celiskiyi_bul, solve,
+)
 from app.solver.loader import (
     dersleri_yukle, gun_sinirlarini_yukle, slotlari_yukle,
 )
@@ -127,7 +130,8 @@ def _dongu(run_id: int, term_id: int, dur: threading.Event) -> None:
             baslangic = _simdi()
 
             sonsuz = bool(program.endless_mode)
-            stratejiler = list(STRATEJILER)
+            # Sonsuz modda beşinci motor (yerel arama) da döngüye girer.
+            stratejiler = list(STRATEJILER) if sonsuz else list(CPSAT_STRATEJILERI)
             gunluk: list[dict] = []
             son_deneme_yerlesimi: list | None = None
 
@@ -140,8 +144,8 @@ def _dongu(run_id: int, term_id: int, dur: threading.Event) -> None:
                 # İlk deneme her zaman otomatik; sonrakiler stratejileri
                 # sırayla döndürür. Sonsuz modda "ipuçlu" tur en iyiden devam eder.
                 strateji = "otomatik" if deneme == 1 else stratejiler[(deneme - 1) % len(stratejiler)]
-                ipucu = tuple(en_iyi) if (strateji == "ipuclu" and en_iyi) else ()
-                sonuc = solve(SolveInput(
+                ipucu = tuple(en_iyi) if (strateji in ("ipuclu", "yerel") and en_iyi) else ()
+                girdi = SolveInput(
                     slots=slots, lessons=lessons, locked=kilitli,
                     ogretmen_yarim_gun=gun_sinirlari,
                     bina_gecisi_engelle=donem.block_building_switch,
@@ -149,7 +153,10 @@ def _dongu(run_id: int, term_id: int, dur: threading.Event) -> None:
                     bosluk_politikasi=program.gap_policy.value,
                     time_limit_seconds=sure, seed=deneme, esnek_gunluk=esnek,
                     strateji=strateji, ipucu=ipucu,
-                ))
+                )
+                # Yerel arama CP-SAT değil: kanıt üretmez, en iyiden başlayıp
+                # eksik saati düşürmeye çalışır.
+                sonuc = yerel.coz(girdi) if strateji == "yerel" else solve(girdi)
                 if sonuc.proven_infeasible:
                     esnek = True
                 yerlesen = len(sonuc.placements)

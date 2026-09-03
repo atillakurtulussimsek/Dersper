@@ -74,7 +74,12 @@ STRATEJILER: dict[str, str] = {
     "sabit": "Sabit arama (ders sırasıyla)",
     "ipuclu": "İpuçlu (en iyiden devam)",
     "dogrusal": "Doğrusal gevşetmeli",
+    # Beşinci motor CP-SAT değil: app.solver.yerel (tavlama). Yalnız sonsuz
+    # modda döner; kanıt üretmez, en iyi yerleşimi iyileştirmeye çalışır.
+    "yerel": "Yerel arama (tavlama)",
 }
+# Sonsuz mod dışında dönen stratejiler (yerel arama hariç).
+CPSAT_STRATEJILERI = [k for k in STRATEJILER if k != "yerel"]
 
 # Varsayım çekirdeği (tanı kipi) için iş parçacığı sayısı. Tek iş parçacığı
 # kesin çalışır ama büyük modelde süre yetmez; deneyle ayarlanır.

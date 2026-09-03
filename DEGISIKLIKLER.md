@@ -5,6 +5,10 @@ Dersper'in geliştirme günlüğü. Her değişiklik tek cümleyle, en yeni sür
 öncesinde ikinci hane özellik, üçüncü hane düzeltme demektir. Uygulamanın
 sürümü arayüzde yan menünün altında yazar.
 
+## 0.22.0 — 2026-09-03
+
+- Sonsuz moda beşinci motor: yerel arama (benzetimli tavlama). CP-SAT'ten bağımsız, dış paket kullanmayan bu motor en iyi yerleşimden başlayıp blokları taşıyıp takas ederek eksik saati ve gün sınırı / bina cezalarını düşürmeye çalışır; sert kurallar (çakışma, müsaitlik, blok bütünlüğü, günlük sınır, bitişik blok yasağı, kilit) aynen korunur.
+
 ## 0.21.0 — 2026-09-03
 
 - Sonsuz mod: program kurulamasa bile dört farklı arama stratejisi (otomatik portföy, sabit arama, ipuçlu, doğrusal gevşetmeli) sırayla döndürülerek siz durdurana kadar denenir; iyileşen deneme ızgaraya hemen yazılır.
