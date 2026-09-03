@@ -130,3 +130,12 @@ export function subeEtiketi(
     ? kayit.section_names.join(" + ")
     : kayit.section_name;
 }
+
+/** Ortak (birleşik) ders ise ipucu metni, değilse null. */
+export function ortakNotu(
+  kayit: { section_name: string; section_names?: string[] },
+): string | null {
+  return kayit.section_names && kayit.section_names.length > 1
+    ? `Ortak ders: ${kayit.section_names.join(" + ")}`
+    : null;
+}

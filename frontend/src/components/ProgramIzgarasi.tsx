@@ -12,19 +12,24 @@
  *  soluklaşır ve nedeni hücrenin ipucunda yazar.
  */
 import { useDraggable, useDroppable } from "@dnd-kit/core";
-import { Lock } from "lucide-react";
+import { Lock, Users } from "lucide-react";
 import clsx from "clsx";
 
 import { bloklariCikar } from "../lib/hucreler";
 import { dersZemini } from "../lib/renkler";
 import type { DersSaati, Gun, Hedef, Hucre, Suruklenen } from "../lib/types";
-import { subeEtiketi, subeyeAit } from "../lib/cakisma";
+import { ortakNotu, subeEtiketi, subeyeAit } from "../lib/cakisma";
 
 export type Bakis = "sube" | "ogretmen";
 
 /** Hücrenin alt satırı: şube bakışında öğretmen, öğretmen bakışında şube. */
 function altSatir(hucre: Hucre, bakis: Bakis): string {
-  return bakis === "sube" ? hucre.teacher_name : subeEtiketi(hucre);
+  if (bakis !== "sube") return subeEtiketi(hucre);
+  // Şube bakışında öğretmen; ortak dersteyse yanında öbür şubeler.
+  const ortaklar = hucre.section_names?.length > 1
+    ? ` · ${hucre.section_names.join(" + ")}`
+    : "";
+  return `${hucre.teacher_name}${ortaklar}`;
 }
 
 export function HucreIcerigi({ hucre, bakis }: { hucre: Hucre; bakis: Bakis }) {
@@ -36,6 +41,11 @@ export function HucreIcerigi({ hucre, bakis }: { hucre: Hucre; bakis: Bakis }) {
       <span className="flex items-center justify-center gap-1 truncate text-[12px] font-semibold leading-tight text-murekkep">
         {hucre.is_locked && <Lock className="h-2.5 w-2.5 shrink-0 text-murekkep-silik" />}
         <span className="truncate">{hucre.subject_name}</span>
+        {/* Ortak ders: başka şubelerle birlikte işleniyor. Simge yeter; hangi
+          * şubeler olduğu hücrenin ipucunda ve alt satırda yazar. */}
+        {ortakNotu(hucre) && (
+          <Users className="h-3 w-3 shrink-0 text-murekkep-yumusak" aria-label="Ortak ders" />
+        )}
       </span>
       {/* Alt satır (öğretmen ya da şube) `murekkep-silik` değil `yumusak`:
         * hücre zemini kullanıcının ders rengiyle boyandığı için silik ton koyu

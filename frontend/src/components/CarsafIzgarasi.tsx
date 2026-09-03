@@ -16,12 +16,12 @@
  *     sayfa görünümünde açar; düzenleme orada yapılır.
  */
 import clsx from "clsx";
-import { Lock } from "lucide-react";
+import { Lock, Users } from "lucide-react";
 
 import { dersZemini } from "../lib/renkler";
 import type { DersSaati, Gun, Hucre } from "../lib/types";
 import type { Bakis } from "./ProgramIzgarasi";
-import { subeEtiketi } from "../lib/cakisma";
+import { ortakNotu, subeEtiketi } from "../lib/cakisma";
 
 /** Ad sütununun genişliği ve bir ders saatinin en az genişliği (px).
  *
@@ -119,16 +119,24 @@ function DersHucresi({
   return (
     <td
       colSpan={genislik}
-      title={`${hucre.subject_name} · ${kim}${genislik > 1 ? ` · ${genislik} saatlik blok` : ""}${kilitli ? " · kilitli" : ""}`}
+      title={`${hucre.subject_name} · ${kim}${genislik > 1 ? ` · ${genislik} saatlik blok` : ""}${kilitli ? " · kilitli" : ""}${ortakNotu(hucre) ? ` · ${ortakNotu(hucre)}` : ""}`}
       className={clsx(
         "h-9 border border-cizgi p-px align-middle",
         gunbas && "border-l-2 border-l-cizgi-guclu",
       )}
     >
       <div
-        className="flex h-full w-full flex-col justify-center overflow-hidden rounded-sm px-0.5 text-center"
+        className="relative flex h-full w-full flex-col justify-center overflow-hidden rounded-sm px-0.5 text-center"
         style={dersZemini(hucre.subject_color, 2)}
       >
+        {/* Ortak ders: hücre birkaç şubenin satırında birden görünür. Çarşaf
+          * hücresi dar; simge satır içinde kısa kodu ezmesin diye köşede. */}
+        {ortakNotu(hucre) && (
+          <Users
+            className="absolute right-0.5 top-0.5 h-2 w-2 text-murekkep-yumusak"
+            aria-label="Ortak ders"
+          />
+        )}
         <span className="sayisal flex items-center justify-center gap-0.5 truncate font-mono text-[10px] font-medium leading-tight text-murekkep">
           {kilitli && <Lock className="h-2 w-2 shrink-0 text-murekkep-silik" />}
           <span className="truncate">{ust(hucre)}</span>

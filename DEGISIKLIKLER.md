@@ -5,6 +5,10 @@ Dersper'in geliştirme günlüğü. Her değişiklik tek cümleyle, en yeni sür
 öncesinde ikinci hane özellik, üçüncü hane düzeltme demektir. Uygulamanın
 sürümü arayüzde yan menünün altında yazar.
 
+## 0.14.1 — 2026-09-03
+
+- Ortak ders hücrede belli oluyor: ders adının yanında (çarşafta köşede) küçük bir kişiler simgesi, alt satırda ve ipucunda birlikte işleyen şubeler.
+
 ## 0.14.0 — 2026-09-03
 
 - Birleşik dersler: ders atamasında birden fazla şube seçilirse ders o şubelere birlikte işlenir — tek öğretmen, tek saat; her şubenin programında görünür, çözücü ve elle düzenleme şubelerin hepsini o saatte dolu sayar.
