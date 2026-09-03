@@ -5,6 +5,10 @@ Dersper'in geliştirme günlüğü. Her değişiklik tek cümleyle, en yeni sür
 öncesinde ikinci hane özellik, üçüncü hane düzeltme demektir. Uygulamanın
 sürümü arayüzde yan menünün altında yazar.
 
+## 0.19.1 — 2026-09-03
+
+- Ders atamasında ders seçilince öğretmen listesi o dersin branş öğretmenlerini (branşı uyan ya da dersi zaten okutan) üstte, diğerlerini altta, ikisini de ada göre gösteriyor; yeni kayıtta ilk branş öğretmeni seçili gelir.
+
 ## 0.19.0 — 2026-09-03
 
 - Öğretmen müsaitliği başka öğretmenlere toplu kopyalanabiliyor: müsaitlik penceresinde "Başka öğretmenlere kopyala", hedefleri seçip tek adımda uygular (şubelerdeki gibi).

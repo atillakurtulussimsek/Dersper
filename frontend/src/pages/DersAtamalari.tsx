@@ -24,6 +24,7 @@ import { get } from "../lib/api";
 import { subeEtiketi } from "../lib/cakisma";
 import { desenCoz, desenEtiketi, desenOnerileri } from "../lib/bloklar";
 import { hataMetni, useKaynak, useListe } from "../lib/hooks";
+import { ogretmenleriGrupla } from "../lib/ogretmenSirasi";
 import type { Ders, Gun, MufredatSatiri, Ogretmen, Sube } from "../lib/types";
 
 const BOS = {
@@ -42,6 +43,9 @@ export default function DersAtamalari() {
   const subeler = useListe<Sube>("subeler", "/sections");
   const dersler = useListe<Ders>("dersler", "/subjects");
   const ogretmenler = useListe<Ogretmen>("ogretmenler", "/teachers");
+  // Tüm dönemin atamaları: bir dersi kimlerin okuttuğunu bilmek için
+  // (öğretmen listesinde branş öğretmenlerini öne almak).
+  const tumMufredat = useListe<MufredatSatiri>("mufredat-hepsi", "/curriculum");
   const izgara = useQuery({ queryKey: ["timegrid"], queryFn: () => get<Gun[]>("/timegrid") });
 
   const [bakis, setBakis] = useState<Bakis>("sube");
@@ -423,7 +427,20 @@ export default function DersAtamalari() {
           <Alan etiket="Ders">
             <Secim
               value={form.subject_id}
-              onChange={(e) => setForm({ ...form, subject_id: Number(e.target.value) })}
+              onChange={(e) => {
+                const subject_id = Number(e.target.value);
+                const ders = dersler.data?.find((d) => d.id === subject_id);
+                const { brans } = ogretmenleriGrupla(
+                  ogretmenler.data ?? [], subject_id, ders?.name ?? null, tumMufredat.data ?? [],
+                );
+                // Yeni kayıtta ders seçilince branş öğretmeni hazır gelsin; seçili
+                // öğretmen zaten branştansa dokunma. Düzenlemede öğretmen değişmez.
+                const teacher_id =
+                  !duzenlenen && brans.length && !brans.some((o) => o.id === form.teacher_id)
+                    ? brans[0].id
+                    : form.teacher_id;
+                setForm({ ...form, subject_id, teacher_id });
+              }}
             >
               {dersler.data?.map((d) => (
                 <option key={d.id} value={d.id}>
@@ -442,12 +459,31 @@ export default function DersAtamalari() {
               value={form.teacher_id}
               onChange={(e) => setForm({ ...form, teacher_id: Number(e.target.value) })}
             >
-              {ogretmenler.data?.map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.full_name}
-                  {o.branch ? ` · ${o.branch}` : ""}
-                </option>
-              ))}
+              {/* Önce seçili dersin branş öğretmenleri, sonra diğerleri; ikisi de ada göre. */}
+              {(() => {
+                const ders = dersler.data?.find((d) => d.id === form.subject_id);
+                const { brans, diger } = ogretmenleriGrupla(
+                  ogretmenler.data ?? [], ders?.id ?? null, ders?.name ?? null,
+                  tumMufredat.data ?? [],
+                );
+                const secenek = (o: Ogretmen) => (
+                  <option key={o.id} value={o.id}>
+                    {o.full_name}
+                    {o.branch ? ` · ${o.branch}` : ""}
+                  </option>
+                );
+                if (!brans.length) return diger.map(secenek);
+                return (
+                  <>
+                    <optgroup label={`${ders?.name ?? "Branş"} öğretmenleri`}>
+                      {brans.map(secenek)}
+                    </optgroup>
+                    {diger.length > 0 && (
+                      <optgroup label="Diğer öğretmenler">{diger.map(secenek)}</optgroup>
+                    )}
+                  </>
+                );
+              })()}
             </Secim>
           </Alan>
           <div className="grid gap-4 sm:grid-cols-2">
