@@ -407,6 +407,8 @@ class TimetableUpdate(BaseModel):
     """Üretim öncesi değiştirilebilen alanlar."""
     name: str | None = Field(default=None, min_length=1, max_length=150)
     gap_policy: GapPolicy | None = None
+    # Sonsuz mod: başarısız olsa da farklı stratejilerle durdurulana kadar dene.
+    endless_mode: bool | None = None
 
 
 class TimetableOut(ORMModel):
@@ -417,6 +419,7 @@ class TimetableOut(ORMModel):
     section_ids: list[int] | None
     gap_policy: GapPolicy
     created_at: datetime
+    endless_mode: bool = False
 
 
 class AssignmentOut(ORMModel):
@@ -558,6 +561,8 @@ class SolveRunOut(ORMModel):
     required: int
     proven_infeasible: bool
     stop_requested: bool
+    # Deneme günlüğü (strateji, süre, sonuç); sonsuz modda uzar.
+    log: list[dict] | None = None
 
 
 # --- Yapay zeka ayarları ---

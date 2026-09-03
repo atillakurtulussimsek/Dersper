@@ -73,6 +73,34 @@ def surum_yaz(
     return surum
 
 
+def deneme_surumu_yaz(
+    db: Session, program: Timetable, yerlesimler: list[tuple[int, int]],
+    kilitli: dict[int, list[int]], label: str,
+) -> TimetableVersion:
+    """Bir çözücü denemesini sürüm olarak yazar; imleci OYNATMAZ.
+
+    Sonsuz modda her deneme geçmişe girer ki kullanıcı ister incelesin ister
+    ona dönsün; ama ızgarada duran hâl (imleç) en iyi deneme kalır. Böylece
+    ekran her turda değişmez, geçmiş ise eksiksizdir. Ebeveyn o anki imleçtir:
+    denemeler geçerli hâlin kardeş dalları olur.
+    """
+    sonraki = (db.scalar(
+        select(func.max(TimetableVersion.number))
+        .where(TimetableVersion.timetable_id == program.id)
+    ) or 0) + 1
+    sirali = sorted(
+        [[e, p, p in kilitli.get(e, [])] for e, p in yerlesimler],
+        key=lambda x: (x[1], x[0]),
+    )
+    surum = TimetableVersion(
+        timetable_id=program.id, number=sonraki, parent_id=program.current_version_id,
+        kind=VersionKind.URETIM, label=label[:200], placements=sirali, placed=len(sirali),
+    )
+    db.add(surum)
+    db.flush()
+    return surum
+
+
 def _gecerli_yerlesimler(
     db: Session, program: Timetable, yerlesimler: list[list]
 ) -> tuple[list[list], int]:

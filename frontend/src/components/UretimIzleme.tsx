@@ -6,7 +6,8 @@
  */
 import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Loader2, Square } from "lucide-react";
+import { AlertTriangle, Infinity, Loader2, Square } from "lucide-react";
+import clsx from "clsx";
 
 import { Buton, Kart } from "./ui";
 import { post } from "../lib/api";
@@ -23,7 +24,14 @@ export function sureMetni(saniye: number): string {
   return `${kalan} sn`;
 }
 
-export default function UretimIzleme({ deneme }: { deneme: Deneme }) {
+export default function UretimIzleme({
+  deneme,
+  sonsuz = false,
+}: {
+  deneme: Deneme;
+  /** Program sonsuz modda mı — açıklama metni ona göre. */
+  sonsuz?: boolean;
+}) {
   const qc = useQueryClient();
   const [simdi, setSimdi] = useState(() => Date.now());
 
@@ -47,8 +55,11 @@ export default function UretimIzleme({ deneme }: { deneme: Deneme }) {
     ? Math.round((deneme.best_placed / deneme.required) * 100)
     : 0;
 
+  const gunluk = deneme.log ?? [];
+  const sonKayit = gunluk[gunluk.length - 1];
   const istatistikler: [string, string][] = [
     ["Deneme", `${deneme.attempts}`],
+    ["Strateji", sonKayit?.strateji_adi ?? "Otomatik portföy"],
     ["Süre", sureMetni(gecen)],
     ["En iyi yerleşim", `${deneme.best_placed} / ${deneme.required} saat`],
     ["Kalan", `${Math.max(0, deneme.required - deneme.best_placed)} saat`],
@@ -72,8 +83,14 @@ export default function UretimIzleme({ deneme }: { deneme: Deneme }) {
     >
       <div className="space-y-4">
         <div className="flex items-center gap-2 text-sm text-murekkep-yumusak">
-          <Loader2 className="h-4 w-4 animate-spin text-murekkep-silik" />
-          Tam yerleşim sağlanana kadar denemeye devam ediliyor.
+          {sonsuz ? (
+            <Infinity className="h-4 w-4 text-murekkep-silik" />
+          ) : (
+            <Loader2 className="h-4 w-4 animate-spin text-murekkep-silik" />
+          )}
+          {sonsuz
+            ? "Sonsuz mod: siz durdurana kadar farklı stratejilerle denemeye devam edilir; her deneme günlüğe ve sürüm geçmişine yazılır, ızgarada en iyisi durur."
+            : "Tam yerleşim sağlanana kadar denemeye devam ediliyor."}
         </div>
 
         <div>
@@ -89,7 +106,7 @@ export default function UretimIzleme({ deneme }: { deneme: Deneme }) {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
           {istatistikler.map(([etiket, deger]) => (
             <div key={etiket} className="rounded-lg bg-yuzey-alt px-3 py-2">
               <p className="text-xs text-murekkep-silik">{etiket}</p>
@@ -106,12 +123,53 @@ export default function UretimIzleme({ deneme }: { deneme: Deneme }) {
                 Bu kısıtlarla tam yerleşim mümkün değil — çözücü bunu kanıtladı.
               </p>
               <p className="mt-0.5 text-uyari">
-                Denemeler sürüyor ama sonuç değişmeyecek. Aşağıdaki bulguları giderip
-                yeniden başlatmanız gerekiyor. Denemeler arası bekleme kademeli olarak
-                açıldığı için işlemci boşuna yorulmaz.
+                {sonsuz
+                  ? "Sonsuz mod açık: tam yerleşim çıkmayacak, ama farklı stratejiler daha az eksikli bir program bulabilir. Aşağıdaki bulguları gidermek yine en kestirme yol."
+                  : "Esnek model de kanıtlarsa üretim kendiliğinden biter. Aşağıdaki bulguları giderip yeniden başlatmanız gerekiyor."}
               </p>
             </div>
           </div>
+        )}
+
+        {gunluk.length > 0 && (
+          <details className="group/gunluk">
+            <summary className="flex cursor-pointer list-none items-center gap-1.5 text-xs text-murekkep-silik hover:text-murekkep-yumusak [&::-webkit-details-marker]:hidden">
+              <span className="transition-transform group-open/gunluk:rotate-90">›</span>
+              Deneme günlüğü · {gunluk.length} kayıt
+            </summary>
+            <div className="mt-2 max-h-56 overflow-y-auto rounded-lg border border-cizgi">
+              <table className="w-full text-xs">
+                <thead className="sticky top-0 bg-yuzey-alt text-left text-2xs uppercase tracking-[0.08em] text-murekkep-silik">
+                  <tr>
+                    <th className="px-2 py-1.5">#</th>
+                    <th className="px-2 py-1.5">Strateji</th>
+                    <th className="px-2 py-1.5">Süre</th>
+                    <th className="px-2 py-1.5">Sonuç</th>
+                    <th className="px-2 py-1.5">Yerleşen</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-cizgi">
+                  {[...gunluk].reverse().map((k) => (
+                    <tr key={k.n} className={clsx(k.iyilesti && "bg-basari-zemin/40")}>
+                      <td className="sayisal px-2 py-1 font-mono">{k.n}</td>
+                      <td className="px-2 py-1">
+                        {k.strateji_adi}
+                        {k.esnek && <span className="text-murekkep-silik"> · esnek</span>}
+                      </td>
+                      <td className="sayisal px-2 py-1">{k.sure_sn} sn</td>
+                      <td className="px-2 py-1">
+                        {k.kanit ? "çözümsüz (kanıt)" : k.durum.toLowerCase()}
+                      </td>
+                      <td className="sayisal px-2 py-1">
+                        {k.yerlesen}/{k.gereken}
+                        {k.iyilesti && <span className="text-basari"> ↑</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </details>
         )}
 
       </div>

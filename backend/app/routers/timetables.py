@@ -143,6 +143,8 @@ def program_guncelle(
     t = _programi_getir(db, timetable_id, donem)
     if payload.name is not None:
         t.name = payload.name
+    if payload.endless_mode is not None:
+        t.endless_mode = payload.endless_mode
     if payload.gap_policy is not None:
         t.gap_policy = payload.gap_policy
     db.commit()

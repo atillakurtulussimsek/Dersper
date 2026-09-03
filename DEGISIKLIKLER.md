@@ -5,6 +5,11 @@ Dersper'in geliştirme günlüğü. Her değişiklik tek cümleyle, en yeni sür
 öncesinde ikinci hane özellik, üçüncü hane düzeltme demektir. Uygulamanın
 sürümü arayüzde yan menünün altında yazar.
 
+## 0.21.0 — 2026-09-03
+
+- Sonsuz mod: program kurulamasa bile dört farklı arama stratejisi (otomatik portföy, sabit arama, ipuçlu, doğrusal gevşetmeli) sırayla döndürülerek siz durdurana kadar denenir; iyileşen deneme ızgaraya hemen yazılır.
+- Her çözücü denemesi sürüm geçmişine yazılıyor ("Deneme 7 · İpuçlu — 440/447") ve incelenip geri yüklenebiliyor; canlı izlemede strateji ve deneme günlüğü (süre, sonuç, yerleşen) görünüyor.
+
 ## 0.20.2 — 2026-09-03
 
 - Çelişki raporunda kaynak satırları gerekçesini söylüyor: "24 saat yük 24 açık saate tam sığıyor, boşluk payı yok — kısıtları kaldırılınca program kuruluyor"; başlık da "her biri tek tek sınandı" diye netleşti.

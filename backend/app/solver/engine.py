@@ -67,6 +67,15 @@ CEZA_BINA_GECISI = 40
 # yapılmış bir anlaşma. Çözücü zorunlu kalmadıkça bu sınırı bozmamalı.
 CEZA_GUN_SINIRI = 40
 VARSAYILAN_SURE_SN = 30.0
+# Arama stratejileri: model aynı, CP-SAT'in arama biçimi farklı. Sonsuz mod
+# bunları sırayla döndürür; hepsi aynı 8 iş parçacığını kullanır.
+STRATEJILER: dict[str, str] = {
+    "otomatik": "Otomatik portföy",
+    "sabit": "Sabit arama (ders sırasıyla)",
+    "ipuclu": "İpuçlu (en iyiden devam)",
+    "dogrusal": "Doğrusal gevşetmeli",
+}
+
 # Varsayım çekirdeği (tanı kipi) için iş parçacığı sayısı. Tek iş parçacığı
 # kesin çalışır ama büyük modelde süre yetmez; deneyle ayarlanır.
 TANI_ISCI = 1
@@ -143,6 +152,12 @@ class SolveInput:
     # Günlük ders tekrar sınırı, öğretmen gün sınırı ve bina kuralı
     # aşılabilsin mi? Aşım cezalandırılır, yasak değildir.
     esnek_gunluk: bool = False
+    # Arama stratejisi (bkz. STRATEJILER). Aynı model, farklı arama yolu:
+    # bir strateji tıkandığında öbürü çoğu zaman başka bir köşeden girer.
+    strateji: str = "otomatik"
+    # Önceki en iyi yerleşim, ipucu olarak: (entry_id, period_id). Çözücü
+    # buradan başlar; sonsuz modda her tur bir öncekinin üstüne koyar.
+    ipucu: tuple[tuple[int, int], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -703,6 +718,8 @@ def _calistir(
     # Çelişki çekirdeği için iş parçacığı sayısı (bkz. TANI_ISCI).
     solver.parameters.num_workers = TANI_ISCI if tani else 8
     solver.parameters.random_seed = data.seed
+    if not tani:
+        _stratejiyi_uygula(model, solver, data, baslangic, dolu, slot_by_period)
     status = solver.Solve(model)
     gecen = _time.monotonic() - basla
 
@@ -745,6 +762,36 @@ def _calistir(
         status_name=solver.StatusName(status),
         relaxations=sorted(esnetmeler),
     )
+
+
+def _stratejiyi_uygula(model, solver, data: SolveInput, baslangic: dict,
+                       dolu: dict, slot_by_period: dict[int, int]) -> None:
+    """Seçili arama stratejisini ve varsa ipucunu çözücüye işler.
+
+    * otomatik — CP-SAT'in kendi portföyü.
+    * sabit    — blok başlangıç değişkenleri sırayla, ilk uygun saate; yoğun
+                 modelde şaşırtıcı biçimde iyi çalışır.
+    * ipuclu   — önceki en iyi yerleşim ipucu olur, arama oradan devam eder.
+    * dogrusal — daha sıkı doğrusal gevşetme, LP tabanlı arama.
+    İpucu, strateji ne olursa olsun verilmişse işlenir.
+    """
+    if data.ipucu:
+        li_by_entry = {l.entry_id: i for i, l in enumerate(data.lessons)}
+        for entry_id, period_id in data.ipucu:
+            li, si = li_by_entry.get(entry_id), slot_by_period.get(period_id)
+            if li is not None and si is not None and (li, si) in dolu:
+                model.AddHint(dolu[(li, si)], 1)
+
+    if data.strateji == "sabit":
+        degiskenler = [v for secenekler in baslangic.values() for v in secenekler.values()]
+        if degiskenler:
+            model.AddDecisionStrategy(
+                degiskenler, cp_model.CHOOSE_FIRST, cp_model.SELECT_MAX_VALUE)
+        solver.parameters.search_branching = cp_model.FIXED_SEARCH
+    elif data.strateji == "dogrusal":
+        solver.parameters.linearization_level = 2
+        solver.parameters.search_branching = cp_model.LP_SEARCH
+    # "otomatik" ve "ipuclu": varsayılan portföy (ipucu yukarıda işlendi).
 
 
 def _bosluklar(

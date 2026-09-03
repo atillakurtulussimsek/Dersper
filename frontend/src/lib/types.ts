@@ -142,6 +142,8 @@ export interface Program {
   /** Programa dahil şubeler; null = dönemin tüm şubeleri. */
   section_ids: number[] | null;
   gap_policy: BoslukPolitikasi;
+  /** Sonsuz mod: başarısız olsa da farklı stratejilerle durdurulana kadar dene. */
+  endless_mode: boolean;
   created_at: string;
 }
 
@@ -311,6 +313,20 @@ export interface Rapor {
   }[];
 }
 
+export interface DenemeKaydi {
+  n: number;
+  strateji: string;
+  strateji_adi: string;
+  sure_sn: number;
+  durum: string;
+  yerlesen: number;
+  gereken: number;
+  kanit: boolean;
+  esnek: boolean;
+  iyilesti: boolean;
+  zaman: string;
+}
+
 export interface Deneme {
   id: number;
   timetable_id: number;
@@ -328,6 +344,8 @@ export interface Deneme {
   required: number;
   /** Çözücü kısıtların çeliştiğini kanıtladı mı? */
   proven_infeasible: boolean;
+  /** Deneme günlüğü: strateji, süre, sonuç. Sonsuz modda uzar. */
+  log: DenemeKaydi[] | null;
   stop_requested: boolean;
 }
 

@@ -402,6 +402,9 @@ class Timetable(Base, SoftDelete):
     gap_policy: Mapped[GapPolicy] = mapped_column(
         Enum(GapPolicy), default=GapPolicy.IDEAL
     )
+    # Sonsuz mod: çözümsüzlük kanıtlansa bile farklı arama stratejileriyle
+    # durdurulana kadar denemeye devam eder; her deneme günlüğe ve sürüme yazılır.
+    endless_mode: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     # Kullanıcının "görmezden gel" dediği uyarı anahtarları.
     ignored_warnings: Mapped[list | None] = mapped_column(JSON)
     # Programın şu an hangi sürümde durduğu. Geri/ileri alma bu imleci
@@ -510,6 +513,8 @@ class SolveRun(Base):
     # Çözücü, kısıtların çeliştiğini kanıtladı mı?
     proven_infeasible: Mapped[bool] = mapped_column(Boolean, default=False)
     stop_requested: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Deneme günlüğü: her deneme için strateji, süre, sonuç (arayüzde listelenir).
+    log: Mapped[list | None] = mapped_column(JSON)
 
 
 class AiSettings(Base):

@@ -11,7 +11,7 @@ import {
 } from "@dnd-kit/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "react-router-dom";
-import { Copy, Globe, Inbox, Lock, LockOpen, MoveRight, Play, Redo2, Undo2 } from "lucide-react";
+import { Copy, Globe, Inbox, Infinity, Lock, LockOpen, MoveRight, Play, Redo2, Undo2 } from "lucide-react";
 
 import { BaglamMenusu, HedefSecici, type MenuOgesi } from "../components/BaglamMenusu";
 import BekleyenDersler from "../components/BekleyenDersler";
@@ -164,6 +164,13 @@ export default function ProgramDetay() {
     mutationFn: (atama: number) =>
       post<Izgara>(`/timetables/${id}/assignments/${atama}/lock`),
     onSuccess: duzenlemeSonucu,
+  });
+
+  const sonsuzDegistir = useMutation({
+    mutationFn: (endless_mode: boolean) =>
+      patch<Program>(`/timetables/${id}`, { endless_mode }),
+    // Program nesnesi ızgara yanıtından gelir; onu tazelemek gerekir.
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["izgara", id] }),
   });
 
   const politikaDegistir = useMutation({
@@ -520,6 +527,20 @@ export default function ProgramDetay() {
             </option>
           ))}
         </select>
+        <label
+          className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-cizgi-guclu bg-yuzey px-2.5 py-2 text-sm text-murekkep-yumusak"
+          title="Sonsuz mod: program kurulamasa bile farklı arama stratejileriyle siz durdurana kadar denemeye devam eder; her deneme günlüğe ve sürüm geçmişine yazılır."
+        >
+          <input
+            type="checkbox"
+            checked={program.endless_mode}
+            disabled={Boolean(surenUretim) || sonsuzDegistir.isPending}
+            onChange={(e) => sonsuzDegistir.mutate(e.target.checked)}
+            className="h-4 w-4 rounded border-cizgi-guclu"
+          />
+          <Infinity className="h-4 w-4" />
+          <span className="hidden sm:inline">Sonsuz mod</span>
+        </label>
         <Buton
           onClick={() => uret.mutate()}
           yukleniyor={uret.isPending}
@@ -537,7 +558,7 @@ export default function ProgramDetay() {
 
       {hata && <Uyari tur="hata">{hata}</Uyari>}
 
-      {surenUretim && <UretimIzleme deneme={surenUretim} />}
+      {surenUretim && <UretimIzleme deneme={surenUretim} sonsuz={program.endless_mode} />}
 
       {/* Bulgular üretim sürerken de gösterilir: kullanıcı beklerken düzeltebilir. */}
       {surenUretim?.report ? (

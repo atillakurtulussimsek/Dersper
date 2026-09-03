@@ -25,7 +25,7 @@ from app.models import (
     Assignment, SolveRun, SolveStatus, Term, Timetable, TimetableStatus, VersionKind,
 )
 from app.solver.diagnose import rapor_olustur
-from app.solver.engine import SolveInput, celiskiyi_bul, solve
+from app.solver.engine import STRATEJILER, SolveInput, celiskiyi_bul, solve
 from app.solver.loader import (
     dersleri_yukle, gun_sinirlarini_yukle, slotlari_yukle,
 )
@@ -126,12 +126,21 @@ def _dongu(run_id: int, term_id: int, dur: threading.Event) -> None:
             celiski_arandi = False
             baslangic = _simdi()
 
+            sonsuz = bool(program.endless_mode)
+            stratejiler = list(STRATEJILER)
+            gunluk: list[dict] = []
+            son_deneme_yerlesimi: list | None = None
+
             while not dur.is_set():
                 deneme += 1
                 # Önce kurala uyan bir program ara; ancak birkaç deneme sonuç
                 # vermezse ya da kısıtların çeliştiği kanıtlanırsa esnet.
                 if deneme > KATI_DENEME_SAYISI:
                     esnek = True
+                # İlk deneme her zaman otomatik; sonrakiler stratejileri
+                # sırayla döndürür. Sonsuz modda "ipuçlu" tur en iyiden devam eder.
+                strateji = "otomatik" if deneme == 1 else stratejiler[(deneme - 1) % len(stratejiler)]
+                ipucu = tuple(en_iyi) if (strateji == "ipuclu" and en_iyi) else ()
                 sonuc = solve(SolveInput(
                     slots=slots, lessons=lessons, locked=kilitli,
                     ogretmen_yarim_gun=gun_sinirlari,
@@ -139,21 +148,50 @@ def _dongu(run_id: int, term_id: int, dur: threading.Event) -> None:
                     cakisma_olcutu=donem.conflict_basis.value,
                     bosluk_politikasi=program.gap_policy.value,
                     time_limit_seconds=sure, seed=deneme, esnek_gunluk=esnek,
+                    strateji=strateji, ipucu=ipucu,
                 ))
                 if sonuc.proven_infeasible:
                     esnek = True
                 yerlesen = len(sonuc.placements)
-                if yerlesen > en_iyi_yerlesen:
+                iyilesti = yerlesen > en_iyi_yerlesen
+                if iyilesti:
                     en_iyi_yerlesen = yerlesen
                     en_iyi = sonuc.placements
                     en_iyi_eksik = sonuc.unplaced
+
+                gunluk.append({
+                    "n": deneme, "strateji": strateji,
+                    "strateji_adi": STRATEJILER[strateji],
+                    "sure_sn": round(sonuc.seconds, 1), "durum": sonuc.status_name,
+                    "yerlesen": yerlesen, "gereken": gereken,
+                    "kanit": bool(sonuc.proven_infeasible), "esnek": esnek,
+                    "iyilesti": iyilesti,
+                    "zaman": _simdi().isoformat(timespec="seconds"),
+                })
+
+                # Sonsuz modda her farklı deneme geçmişe sürüm olarak yazılır
+                # (imleç oynamaz: ızgarada en iyi kalır). Birebir aynı yerleşim
+                # tekrar yazılmaz.
+                if sonsuz and sonuc.placements:
+                    imza = sorted(sonuc.placements)
+                    if imza != son_deneme_yerlesimi:
+                        son_deneme_yerlesimi = imza
+                        _deneme_surumunu_yaz(
+                            run_id, sonuc.placements, kilitli,
+                            f"Deneme {deneme} · {STRATEJILER[strateji]} — "
+                            f"{yerlesen}/{gereken} ders saati",
+                        )
+                # Sonsuz modda iyileşen deneme hemen ızgaraya yazılır: kullanıcı
+                # beklerken en iyi hâli görsün.
+                if sonsuz and iyilesti and not sonuc.ok:
+                    _yerlesimleri_yaz(run_id, en_iyi, kilitli, gereken)
 
                 son_rapor = rapor_olustur(slots, lessons, sonuc.unplaced,
                                           sonuc.status_name, sonuc.seconds,
                                           gun_sinirlari, celisenler)
 
                 _ilerlemeyi_yaz(run_id, deneme, en_iyi_yerlesen, gereken,
-                                sonuc.proven_infeasible, son_rapor, baslangic)
+                                sonuc.proven_infeasible, son_rapor, baslangic, gunluk)
 
                 # Çözümsüzlük kanıtlandıysa hangi kısıtların çeliştiğini BİR KEZ
                 # çözümle. İlerleme yazıldıktan sonra yapılır: kullanıcı önce
@@ -181,7 +219,7 @@ def _dongu(run_id: int, term_id: int, dur: threading.Event) -> None:
                             slots, lessons, sonuc.unplaced, sonuc.status_name,
                             sonuc.seconds, gun_sinirlari, celisenler)
                         _ilerlemeyi_yaz(run_id, deneme, en_iyi_yerlesen, gereken,
-                                        True, son_rapor, baslangic)
+                                        True, son_rapor, baslangic, gunluk)
 
                 if sonuc.ok:
                     _yerlesimleri_yaz(run_id, sonuc.placements, kilitli, gereken)
@@ -191,7 +229,10 @@ def _dongu(run_id: int, term_id: int, dur: threading.Event) -> None:
                 # Sert model de esnek model de çözümsüzlüğü KANITLADIYSA hiçbir
                 # tohum işe yaramaz: en iyi gevşek yerleşimi yazıp bitiririz.
                 # Kullanıcı saatlerce dönen bir iş yerine nedenini görsün.
-                if sonuc.proven_infeasible and sonuc.esnek_proven_infeasible:
+                # Sonsuz mod bunu geçer: kullanıcı durdurana kadar gevşek modeli
+                # farklı stratejilerle iyileştirmeye çalışır.
+                if (sonuc.proven_infeasible and sonuc.esnek_proven_infeasible
+                        and not sonsuz):
                     if en_iyi:
                         _yerlesimleri_yaz(run_id, en_iyi, kilitli, gereken)
                     _bitir(db, run_id, SolveStatus.COZUMSUZ, son_rapor, baslangic)
@@ -199,7 +240,7 @@ def _dongu(run_id: int, term_id: int, dur: threading.Event) -> None:
 
                 # Yalnız sert model kanıtlıysa esnek modele geçilir (yukarıda
                 # `esnek = True`); o da kanıtlarsa bir sonraki tur biter.
-                if sonuc.proven_infeasible:
+                if sonuc.proven_infeasible and not sonsuz:
                     ara = min(ara * 2, EN_UZUN_ARA_SN)
                 else:
                     sure = min(sure * SURE_CARPANI, EN_UZUN_SURE_SN)
@@ -232,19 +273,36 @@ def _simdi() -> datetime:
 
 
 def _ilerlemeyi_yaz(run_id: int, deneme: int, en_iyi: int, gereken: int,
-                    kanitlandi: bool, rapor: dict, baslangic: datetime) -> None:
-    """Her denemeden sonra sayaçları günceller — arayüz bunları gösterir."""
+                    kanitlandi: bool, rapor: dict, baslangic: datetime,
+                    gunluk: list[dict] | None = None) -> None:
+    """Her denemeden sonra sayaçları ve günlüğü günceller — arayüz gösterir."""
     with SessionLocal() as db:
         run = db.get(SolveRun, run_id)
         if run is None:
             return
         run.attempts = deneme
+        if gunluk is not None:
+            # Son 200 deneme yeter; sonsuz modda liste sınırsız büyümesin.
+            run.log = gunluk[-200:]
         run.best_placed = en_iyi
         run.required = gereken
         run.proven_infeasible = kanitlandi
         run.report = rapor
         run.updated_at = _simdi()
         run.seconds = (_simdi() - baslangic).total_seconds()
+        db.commit()
+
+
+def _deneme_surumunu_yaz(run_id: int, yerlesim: list[tuple[int, int]],
+                         kilitli: dict[int, list[int]], etiket: str) -> None:
+    """Bir denemeyi ızgaraya dokunmadan geçmişe sürüm olarak yazar."""
+    with SessionLocal() as db:
+        run = db.get(SolveRun, run_id)
+        if run is None:
+            return
+        program = db.get(Timetable, run.timetable_id)
+        surumler.baslangici_guvence_al(db, program)
+        surumler.deneme_surumu_yaz(db, program, yerlesim, kilitli, etiket)
         db.commit()
 
 
