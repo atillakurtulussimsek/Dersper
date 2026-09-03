@@ -10,6 +10,7 @@ import Dersler from "./pages/Dersler";
 import Donemler from "./pages/Donemler";
 import Giris from "./pages/Giris";
 import Kayit from "./pages/Kayit";
+import Kisitlamalar from "./pages/Kisitlamalar";
 import Kullanicilar from "./pages/Kullanicilar";
 import Ogretmenler from "./pages/Ogretmenler";
 import Ozet from "./pages/Ozet";
@@ -88,6 +89,7 @@ export default function App() {
           <Route path="/dersler" element={<Dersler />} />
           <Route path="/subeler" element={<Subeler />} />
           <Route path="/binalar" element={<Binalar />} />
+          <Route path="/kisitlamalar" element={<Kisitlamalar />} />
           <Route path="/ders-atamalari" element={<DersAtamalari />} />
           {/* Eski adres, yer imleri bozulmasın diye yönlendirilir. */}
           <Route path="/mufredat" element={<Navigate to="/ders-atamalari" replace />} />

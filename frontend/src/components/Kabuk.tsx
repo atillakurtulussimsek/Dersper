@@ -8,7 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   BookOpen,
   Building2, CalendarClock, CalendarRange, Gauge, GraduationCap, LayoutGrid,
-  LogOut, Settings, Table2, UserCog, Users,
+  LogOut, Settings, SlidersHorizontal, Table2, UserCog, Users,
 } from "lucide-react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import clsx from "clsx";
@@ -37,7 +37,10 @@ const MENU: Obek[] = [
   },
   {
     baslik: "Program",
-    girdiler: [{ yol: "/programlar", ad: "Ders Programları", ikon: LayoutGrid }],
+    girdiler: [
+      { yol: "/programlar", ad: "Ders Programları", ikon: LayoutGrid },
+      { yol: "/kisitlamalar", ad: "Kısıtlamalar", ikon: SlidersHorizontal },
+    ],
   },
   {
     baslik: "Kurum",

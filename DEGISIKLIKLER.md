@@ -5,6 +5,10 @@ Dersper'in geliştirme günlüğü. Her değişiklik tek cümleyle, en yeni sür
 öncesinde ikinci hane özellik, üçüncü hane düzeltme demektir. Uygulamanın
 sürümü arayüzde yan menünün altında yazar.
 
+## 0.20.0 — 2026-09-03
+
+- Kısıtlamalar ekranı: programı bağlayan kurallar tek yerde toplanıyor; bina kuralı Binalar'dan, çakışma ölçütü Zaman Izgarası'ndan buraya taşındı, eski yerlerinde yönlendirme bırakıldı.
+
 ## 0.19.1 — 2026-09-03
 
 - Ders atamasında ders seçilince öğretmen listesi o dersin branş öğretmenlerini (branşı uyan ya da dersi zaten okutan) üstte, diğerlerini altta, ikisini de ada göre gösteriyor; yeni kayıtta ilk branş öğretmeni seçili gelir.

@@ -6,25 +6,22 @@
  *  toplanır, hangi binanın hangi güne düşeceğine program karar verir.
  */
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Building2, Download, Pencil, Plus, Trash2 } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Download, Pencil, Plus, Trash2 } from "lucide-react";
 
 import {
   Alan, BosDurum, Buton, CokSatir, Girdi, Kart, Kutu, SayfaBasligi, Tablo,
   Uyari, Yukleniyor,
 } from "../components/ui";
 import GecmisDonemdenAktar from "../components/GecmisDonemdenAktar";
-import { get, put } from "../lib/api";
 import { hataMetni, useKaynak, useListe } from "../lib/hooks";
-import type { Bina, Donem, Sube } from "../lib/types";
+import type { Bina, Sube } from "../lib/types";
 
 const BOS = { name: "", short_code: "", notes: "", is_active: true };
 
 export default function Binalar() {
-  const qc = useQueryClient();
   const liste = useListe<Bina>("binalar", "/buildings");
   const subeler = useListe<Sube>("subeler", "/sections");
-  const donemler = useQuery({ queryKey: ["donemler"], queryFn: () => get<Donem[]>("/terms") });
   const kaynak = useKaynak<any, Bina>("binalar", "/buildings");
 
   const [acik, setAcik] = useState(false);
@@ -32,18 +29,6 @@ export default function Binalar() {
   const [form, setForm] = useState(BOS);
   const [aktarimAcik, setAktarimAcik] = useState(false);
 
-  const aktifDonem = (donemler.data ?? []).find((d) => d.is_active);
-
-  const kural = useMutation({
-    mutationFn: (acikMi: boolean) =>
-      put<Donem>(`/terms/${aktifDonem!.id}`, {
-        name: aktifDonem!.name,
-        starts_on: aktifDonem!.starts_on,
-        ends_on: aktifDonem!.ends_on,
-        block_building_switch: acikMi,
-      }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["donemler"] }),
-  });
 
   function ac(b?: Bina) {
     setDuzenlenen(b ?? null);
@@ -79,7 +64,6 @@ export default function Binalar() {
   }
 
   const hata = hataMetni(kaynak.ekle, kaynak.guncelle, kaynak.sil);
-  const binasiz = (subeler.data ?? []).filter((s) => s.building_id === null).length;
 
   return (
     <div className="space-y-5">
@@ -154,41 +138,11 @@ export default function Binalar() {
         )}
       </Kart>
 
-      {(liste.data?.length ?? 0) > 0 && aktifDonem && (
-        <Kart
-          baslik="Binalar arası geçiş"
-          aciklama="Binalar birbirinden uzaksa öğretmenin gün içinde bina değiştirmesi zordur."
-          sag={<Building2 className="h-4 w-4 text-murekkep-silik" />}
-        >
-          <label className="flex cursor-pointer items-start gap-3">
-            <input
-              type="checkbox"
-              checked={aktifDonem.block_building_switch}
-              disabled={kural.isPending}
-              onChange={(e) => kural.mutate(e.target.checked)}
-              className="mt-0.5 h-4 w-4 rounded border-cizgi-guclu"
-            />
-            <span className="text-sm">
-              <span className="font-medium text-murekkep">
-                Bir öğretmen bir günde tek binada ders versin
-              </span>
-              <span className="mt-0.5 block text-murekkep-silik">
-                Açıkken bir binanın dersleri bir güne, öbürününki başka güne toplanır;
-                hangi binanın hangi güne düşeceğine program karar verir. Program başka
-                türlü kurulamıyorsa kural esnetilir ve aşım uyarı olarak listelenir.
-              </span>
-            </span>
-          </label>
-
-          {binasiz > 0 && (
-            <Uyari>
-              {binasiz} şubenin binası seçilmemiş. Binasız şubeler bu kuralın dışında
-              kalır — Şubeler sayfasından binalarını seçebilirsiniz.
-            </Uyari>
-          )}
-          {kural.error && <Uyari tur="hata">{(kural.error as Error).message}</Uyari>}
-        </Kart>
-      )}
+      <p className="text-xs text-murekkep-silik">
+        Öğretmenin gün içinde bina değiştirmesini engelleyen kural{" "}
+        <Link to="/kisitlamalar" className="font-medium underline">Kısıtlamalar</Link>{" "}
+        sayfasında.
+      </p>
 
       {aktarimAcik && (
         <GecmisDonemdenAktar<Bina>
