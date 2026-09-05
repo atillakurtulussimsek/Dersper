@@ -158,7 +158,7 @@ export default function Ogretmenler() {
             }
           />
         ) : (
-          <Tablo basliklar={["Ad soyad", "Branş", "Kısa kod", "Günlük en fazla", "Haftalık gün", "Durum", ""]}>
+          <Tablo basliklar={["Ad soyad", "Branş", "Haftalık yük", "Kısa kod", "Günlük en fazla", "Haftalık gün", "Durum", ""]}>
             {liste.data.map((o) => (
               <tr key={o.id} className="hover:bg-yuzey-alt">
                 <td className="px-3 py-2.5">
@@ -171,6 +171,9 @@ export default function Ogretmenler() {
                   </span>
                 </td>
                 <td className="px-3 py-2.5 text-murekkep-silik">{o.branch || "—"}</td>
+                <td className="sayisal px-3 py-2.5 text-murekkep-yumusak">
+                  {o.weekly_load ? `${o.weekly_load} saat` : "—"}
+                </td>
                 <td className="px-3 py-2.5 font-mono text-xs text-murekkep-yumusak">{o.short_code || "—"}</td>
                 <td className="sayisal px-3 py-2.5 text-murekkep-silik">
                   {o.max_daily_hours ? `${o.max_daily_hours} saat` : "—"}

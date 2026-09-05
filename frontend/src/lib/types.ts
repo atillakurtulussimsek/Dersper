@@ -93,6 +93,8 @@ export interface Ogretmen {
   notes: string | null;
   color: string;
   is_active: boolean;
+  /** Bu dönemde atanmış haftalık ders saati toplamı. */
+  weekly_load: number;
 }
 
 export interface Ders {

@@ -5,6 +5,14 @@ Dersper'in geliştirme günlüğü. Her değişiklik tek cümleyle, en yeni sür
 öncesinde ikinci hane özellik, üçüncü hane düzeltme demektir. Uygulamanın
 sürümü arayüzde yan menünün altında yazar.
 
+## 0.22.2 — 2026-09-03
+
+- Öğretmen listesinde haftalık ders yükü sütunu.
+
+## 0.22.1 — 2026-09-03
+
+- Çelişki raporunda şube için "boşluk payı yok" gerekçesi kaldırıldı (şube programı tam dolu olur, bu olağandır); işaretlenen şubede dersler tek tek sınanıp hangi ders ve öğretmenin çıkınca programın kurulduğu, öğretmenin yük/açık saatiyle birlikte yazılıyor; şubenin hiçbir öğretmeninin müsait olmadığı saatler de listeleniyor.
+
 ## 0.22.0 — 2026-09-03
 
 - Sonsuz moda beşinci motor: yerel arama (benzetimli tavlama). CP-SAT'ten bağımsız, dış paket kullanmayan bu motor en iyi yerleşimden başlayıp blokları taşıyıp takas ederek eksik saati ve gün sınırı / bina cezalarını düşürmeye çalışır; sert kurallar (çakışma, müsaitlik, blok bütünlüğü, günlük sınır, bitişik blok yasağı, kilit) aynen korunur.

@@ -444,16 +444,109 @@ def etiket_gruplari(data: SolveInput) -> list[tuple[Celisen, frozenset[Celisen]]
             oneri=(f"{k['ad']} için müsaitlik matrisinde birkaç saat açın, bir dersini "
                    f"başka öğretmene verin ya da gün sınırını yükseltin"),
         ), frozenset(k["etiketler"])))
-    for k in sube.values():
+    for sid, k in sube.items():
+        # Şube programının tam dolu olması olağandır; burada "boşluk payı"
+        # gerekçe değildir. Sorun şubenin öğretmenlerinde: bazı saatlerde
+        # hepsi başka yerde. Hangi ders/öğretmen olduğunu ikinci tur söyler.
         gruplar.append((oran(k), Celisen(
             tur="sube",
-            metin=(f"{k['ad']} (şube): {pay_metni(k)} — kısıtları kaldırılınca "
-                   f"program kuruluyor"),
-            oneri=(f"{k['ad']} şubesinde bir dersi başka öğretmene verin, kapalı "
-                   f"saatlerini azaltın ya da bir dersin haftalık saatini düşürün"),
+            metin=(f"{k['ad']} (şube): {k['yuk']} saatlik yükü {k['acik']} açık saate "
+                   f"yerleşemiyor — kısıtları kaldırılınca program kuruluyor. Sorun "
+                   f"şubede değil, öğretmenlerinin aynı saatlerde başka şubelerde "
+                   f"olmasında"),
+            oneri=(f"{k['ad']} şubesinde aşağıda işaretlenen dersi başka öğretmene "
+                   f"verin ya da o öğretmenin müsaitliğini genişletin"),
         ), frozenset(k["etiketler"])))
+        k["sid"] = sid
     gruplar.sort(key=lambda g: -g[0])
     return [(baslik, kume) for _, baslik, kume in gruplar]
+
+
+def _sube_dersleri(data: SolveInput, sube_adi: str) -> list[int]:
+    """Adı verilen şubenin ders satırı indeksleri, öğretmen sıkışıklığına göre."""
+    toplam = len(data.slots)
+    yuk: dict[int, int] = {}
+    for l in data.lessons:
+        yuk[l.teacher_id] = yuk.get(l.teacher_id, 0) + l.weekly_hours
+    def sikisiklik(l: Lesson) -> float:
+        acik = toplam - len(l.blocked_period_ids)
+        return yuk[l.teacher_id] / acik if acik else 9.9
+    return sorted(
+        (i for i, l in enumerate(data.lessons)
+         if any(ad == sube_adi for _, ad in sube_ciftleri(l))),
+        key=lambda i: -sikisiklik(data.lessons[i]),
+    )
+
+
+def _bos_ogretmensiz_saatler(data: SolveInput, sube_adi: str) -> list[str]:
+    """Şubenin açık olduğu ama hiçbir öğretmeninin müsait olmadığı saatler.
+
+    Statik ve kesin: bu saatler ne olursa olsun dolamaz; şube tam doluysa
+    program burada tıkanır. Gün ve saat adıyla döner.
+    """
+    dersler = [data.lessons[i] for i in _sube_dersleri(data, sube_adi)]
+    if not dersler:
+        return []
+    sube_kapali = set().union(*(l.section_blocked_period_ids for l in dersler))
+    sonuc = []
+    for s in data.slots:
+        if s.period_id in sube_kapali:
+            continue
+        if all(s.period_id in l.blocked_period_ids for l in dersler):
+            sonuc.append(f"{s.day_name} {s.period_name}")
+    return sonuc
+
+
+def _subeyi_incele(data: SolveInput, baslik: Celisen, devam, kalan_sn) -> list[Celisen]:
+    """İşaretlenen şubede ders tek tek çıkarılır: hangisi çıkınca kuruluyor?
+
+    Şube programı tam doludur, bu olağan; tıkanma öğretmenlerdedir. Dersin
+    yük etiketi çıkarılınca program kuruluyorsa o dersin öğretmeni aynı
+    saatlerde başka şubelerdedir: kullanıcıya adıyla söylenir.
+    """
+    import time as _t
+
+    ad = baslik.metin.split(" (şube)")[0]
+    sonuclar: list[Celisen] = []
+    bos = _bos_ogretmensiz_saatler(data, ad)
+    if bos:
+        sonuclar.append(Celisen(
+            tur="sube_saat",
+            metin=(f"{ad}: {', '.join(bos[:6])}{'…' if len(bos) > 6 else ''} — bu "
+                   f"saatlerde şubenin hiçbir öğretmeni müsait değil, saat dolamaz"),
+            oneri=(f"{ad} şubesini bu saatlerde kapatın ya da öğretmenlerinden birinin "
+                   f"müsaitliğini bu saatlere açın"),
+            tek_basina_yeterli=None,
+        ))
+
+    basla = _t.monotonic()
+    bulunan = 0
+    for li in _sube_dersleri(data, ad)[:10]:
+        if not devam() or _t.monotonic() - basla > kalan_sn or bulunan >= 3:
+            break
+        l = data.lessons[li]
+        sinama = _calistir(
+            SolveInput(**{**data.__dict__, "time_limit_seconds": SINAMA_SN}),
+            gevsek=False, atlanan=_yuk_etiketi(l),
+        )
+        yeter = _sinama_sonucu(sinama)
+        if yeter is False:
+            continue
+        bulunan += 1
+        # Öğretmenin genel yükü: kullanıcı neyi gevşeteceğini görsün.
+        ogr_yuk = sum(x.weekly_hours for x in data.lessons if x.teacher_id == l.teacher_id)
+        ogr_acik = len(data.slots) - len(l.blocked_period_ids)
+        sonuclar.append(Celisen(
+            tur="ders",
+            metin=(f"{ad} · {l.subject_name} ({l.teacher_name}): bu ders çıkarılınca "
+                   f"program kuruluyor. {l.teacher_name}: haftalık {ogr_yuk} saat yük, "
+                   f"{ogr_acik} açık saat"),
+            oneri=(f"{l.teacher_name} aynı saatlerde başka şubelerde — dersi başka "
+                   f"öğretmene verin, {l.teacher_name} için müsaitlikte saat açın ya da "
+                   f"haftalık saatini düşürün"),
+            tek_basina_yeterli=yeter,
+        ))
+    return sonuclar
 
 
 def _sinama_sonucu(sonuc: SolveOutput) -> bool | None:
@@ -518,6 +611,7 @@ def celiskiyi_bul(
         return []
 
     sonuclar = []
+    incelenen_sube = 0
     for baslik, kume in etiket_gruplari(data):
         if not devam() or _t.monotonic() - baslangic > COZUMLEME_TAVANI_SN:
             break
@@ -533,6 +627,12 @@ def celiskiyi_bul(
             continue
         sonuclar.append(Celisen(tur=baslik.tur, metin=baslik.metin,
                                 oneri=baslik.oneri, tek_basina_yeterli=yeter))
+        # Şube işaretlendiyse içine bak: hangi ders, hangi öğretmen? İlk iki
+        # şube için; gerisi aynı öğretmenlere çıkar zaten.
+        if baslik.tur == "sube" and incelenen_sube < 2:
+            incelenen_sube += 1
+            kalan = COZUMLEME_TAVANI_SN - (_t.monotonic() - baslangic)
+            sonuclar.extend(_subeyi_incele(data, baslik, devam, kalan))
     return sonuclar
 
 

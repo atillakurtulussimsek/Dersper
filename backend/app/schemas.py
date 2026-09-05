@@ -255,6 +255,8 @@ class TeacherOut(ORMModel):
     notes: str | None
     color: str
     is_active: bool
+    # Bu dönemde atanmış haftalık ders saati toplamı (listede gösterilir).
+    weekly_load: int = 0
 
 
 class AvailabilityCell(BaseModel):

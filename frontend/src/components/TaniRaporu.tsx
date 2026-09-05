@@ -80,7 +80,7 @@ export default function TaniRaporu({ deneme }: { deneme: Deneme }) {
           {celiskiler.length > 0 && (
             <div className="space-y-2">
               <p className="text-sm font-medium text-murekkep">
-                {celiskiler.every((c) => c.tur === "ogretmen" || c.tur === "sube")
+                {celiskiler.every((c) => ["ogretmen", "sube", "ders", "sube_saat"].includes(c.tur))
                   ? "Program şu kaynakların kısıtlarına takılıyor (her biri tek tek sınandı):"
                   : "Şu kısıtlar birlikte çelişiyor:"}
               </p>

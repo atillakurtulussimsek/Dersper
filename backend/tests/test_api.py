@@ -1149,3 +1149,14 @@ def test_bosluk_politikasi_varsayilani_ideal(yonetici: TestClient):
 def test_gecersiz_bosluk_politikasi_reddedilir(yonetici: TestClient):
     r = yonetici.post("/api/timetables", json={"name": "X", "gap_policy": "hizli"})
     assert r.status_code == 422
+
+
+def test_ogretmen_listesinde_haftalik_yuk(yonetici):
+    ogr = yonetici.post("/api/teachers", json={"full_name": "Yüklü Öğretmen"}).json()["id"]
+    ders = yonetici.post("/api/subjects", json={"name": "Matematik"}).json()["id"]
+    for ad in ("9-A", "9-B"):
+        sube = yonetici.post("/api/sections", json={"name": ad}).json()["id"]
+        yonetici.post("/api/curriculum", json={"section_id": sube, "subject_id": ders,
+                                               "teacher_id": ogr, "weekly_hours": 4})
+    liste = yonetici.get("/api/teachers").json()
+    assert next(t for t in liste if t["id"] == ogr)["weekly_load"] == 8

@@ -10,7 +10,7 @@ kayıtlar listelenir, seçilenler aktif döneme kopyalanır.
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.db import get_db
@@ -76,8 +76,21 @@ def _ogretmen_alanlari(payload: TeacherIn) -> dict:
 @router.get("/teachers", response_model=list[TeacherOut])
 def ogretmenler(
     db: Session = Depends(get_db), donem: Term = Depends(aktif_donem)
-) -> list[Teacher]:
-    return list(db.scalars(_donemin(Teacher, donem).order_by(Teacher.full_name)))
+) -> list[TeacherOut]:
+    ogretmenler = list(db.scalars(_donemin(Teacher, donem).order_by(Teacher.full_name)))
+    # Haftalık yük: silinmemiş ders atamalarının saat toplamı, öğretmen başına.
+    yukler = dict(db.execute(
+        select(CurriculumEntry.teacher_id, func.sum(CurriculumEntry.weekly_hours))
+        .join(Section, Section.id == CurriculumEntry.section_id)
+        .where(Section.term_id == donem.id, CurriculumEntry.deleted_at.is_(None))
+        .group_by(CurriculumEntry.teacher_id)
+    ).all())
+    cikti = []
+    for t in ogretmenler:
+        v = TeacherOut.model_validate(t)
+        v.weekly_load = int(yukler.get(t.id, 0) or 0)
+        cikti.append(v)
+    return cikti
 
 
 @router.post("/teachers", response_model=TeacherOut, status_code=status.HTTP_201_CREATED)
