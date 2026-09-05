@@ -232,6 +232,7 @@ export default function Subeler() {
             basliklar={[
               ...(elle ? [""] : []),
               "Şube",
+              "Haftalık yük",
               ...(binaVar ? ["Bina"] : []),
               "Sınıf seviyesi", "Öğrenci", "Durum", "",
             ]}
@@ -249,6 +250,9 @@ export default function Subeler() {
                   </td>
                 )}
                 <td className="px-3 py-2.5 font-medium">{s.name}</td>
+                <td className="sayisal px-3 py-2.5 text-murekkep-yumusak">
+                  {s.weekly_load ? `${s.weekly_load} saat` : "—"}
+                </td>
                 {binaVar && (
                   <td className="px-3 py-2.5 text-murekkep-silik">
                     {binalar.data?.find((b) => b.id === s.building_id)?.name ?? "—"}

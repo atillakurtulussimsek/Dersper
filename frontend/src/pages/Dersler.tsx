@@ -92,7 +92,7 @@ export default function Dersler() {
             eylem={<Buton onClick={() => ac()}>Ders ekle</Buton>}
           />
         ) : (
-          <Tablo basliklar={["Ders", "Kısa kod", "Durum", ""]}>
+          <Tablo basliklar={["Ders", "Haftalık yük", "Kısa kod", "Durum", ""]}>
             {liste.data.map((d) => (
               <tr key={d.id} className="hover:bg-yuzey-alt">
                 <td className="px-3 py-2.5">
@@ -103,6 +103,9 @@ export default function Dersler() {
                     />
                     <span className="font-medium">{d.name}</span>
                   </span>
+                </td>
+                <td className="sayisal px-3 py-2.5 text-murekkep-yumusak">
+                  {d.weekly_load ? `${d.weekly_load} saat` : "—"}
                 </td>
                 <td className="px-3 py-2.5 font-mono text-xs text-murekkep-yumusak">{d.short_code || "—"}</td>
                 <td className="px-3 py-2.5 text-murekkep-silik">

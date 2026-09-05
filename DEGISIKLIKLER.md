@@ -5,6 +5,10 @@ Dersper'in geliştirme günlüğü. Her değişiklik tek cümleyle, en yeni sür
 öncesinde ikinci hane özellik, üçüncü hane düzeltme demektir. Uygulamanın
 sürümü arayüzde yan menünün altında yazar.
 
+## 0.22.3 — 2026-09-03
+
+- Dersler ve Şubeler listelerinde haftalık ders yükü sütunu (birleşik dersler her üye şubeye sayılır).
+
 ## 0.22.2 — 2026-09-03
 
 - Öğretmen listesinde haftalık ders yükü sütunu.

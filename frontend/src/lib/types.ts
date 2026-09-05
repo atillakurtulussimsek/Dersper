@@ -102,8 +102,10 @@ export interface Ders {
   name: string;
   short_code: string | null;
   color: string;
-  is_active: boolean;
+  is_active: boolean;  /** Bu dönemdeki haftalık ders saati toplamı. */
+  weekly_load: number;
 }
+
 
 export interface Sube {
   id: number;
@@ -113,8 +115,10 @@ export interface Sube {
   /** Dersliğinin bulunduğu bina; null = tek binalı kurum. */
   building_id: number | null;
   is_active: boolean;  /** Elle sıralamadaki yeri; null = sırası verilmemiş. */
-  sort_order: number | null;
+  sort_order: number | null;  /** Bu dönemdeki haftalık ders saati toplamı. */
+  weekly_load: number;
 }
+
 
 
 export interface MufredatSatiri {

@@ -413,8 +413,20 @@ def bina_aktar(
 @router.get("/subjects", response_model=list[SubjectOut])
 def dersler(
     db: Session = Depends(get_db), donem: Term = Depends(aktif_donem)
-) -> list[Subject]:
-    return list(db.scalars(_donemin(Subject, donem).order_by(Subject.name)))
+) -> list[SubjectOut]:
+    dersler = list(db.scalars(_donemin(Subject, donem).order_by(Subject.name)))
+    yukler = dict(db.execute(
+        select(CurriculumEntry.subject_id, func.sum(CurriculumEntry.weekly_hours))
+        .join(Section, Section.id == CurriculumEntry.section_id)
+        .where(Section.term_id == donem.id, CurriculumEntry.deleted_at.is_(None))
+        .group_by(CurriculumEntry.subject_id)
+    ).all())
+    cikti = []
+    for d in dersler:
+        v = SubjectOut.model_validate(d)
+        v.weekly_load = int(yukler.get(d.id, 0) or 0)
+        cikti.append(v)
+    return cikti
 
 
 @router.post("/subjects", response_model=SubjectOut, status_code=status.HTTP_201_CREATED)
@@ -499,8 +511,21 @@ def ders_aktar(
 @router.get("/sections", response_model=list[SectionOut])
 def subeler(
     db: Session = Depends(get_db), donem: Term = Depends(aktif_donem)
-) -> list[Section]:
-    return siralama.sirali_subeler(db, donem)
+) -> list[SectionOut]:
+    subeler = siralama.sirali_subeler(db, donem)
+    # Haftalık yük: birleşik ders her üye şubenin toplamına girer.
+    yukler: dict[int, int] = {}
+    for e in db.scalars(
+        _mufredat_sorgusu(donem)
+    ):
+        for sid in e.section_ids:
+            yukler[sid] = yukler.get(sid, 0) + e.weekly_hours
+    cikti = []
+    for sb in subeler:
+        v = SectionOut.model_validate(sb)
+        v.weekly_load = yukler.get(sb.id, 0)
+        cikti.append(v)
+    return cikti
 
 
 @router.put("/sections/order", response_model=list[SectionOut])

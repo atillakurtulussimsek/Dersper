@@ -1160,3 +1160,19 @@ def test_ogretmen_listesinde_haftalik_yuk(yonetici):
                                                "teacher_id": ogr, "weekly_hours": 4})
     liste = yonetici.get("/api/teachers").json()
     assert next(t for t in liste if t["id"] == ogr)["weekly_load"] == 8
+
+
+def test_ders_ve_sube_listelerinde_haftalik_yuk(yonetici):
+    ogr = yonetici.post("/api/teachers", json={"full_name": "Öğretmen"}).json()["id"]
+    ders = yonetici.post("/api/subjects", json={"name": "Beden"}).json()["id"]
+    a = yonetici.post("/api/sections", json={"name": "9-A"}).json()["id"]
+    b = yonetici.post("/api/sections", json={"name": "9-B"}).json()["id"]
+    yonetici.post("/api/curriculum", json={"section_id": a, "subject_id": ders,
+                                           "teacher_id": ogr, "weekly_hours": 3})
+    # Birleşik ders: iki şubenin de yüküne girer, dersin toplamına bir kez.
+    yonetici.post("/api/curriculum", json={"section_id": a, "extra_section_ids": [b],
+                                           "subject_id": ders, "teacher_id": ogr,
+                                           "weekly_hours": 2})
+    assert yonetici.get("/api/subjects").json()[0]["weekly_load"] == 5
+    yukler = {s["name"]: s["weekly_load"] for s in yonetici.get("/api/sections").json()}
+    assert yukler == {"9-A": 5, "9-B": 2}

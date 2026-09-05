@@ -306,6 +306,8 @@ class SubjectOut(ORMModel):
     short_code: str | None
     color: str
     is_active: bool
+    # Bu dönemde tüm şubelere atanmış haftalık saat toplamı.
+    weekly_load: int = 0
 
 
 class BuildingIn(BaseModel):
@@ -340,6 +342,8 @@ class SectionOut(ORMModel):
     building_id: int | None
     is_active: bool
     sort_order: int | None = None
+    # Şubenin haftalık ders saati toplamı (birleşik dersler dahil).
+    weekly_load: int = 0
 
 
 class CurriculumIn(BaseModel):
