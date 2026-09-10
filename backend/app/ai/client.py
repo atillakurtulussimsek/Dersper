@@ -4,8 +4,9 @@ Kurum kendi API anahtarını ve uç noktasını Ayarlar'dan girer. OpenAI SDK
 kullanılır; `base_url` değiştirilebildiği için OpenAI, Ollama, OpenRouter,
 LM Studio ve OpenAI uyumlu diğer servisler aynı kodla çalışır.
 
-v1'deki tek görev: program yerleşmediğinde çözümsüzlük raporunu sade Türkçeye
-çevirmek. Yapay zeka kapalıyken uygulama tüm işlevleriyle çalışmaya devam eder.
+v1'deki tek görev: program yerleşmediğinde çözümsüzlük raporunu kısa, hedefe
+odaklı Türkçeye çevirmek. Rapordaki çözüm adayları çözücü tarafından arka
+planda sınanmıştır; model hangisinin denenip yettiğini söyler, kendisi sınamaz. Yapay zeka kapalıyken uygulama tüm işlevleriyle çalışmaya devam eder.
 """
 from __future__ import annotations
 
@@ -16,21 +17,22 @@ from openai import OpenAI
 from app.crypto import decrypt
 from app.models import AiSettings
 
-SISTEM_MESAJI = """Sen bir okulun ders programı hazırlama yazılımının yardımcısısın.
-Sana, otomatik ders programı üretiminin neden tamamlanamadığını anlatan
-yapılandırılmış bir teknik rapor verilecek.
+SISTEM_MESAJI = """Sen bir okulun ders programı yazılımının yardımcısısın. Sana, programın
+neden kurulamadığını anlatan kısa bir teknik özet verilecek. Okul yönetimine
+hitap eden, hedefe odaklı, kısa bir Türkçe metin yaz.
 
-Görevin, okul müdürüne veya müdür yardımcısına hitap eden sade bir Türkçe
-açıklama yazmak. Kurallar:
-- Teknik terim kullanma. "kısıt", "çözücü", "model", "değişken" gibi kelimeler yasak.
-- Doğrudan konuya gir. Selamlama ve kapanış cümlesi yazma.
-- Önce tek cümlelik özet ver: programın tıkandığı ana sebep ne.
-- Sonra "Tıkanmanın sebepleri" başlığı altında maddeler halinde açıkla.
-- Sonra "Ne yapabilirsiniz" başlığı altında somut, uygulanabilir öneriler ver.
-  Öneriler sayısal olsun: hangi öğretmenin kaç saatini açması, hangi dersin
-  günlük sınırının kaça çıkarılması gerektiği gibi.
-- Sadece raporda geçen bilgileri kullan. Veri uydurma.
-- Markdown başlık ve madde işaretleri kullan. En fazla 350 kelime.
+Kurallar:
+- Teknik terim yok ("kısıt", "çözücü", "model" yasak). Selamlama, giriş ve
+  kapanış cümlesi yok. Gerekçe anlatma; ne yapılacağını söyle.
+- İlk satır: tıkanmanın ana sebebi, tek cümle.
+- "Denenmiş çözümler" başlığı: özetteki `denenmis_cozumler` listesi. Her madde
+  tek cümle, sonunda "— arka planda denendi, bu değişiklik tek başına yetiyor."
+  Liste boşsa bu başlığı yazma.
+- "Öneriler" başlığı: en fazla 3 somut, sayısal adım (kim, kaç saat, hangi ders).
+  Her maddenin sonuna "— denenmedi." ekle. Denenmiş çözümleri tekrarlama.
+  `yetmeyenler` listesindekileri tek başına önerme.
+- Sadece özetteki bilgiyi kullan; ad, sayı, ders uydurma.
+- Markdown başlık ve madde işareti kullan. En fazla 120 kelime.
 """
 
 
@@ -94,8 +96,45 @@ def baglanti_testi(ayar: AiSettings | None) -> tuple[bool, str]:
         return False, f"Bağlantı kurulamadı: {e}"
 
 
+def rapor_ozeti(rapor: dict, en_fazla: int = 5) -> dict:
+    """Yapay zekaya giden kısaltılmış rapor.
+
+    Tam rapor gürültülüdür (özet sayılar, süre, her yerleşmeyen ders). Modele
+    yalnızca karar için gerekeni veririz: kesin engeller, arka planda sınanmış
+    çözümler (`tek_basina_yeterli`), sınanıp yetmeyenler, sıkışık öğretmenler
+    ve en çok saati boş kalan dersler. Kısa girdi, kısa ve doğru çıktı verir.
+    """
+    bulgular = rapor.get("bulgular", [])
+    celiskiler = rapor.get("celiskiler", [])
+
+    def madde(c: dict) -> dict:
+        return {"sorun": c.get("metin", ""), "yapilacak": c.get("oneri", "")}
+
+    return {
+        "kesin_engeller": [
+            {"baslik": b.get("baslik", ""), "detay": b.get("detay", "")}
+            for b in bulgular if b.get("onem") == "engel"
+        ][:en_fazla],
+        "denenmis_cozumler": [
+            madde(c) for c in celiskiler if c.get("tek_basina_yeterli") is True
+        ][:en_fazla],
+        "yetmeyenler": [
+            c.get("metin", "") for c in celiskiler
+            if c.get("tek_basina_yeterli") is False
+        ][:en_fazla],
+        "denenmemis_ipuclari": [
+            madde(c) for c in celiskiler if c.get("tek_basina_yeterli") is None
+        ][:en_fazla] + [
+            {"sorun": s.get("metin", ""), "yapilacak": s.get("oneri", "")}
+            for s in rapor.get("sikisiklik", [])
+        ][:3],
+        "yerlesmeyen_dersler": rapor.get("yerlesmeyenler", [])[:en_fazla],
+        "yerlesmeyen_toplam_saat": rapor.get("ozet", {}).get("yerlesmeyen_toplam"),
+    }
+
+
 def cozumsuzluk_acikla(ayar: AiSettings | None, rapor: dict) -> str:
-    """Teknik raporu okul yönetimine hitap eden Türkçe metne çevirir."""
+    """Teknik raporu okul yönetimine hitap eden kısa Türkçe metne çevirir."""
     client, model = istemci_olustur(ayar)
     yanit = client.chat.completions.create(
         model=model,
@@ -103,11 +142,11 @@ def cozumsuzluk_acikla(ayar: AiSettings | None, rapor: dict) -> str:
             {"role": "system", "content": SISTEM_MESAJI},
             {
                 "role": "user",
-                "content": "Ders programı üretim raporu:\n\n"
-                + json.dumps(rapor, ensure_ascii=False, indent=2),
+                "content": "Ders programı tıkanma özeti:\n\n"
+                + json.dumps(rapor_ozeti(rapor), ensure_ascii=False, indent=2),
             },
         ],
         temperature=0.2,
-        max_tokens=900,
+        max_tokens=400,
     )
     return (yanit.choices[0].message.content or "").strip()

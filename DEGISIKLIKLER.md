@@ -5,6 +5,10 @@ Dersper'in geliştirme günlüğü. Her değişiklik tek cümleyle, en yeni sür
 öncesinde ikinci hane özellik, üçüncü hane düzeltme demektir. Uygulamanın
 sürümü arayüzde yan menünün altında yazar.
 
+## 0.23.0 — 2026-09-10
+
+- Yapay zeka açıklaması kısaldı ve hedefe odaklandı (en fazla 120 kelime): ana sebep tek cümle, ardından "Denenmiş çözümler" (çözücünün arka planda sınayıp tek başına yettiğini doğruladığı değişiklikler, öyle de etiketlenir) ve en fazla üç "denenmedi" işaretli somut öneri; modele tam rapor yerine kısaltılmış özet gidiyor.
+
 ## 0.22.7 — 2026-09-10
 
 - Çelişki ve sıkışıklık önerileri öğretmenin gerçek kısıtlarına göre yazılıyor: kapalı saati olmayan öğretmene "müsaitlik matrisinde saat açın", gün sınırı olmayana "gün sınırını yükseltin" denmiyor.
