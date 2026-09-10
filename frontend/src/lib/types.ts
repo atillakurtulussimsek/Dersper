@@ -269,6 +269,8 @@ export interface Bulgu {
   kod: string;
   baslik: string;
   detay: string;
+  /** Somut adım: bu engel için ne yapılmalı. Her bulguda yok. */
+  oneri?: string;
   onem: "engel" | "uyari";
   sube?: string;
   ders?: string;

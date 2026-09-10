@@ -5,6 +5,12 @@ Dersper'in geliştirme günlüğü. Her değişiklik tek cümleyle, en yeni sür
 öncesinde ikinci hane özellik, üçüncü hane düzeltme demektir. Uygulamanın
 sürümü arayüzde yan menünün altında yazar.
 
+## 0.24.0 — 2026-09-10
+
+- Yeni kesin ön kontrol (akış tabanlı): bir öğretmenin dersleri şubelerin açık saatlerine, ya da bir şubenin dersleri öğretmenlerinin müsait saatlerine birlikte sığmıyorsa program başlamadan yakalanır; hangi derslerin kaç saat fazla geldiği adıyla yazılır ve "Yapılacak" satırında somut adım verilir (kaç saati başka öğretmene verin / hangi şubelerde kaç ortak saat açın). Basit sayımın (%53 yük) kaçırdığı, üretimi kanıtlı çözümsüz bırakan asıl tıkanma buydu.
+- Engel bulgularında "Yapılacak" satırı gösteriliyor; yapay zeka özeti de bu adımı alıyor.
+- Canlı üretimdeki "çözücü kanıtladı" uyarısı bulguların tablonun altındaki bölümde olduğunu söylüyor.
+
 ## 0.23.2 — 2026-09-10
 
 - Program sayfasında tablo en üstte; "Program neden tamamlanamadı" ve "Yapay zeka yorumu" kartları tablonun altına indi ve katlanır, kapalı başlıyor (başlıkta "5 saat yerleşemedi" özeti). Üstte yalnızca canlı üretim bilgisi kalıyor.

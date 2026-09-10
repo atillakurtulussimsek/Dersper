@@ -166,6 +166,22 @@ def on_kontrol(
                 "mevcut": musait,
             })
 
+    # --- Akış kontrolü: dersler gerçekten sığabilecekleri saatlere sığıyor mu ---
+    # Sayımla yakalanmayan asıl tıkanma: öğretmenin dersleri dar pencereli
+    # şubelerde toplanmış, ya da şubenin öğretmenleri şubenin açık saatlerinde
+    # yok. Zaten kapasite engeli yazılan kaynaklar tekrarlanmaz.
+    from app.solver import akis
+    bildirilen_ogr = {b["ogretmen"] for b in bulgular if b["kod"] == "ogretmen_kapasite"}
+    bildirilen_sube = {b["sube"] for b in bulgular if b["kod"] == "sube_kapasite"}
+    bulgular.extend(akis.ogretmen_bulgulari(
+        slots, lessons,
+        atla={tid for tid, ad in ogretmen_adi.items() if ad in bildirilen_ogr},
+    ))
+    bulgular.extend(akis.sube_bulgulari(
+        slots, lessons,
+        atla={sid for sid, ad in sube_adi.items() if ad in bildirilen_sube},
+    ))
+
     # --- Blok ders gün içine sığıyor mu (dersin kendi kapalı saatlerine göre) ---
     for l in lessons:
         boy = max(l.blocks, default=1)

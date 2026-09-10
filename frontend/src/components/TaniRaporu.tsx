@@ -176,6 +176,11 @@ export default function TaniRaporu({ deneme }: { deneme: Deneme }) {
                   <div>
                     <p className="text-sm font-medium text-hata">{b.baslik}</p>
                     <p className="mt-0.5 text-sm text-hata">{b.detay}</p>
+                    {b.oneri && (
+                      <p className="mt-1.5 text-sm font-medium text-murekkep">
+                        Yapılacak: {b.oneri}
+                      </p>
+                    )}
                   </div>
                 </div>
               ))}

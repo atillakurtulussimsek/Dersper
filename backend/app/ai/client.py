@@ -112,7 +112,8 @@ def rapor_ozeti(rapor: dict, en_fazla: int = 5) -> dict:
 
     return {
         "kesin_engeller": [
-            {"baslik": b.get("baslik", ""), "detay": b.get("detay", "")}
+            {"baslik": b.get("baslik", ""), "detay": b.get("detay", ""),
+             "yapilacak": b.get("oneri", "")}
             for b in bulgular if b.get("onem") == "engel"
         ][:en_fazla],
         "denenmis_cozumler": [

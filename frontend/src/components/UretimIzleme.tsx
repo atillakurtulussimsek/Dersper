@@ -124,8 +124,8 @@ export default function UretimIzleme({
               </p>
               <p className="mt-0.5 text-uyari">
                 {sonsuz
-                  ? "Sonsuz mod açık: tam yerleşim çıkmayacak, ama farklı stratejiler daha az eksikli bir program bulabilir. Aşağıdaki bulguları gidermek yine en kestirme yol."
-                  : "Esnek model de kanıtlarsa üretim kendiliğinden biter. Aşağıdaki bulguları giderip yeniden başlatmanız gerekiyor."}
+                  ? "Sonsuz mod açık: tam yerleşim çıkmayacak, ama farklı stratejiler daha az eksikli bir program bulabilir. Tablonun altındaki \"Program neden tamamlanamadı\" bölümündeki adımları uygulamak yine en kestirme yol."
+                  : "Esnek model de kanıtlarsa üretim kendiliğinden biter. Tablonun altındaki \"Program neden tamamlanamadı\" bölümündeki adımları uygulayıp yeniden başlatın."}
               </p>
             </div>
           </div>
