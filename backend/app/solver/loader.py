@@ -82,16 +82,29 @@ def gun_sinirlarini_yukle(db: Session, donem: Term) -> dict[int, int]:
 
 
 def dersleri_yukle(
-    db: Session, donem: Term, section_ids: list[int] | None = None
+    db: Session, donem: Term, section_ids: list[int] | None = None,
+    slots: list[Slot] | None = None,
 ) -> list[Lesson]:
-    """Dönemin dersleri. `section_ids` verilirse yalnızca o şubelerinkiler."""
+    """Dönemin dersleri. `section_ids` verilirse yalnızca o şubelerinkiler.
+
+    `slots` verilirse kapalı saatler ızgaradaki hücrelerle sınırlanır:
+    teneffüs, pasif gün ya da kısaltılmış gün gibi ızgarada olmayan hücrelerin
+    "uygun değil" kayıtları sayılmaz. Yoksa kapasite hesabı bu hayalet
+    hücreleri de kapalı sayar ve şube gerçekte sığarken "sığmıyor" der.
+    """
+    gecerli = {s.period_id for s in slots} if slots is not None else None
+
+    def sayilir(period_id: int) -> bool:
+        return gecerli is None or period_id in gecerli
+
     ogretmen_kapali: dict[int, set[int]] = defaultdict(set)
     for row in db.scalars(
         select(TeacherAvailability).where(
             TeacherAvailability.state == Availability.UYGUN_DEGIL
         )
     ):
-        ogretmen_kapali[row.teacher_id].add(row.period_id)
+        if sayilir(row.period_id):
+            ogretmen_kapali[row.teacher_id].add(row.period_id)
 
     sube_kapali: dict[int, set[int]] = defaultdict(set)
     for row in db.scalars(
@@ -99,7 +112,8 @@ def dersleri_yukle(
             SectionAvailability.state == Availability.UYGUN_DEGIL
         )
     ):
-        sube_kapali[row.section_id].add(row.period_id)
+        if sayilir(row.period_id):
+            sube_kapali[row.section_id].add(row.period_id)
 
     sorgu = (
         select(CurriculumEntry)

@@ -91,7 +91,7 @@ def _dongu(run_id: int, term_id: int, dur: threading.Event) -> None:
             run = db.get(SolveRun, run_id)
             program = db.get(Timetable, run.timetable_id)
             slots = slotlari_yukle(db, donem)
-            lessons = dersleri_yukle(db, donem, program.section_ids)
+            lessons = dersleri_yukle(db, donem, program.section_ids, slots)
             gun_sinirlari = gun_sinirlarini_yukle(db, donem)
             gereken = sum(l.weekly_hours for l in lessons)
 

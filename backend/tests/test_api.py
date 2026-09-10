@@ -285,6 +285,45 @@ def test_asiri_kapali_sube_tani_raporunda_gorunur(yonetici: TestClient):
     assert bulgu["gereken"] == 12
 
 
+def test_teneffuse_cevrilen_kapali_saat_sube_kapasitesinden_dusmez(yonetici: TestClient):
+    """Izgarada olmayan hücrenin "uygun değil" kaydı kapasite hesabına girmez.
+
+    Şube tam sığarken (5 açık saat, 5 saat ders) bir kapalı hücre teneffüse
+    çevrilince o kaydın hâlâ sayılması "haftada 4 saate ders konabiliyor" diye
+    yanlış bir engel üretiyordu.
+    """
+    d = yonetici.post("/api/subjects", json={"name": "Türkçe"}).json()["id"]
+    o = yonetici.post("/api/teachers", json={"full_name": "Bir Öğretmen"}).json()["id"]
+    s = yonetici.post("/api/sections", json={"name": "10-Dar"}).json()["id"]
+
+    izgara = yonetici.get("/api/timegrid").json()
+    gunler = [g for g in izgara if g["is_active"]]
+    acik = {g["periods"][0]["id"] for g in gunler}
+    kapali = [p["id"] for g in gunler for p in g["periods"] if p["id"] not in acik]
+    yonetici.put(f"/api/sections/{s}/availability", json={
+        "cells": [{"period_id": pid, "state": "uygun_degil"} for pid in kapali]
+    })
+
+    # Pazartesi 2. ders (kapalı) teneffüs olsun; kimlikler gönderildiği için
+    # öteki satırların müsaitlik işaretleri yerinde kalır.
+    for g in izgara:
+        for p in g["periods"]:
+            p.pop("day_id", None)
+    izgara[0]["periods"][1]["is_break"] = True
+    r = yonetici.put("/api/timegrid", json=izgara)
+    assert r.status_code == 200, r.text
+
+    yonetici.post("/api/curriculum", json={
+        "section_id": s, "subject_id": d, "teacher_id": o,
+        "weekly_hours": 5, "max_per_day": 1,
+    })
+    pid = yonetici.post("/api/timetables", json={"name": "Tam sığan"}).json()["id"]
+    deneme = uret_ve_bekle(yonetici, pid)
+    assert deneme["status"] == "basarili", deneme["report"]
+    kodlar = [b["kod"] for b in (deneme["report"] or {}).get("bulgular", [])]
+    assert "sube_kapasite" not in kodlar, deneme["report"]
+
+
 def test_blok_deseni_kaydedilir_ve_dogrulanir(yonetici: TestClient):
     d = yonetici.post("/api/subjects", json={"name": "Matematik"}).json()["id"]
     o = yonetici.post("/api/teachers", json={"full_name": "Desen Öğretmeni"}).json()["id"]
