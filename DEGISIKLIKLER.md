@@ -5,6 +5,10 @@ Dersper'in geliştirme günlüğü. Her değişiklik tek cümleyle, en yeni sür
 öncesinde ikinci hane özellik, üçüncü hane düzeltme demektir. Uygulamanın
 sürümü arayüzde yan menünün altında yazar.
 
+## 0.22.7 — 2026-09-10
+
+- Çelişki ve sıkışıklık önerileri öğretmenin gerçek kısıtlarına göre yazılıyor: kapalı saati olmayan öğretmene "müsaitlik matrisinde saat açın", gün sınırı olmayana "gün sınırını yükseltin" denmiyor.
+
 ## 0.22.6 — 2026-09-10
 
 - Sıkışıklık ipuçlarında şubeler listelenmiyor ("7/A: 14 saat yükü, 14 açık saati var (%100)" gibi satırlar kalktı); şube programı tam dolduğu için bu oran bilgi taşımıyordu, yalnız öğretmenler kaldı.

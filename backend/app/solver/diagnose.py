@@ -367,6 +367,7 @@ def sikisiklik_onerileri(
         adaylar.setdefault(("ogretmen", l.teacher_id), {
             "tur": "ogretmen", "oran": oran, "ad": l.teacher_name,
             "yuk": ogretmen_yuk[l.teacher_id], "acik": ogr_acik,
+            "kisitli": bool(l.blocked_period_ids),
         })
 
     sirali = sorted(adaylar.values(), key=lambda a: -a["oran"])[:6]
@@ -378,7 +379,12 @@ def sikisiklik_onerileri(
         metin = f"{a['ad']}: haftalık {a['yuk']} saat yükü, {acik}"
         if a["acik"]:
             metin += f" (%{yuzde})"
-        oneri = (f"{a['ad']} öğretmeninin müsaitlik matrisinde birkaç saat açın "
-                 f"ya da yükünü başka öğretmene aktarın")
+        # Kapalı saati olmayan öğretmene "saat açın" demek anlamsız: onun
+        # sıkışıklığı başka şubelerle çakışmadan gelir, çare yükü paylaşmak.
+        if a["kisitli"]:
+            oneri = (f"{a['ad']} öğretmeninin müsaitlik matrisinde birkaç saat açın "
+                     f"ya da yükünü başka öğretmene aktarın")
+        else:
+            oneri = f"{a['ad']} öğretmeninin yükünün bir kısmını başka öğretmene aktarın"
         sonuc.append({"tur": a["tur"], "metin": metin, "oneri": oneri, "oran": yuzde})
     return sonuc

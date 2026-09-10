@@ -448,14 +448,25 @@ def etiket_gruplari(data: SolveInput) -> list[tuple[Celisen, frozenset[Celisen]]
         return (f"haftalık {k['yuk']} saat yükü, {k['acik']} açık saat, yalnızca "
                 f"{pay} saat pay")
 
+    def ogretmen_onerisi(tid: int, k: dict) -> str:
+        """Yalnızca öğretmende gerçekten var olan kısıtlar için öneri."""
+        secenekler = []
+        if k["acik"] < toplam:
+            secenekler.append("müsaitlik matrisinde birkaç saat açın")
+        secenekler.append("bir dersini başka öğretmene verin")
+        if tid in data.ogretmen_yarim_gun:
+            secenekler.append("gün sınırını yükseltin")
+        if len(secenekler) == 1:
+            return f"{k['ad']} için {secenekler[0]}"
+        return f"{k['ad']} için " + ", ".join(secenekler[:-1]) + f" ya da {secenekler[-1]}"
+
     gruplar: list[tuple[float, Celisen, frozenset[Celisen]]] = []
-    for k in ogretmen.values():
+    for tid, k in ogretmen.items():
         gruplar.append((oran(k), Celisen(
             tur="ogretmen",
             metin=(f"{k['ad']} (öğretmen): {pay_metni(k)} — kısıtları kaldırılınca "
                    f"program kuruluyor"),
-            oneri=(f"{k['ad']} için müsaitlik matrisinde birkaç saat açın, bir dersini "
-                   f"başka öğretmene verin ya da gün sınırını yükseltin"),
+            oneri=ogretmen_onerisi(tid, k),
         ), frozenset(k["etiketler"])))
     for sid, k in sube.items():
         # Şube programının tam dolu olması olağandır; burada "boşluk payı"
@@ -556,8 +567,10 @@ def _subeyi_incele(data: SolveInput, baslik: Celisen, devam, kalan_sn) -> list[C
                    f"program kuruluyor. {l.teacher_name}: haftalık {ogr_yuk} saat yük, "
                    f"{ogr_acik} açık saat"),
             oneri=(f"{l.teacher_name} aynı saatlerde başka şubelerde — dersi başka "
-                   f"öğretmene verin, {l.teacher_name} için müsaitlikte saat açın ya da "
-                   f"haftalık saatini düşürün"),
+                   f"öğretmene verin"
+                   + (f", {l.teacher_name} için müsaitlikte saat açın"
+                      if l.blocked_period_ids else "")
+                   + " ya da haftalık saatini düşürün"),
             tek_basina_yeterli=yeter,
         ))
     return sonuclar

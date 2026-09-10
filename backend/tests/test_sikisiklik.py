@@ -35,3 +35,11 @@ def test_sube_listelenmez():
     b = ders_sube_kapali(2, 1, 11, "Fizik", 3, sube_kapali=kapali)
     sonuc = sikisiklik_onerileri(slots, [a, b], {1: 1, 2: 1})
     assert all(x["tur"] == "ogretmen" for x in sonuc)
+
+
+def test_kisitsiz_ogretmene_saat_acin_denmez():
+    slots = izgara()
+    serbest = ders(1, 1, 10, "Matematik", 8)
+    sonuc = sikisiklik_onerileri(slots, [serbest], {1: 2})
+    assert "müsaitlik" not in sonuc[0]["oneri"]
+    assert "başka öğretmene" in sonuc[0]["oneri"]
