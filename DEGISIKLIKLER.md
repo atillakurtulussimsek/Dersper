@@ -5,6 +5,10 @@ Dersper'in geliştirme günlüğü. Her değişiklik tek cümleyle, en yeni sür
 öncesinde ikinci hane özellik, üçüncü hane düzeltme demektir. Uygulamanın
 sürümü arayüzde yan menünün altında yazar.
 
+## 0.23.1 — 2026-09-10
+
+- Program sayfasındaki Uyarılar kartı katlanır ve kapalı başlar; başlıkta "3 uyarı, 1 gizli" gibi özet görünür.
+
 ## 0.23.0 — 2026-09-10
 
 - Yapay zeka açıklaması kısaldı ve hedefe odaklandı (en fazla 120 kelime): ana sebep tek cümle, ardından "Denenmiş çözümler" (çözücünün arka planda sınayıp tek başına yettiğini doğruladığı değişiklikler, öyle de etiketlenir) ve en fazla üç "denenmedi" işaretli somut öneri; modele tam rapor yerine kısaltılmış özet gidiyor.

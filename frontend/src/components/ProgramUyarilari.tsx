@@ -93,6 +93,12 @@ export default function ProgramUyarilari({ timetableId }: { timetableId: string 
     <Kart
       baslik="Uyarılar"
       aciklama="Program tamamlandı, ama aşağıdaki noktalarda kural esnetildi. Düzeltmek isteğe bağlıdır."
+      katlanir
+      ozet={
+        acik.length
+          ? `${acik.length} uyarı${gizli.length ? `, ${gizli.length} gizli` : ""}`
+          : `${gizli.length} gizli uyarı`
+      }
       sag={
         gizli.length > 0 ? (
           <Buton tur="ikincil" onClick={() => setGizliGoster((g) => !g)}>
