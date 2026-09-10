@@ -166,5 +166,8 @@ def dersleri_yukle(
             section_blocked_period_ids=frozenset().union(
                 *(sube_kapali.get(sb.id, set()) for sb in subeler)
             ),
+            section_blocked_map=tuple(
+                (sb.id, frozenset(sube_kapali.get(sb.id, set()))) for sb in subeler
+            ),
         ))
     return dersler

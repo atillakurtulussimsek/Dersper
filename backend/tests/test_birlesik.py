@@ -208,3 +208,46 @@ def test_birlesik_dersin_saatine_baska_sube_dersi_elle_konamaz(yonetici: TestCli
     })
     assert ikinci.status_code == 409, ikinci.text
     assert "9-B" in ikinci.json()["detail"], ikinci.json()
+
+
+def test_ortagin_kapali_saatleri_subenin_kapasitesine_yazilmaz(yonetici: TestClient):
+    """Birleşik derste her şube kendi kapalı saatleriyle ölçülür.
+
+    9-A tam sığıyor (5 açık saat, 5 saat ders). Ortağı 9-B'nin başka saatleri de
+    kapalı; bunlar 9-A'ya sayılırsa şube "sığmıyor" görünür ve gerçek çelişki
+    çözümlemesi hiç çalışmazdı.
+    """
+    o = _okul(yonetici)
+    gunler = [g for g in yonetici.get("/api/timegrid").json() if g["is_active"]]
+    ilk = {g["periods"][0]["id"] for g in gunler}
+    ikinci = {g["periods"][1]["id"] for g in gunler}
+
+    def kapat(sid: int, acik: set[int]) -> None:
+        kapali = [p["id"] for g in gunler for p in g["periods"] if p["id"] not in acik]
+        r = yonetici.put(f"/api/sections/{sid}/availability", json={
+            "cells": [{"period_id": pid, "state": "uygun_degil"} for pid in kapali]
+        })
+        assert r.status_code == 200, r.text
+
+    pazartesi_ilk = gunler[0]["periods"][0]["id"]
+    kapat(o["a"], ilk)                        # 9-A: yalnız 1. saatler açık
+    kapat(o["b"], {pazartesi_ilk} | ikinci)   # 9-B: Pazartesi 1 ve 2. saatler açık
+
+    # 9-A'nın kendi 4 saati + birleşik 1 saat = 9-A yükü 5, açık 5.
+    mat = yonetici.post("/api/subjects", json={"name": "Matematik"}).json()["id"]
+    ogr2 = yonetici.post("/api/teachers", json={"full_name": "Ayşe Yılmaz"}).json()["id"]
+    yonetici.post("/api/curriculum", json={
+        "section_id": o["a"], "subject_id": mat, "teacher_id": ogr2,
+        "weekly_hours": 4, "max_per_day": 1,
+    })
+    yonetici.post("/api/curriculum", json={
+        "section_id": o["a"], "extra_section_ids": [o["b"]],
+        "subject_id": o["ders"], "teacher_id": o["ogretmen"],
+        "weekly_hours": 1, "max_per_day": 1,
+    })
+
+    pid = yonetici.post("/api/timetables", json={"name": "Ortak"}).json()["id"]
+    deneme = uret_ve_bekle(yonetici, pid)
+    assert deneme["status"] == "basarili", deneme["report"]
+    kodlar = [b["kod"] for b in (deneme["report"] or {}).get("bulgular", [])]
+    assert "sube_kapasite" not in kodlar, deneme["report"]

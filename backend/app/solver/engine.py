@@ -125,8 +125,13 @@ class Lesson:
     sections: tuple[tuple[int, str], ...] = ()
     # Öğretmenin uygun OLMADIĞI period_id kümesi
     blocked_period_ids: frozenset[int] = frozenset()
-    # Şubenin uygun OLMADIĞI period_id kümesi
+    # Şubenin uygun OLMADIĞI period_id kümesi. Birleşik derste tüm üye
+    # şubelerin BİRLEŞİMİ: ders ancak hepsinin açık olduğu saate konabilir.
     section_blocked_period_ids: frozenset[int] = frozenset()
+    # Her üye şubenin KENDİ kapalı saatleri: (şube kimliği, küme) çiftleri.
+    # Kapasite tanıları buradan okur; birleşimi okusalardı ortağın kapalı
+    # saatleri şubeye yazılır, tam sığan şube "sığmıyor" görünürdü.
+    section_blocked_map: tuple[tuple[int, frozenset[int]], ...] = ()
 
     @property
     def engelli_period_ids(self) -> frozenset[int]:
@@ -243,6 +248,14 @@ class SolveOutput:
 def sube_ciftleri(lesson: Lesson) -> tuple[tuple[int, str], ...]:
     """Dersi gören şubeler, (kimlik, ad) olarak. Birleşik değilse tek eleman."""
     return lesson.sections or ((lesson.section_id, lesson.section_name),)
+
+
+def sube_kapali_saatleri(lesson: Lesson, section_id: int) -> frozenset[int]:
+    """Verilen şubenin kendi kapalı saatleri. Ayrı küme yoksa dersin birleşimi."""
+    for si, kume in lesson.section_blocked_map:
+        if si == section_id:
+            return kume
+    return lesson.section_blocked_period_ids
 
 
 def subeleri(lesson: Lesson) -> frozenset[int]:
@@ -406,7 +419,7 @@ def etiket_gruplari(data: SolveInput) -> list[tuple[Celisen, frozenset[Celisen]]
         o["etiketler"].update(etiketler)
         for si, ad in sube_ciftleri(l):
             sb = sube.setdefault(si, {
-                "ad": ad, "yuk": 0, "acik": toplam - len(l.section_blocked_period_ids),
+                "ad": ad, "yuk": 0, "acik": toplam - len(sube_kapali_saatleri(l, si)),
                 "etiketler": set(),
             })
             sb["yuk"] += l.weekly_hours
@@ -487,7 +500,8 @@ def _bos_ogretmensiz_saatler(data: SolveInput, sube_adi: str) -> list[str]:
     dersler = [data.lessons[i] for i in _sube_dersleri(data, sube_adi)]
     if not dersler:
         return []
-    sube_kapali = set().union(*(l.section_blocked_period_ids for l in dersler))
+    sube_id = next(si for si, ad in sube_ciftleri(dersler[0]) if ad == sube_adi)
+    sube_kapali = set().union(*(sube_kapali_saatleri(l, sube_id) for l in dersler))
     sonuc = []
     for s in data.slots:
         if s.period_id in sube_kapali:

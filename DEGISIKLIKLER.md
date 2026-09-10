@@ -5,6 +5,10 @@ Dersper'in geliştirme günlüğü. Her değişiklik tek cümleyle, en yeni sür
 öncesinde ikinci hane özellik, üçüncü hane düzeltme demektir. Uygulamanın
 sürümü arayüzde yan menünün altında yazar.
 
+## 0.22.5 — 2026-09-10
+
+- Birleşik derste ortak şubenin kapalı saatleri artık diğer şubenin kapasitesine yazılmıyor; 11/EA-1 gibi tam sığan bir şube "haftaya sığmıyor" diye yanlış engel almıyor.
+
 ## 0.22.4 — 2026-09-10
 
 - Şube/öğretmen kapasite tanısı yalnızca ızgaradaki hücrelerin "uygun değil" kayıtlarını sayıyor; teneffüse çevrilmiş, pasif güne ya da kısaltılmış güne ait hayalet hücreler artık "haftaya sığmıyor" diye yanlış engel üretmiyor ve gerçek çelişki çözümlemesini gizlemiyor.

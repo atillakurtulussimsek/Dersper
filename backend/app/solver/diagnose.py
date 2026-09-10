@@ -12,7 +12,9 @@ from __future__ import annotations
 
 from collections import defaultdict
 
-from app.solver.engine import Lesson, Slot, _gune_gore, sube_ciftleri
+from app.solver.engine import (
+    Lesson, Slot, _gune_gore, sube_ciftleri, sube_kapali_saatleri,
+)
 
 
 def _gun_adlari(slots: list[Slot]) -> dict[int, str]:
@@ -116,7 +118,7 @@ def on_kontrol(
         for si, ad in sube_ciftleri(l):
             sube_yuku[si] += l.weekly_hours
             sube_adi[si] = ad
-            sube_kapali[si] = l.section_blocked_period_ids
+            sube_kapali[si] = sube_kapali_saatleri(l, si)
 
     for sid, yuk in sube_yuku.items():
         kapali = sube_kapali.get(sid, frozenset())
@@ -367,9 +369,7 @@ def sikisiklik_onerileri(
             "yuk": ogretmen_yuk[l.teacher_id], "acik": ogr_acik,
         })
         for si, ad in sube_ciftleri(l):
-            # Şubenin kapalı saatleri dersin section_blocked kümesinde (birleşik
-            # derste birleşim); yaklaşık ama yön doğru.
-            sb_acik = toplam - len(l.section_blocked_period_ids)
+            sb_acik = toplam - len(sube_kapali_saatleri(l, si))
             adaylar.setdefault(("sube", si), {
                 "tur": "sube", "oran": sube_yuk[si] / sb_acik if sb_acik else 9.9,
                 "ad": ad, "yuk": sube_yuk[si], "acik": sb_acik,
