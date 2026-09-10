@@ -1,6 +1,6 @@
 """Çekirdek bulunamadığında yerleşemeyen derslerden türeyen sıkışıklık ipuçları."""
 from app.solver.diagnose import sikisiklik_onerileri
-from tests.test_engine import ders, izgara
+from tests.test_engine import ders, ders_sube_kapali, izgara
 
 
 def test_en_sikisik_kaynak_once_gelir():
@@ -25,4 +25,13 @@ def test_ayni_kaynak_bir_kez_listelenir():
     b = ders(2, 1, 10, "Fizik", 3)        # aynı öğretmen, aynı şube
     sonuc = sikisiklik_onerileri(slots, [a, b], {1: 1, 2: 1})
     assert [x["tur"] for x in sonuc].count("ogretmen") == 1
-    assert [x["tur"] for x in sonuc].count("sube") == 1
+
+
+def test_sube_listelenmez():
+    """Şubenin yükü açık saatine eşittir; %100 oranı bilgi taşımaz."""
+    slots = izgara()
+    kapali = frozenset(s.period_id for s in slots[:34])   # şubeye 6 saat açık
+    a = ders_sube_kapali(1, 1, 10, "Matematik", 3, sube_kapali=kapali)
+    b = ders_sube_kapali(2, 1, 11, "Fizik", 3, sube_kapali=kapali)
+    sonuc = sikisiklik_onerileri(slots, [a, b], {1: 1, 2: 1})
+    assert all(x["tur"] == "ogretmen" for x in sonuc)

@@ -340,21 +340,21 @@ def sikisiklik_onerileri(
     """Yerleşemeyen derslerin en sıkışık kaynakları — çekirdek bulunamadığında.
 
     Kesin bir çelişki kanıtı yoksa bile gevşek çözüm hangi derslerin dışarıda
-    kaldığını söyler. O derslerin öğretmeni ve şubesi için "yük / açık saat"
-    oranına bakılır: oran yüksekse o kaynağın müsaitliğini açmak ya da yükünü
+    kaldığını söyler. O derslerin öğretmeni için "yük / açık saat" oranına
+    bakılır: oran yüksekse o öğretmenin müsaitliğini açmak ya da yükünü
     azaltmak en olası çıkış yoludur. Kanıt değildir; öyle de sunulur.
+
+    Şubeler listelenmez: şubenin programı tasarım gereği tam dolar, yükü açık
+    saatine eşittir ve oran hep %100 çıkar. Yükün açık saati aştığı durumu
+    ön kontrol zaten engel olarak bildirir.
     """
     if not unplaced:
         return []
-    from app.solver.engine import sube_ciftleri
 
     toplam = len(slots)
     ogretmen_yuk: dict[int, int] = defaultdict(int)
-    sube_yuk: dict[int, int] = defaultdict(int)
     for l in lessons:
         ogretmen_yuk[l.teacher_id] += l.weekly_hours
-        for si, _ in sube_ciftleri(l):
-            sube_yuk[si] += l.weekly_hours
 
     ders_by_id = {l.entry_id: l for l in lessons}
     adaylar: dict[tuple[str, int], dict] = {}
@@ -368,12 +368,6 @@ def sikisiklik_onerileri(
             "tur": "ogretmen", "oran": oran, "ad": l.teacher_name,
             "yuk": ogretmen_yuk[l.teacher_id], "acik": ogr_acik,
         })
-        for si, ad in sube_ciftleri(l):
-            sb_acik = toplam - len(sube_kapali_saatleri(l, si))
-            adaylar.setdefault(("sube", si), {
-                "tur": "sube", "oran": sube_yuk[si] / sb_acik if sb_acik else 9.9,
-                "ad": ad, "yuk": sube_yuk[si], "acik": sb_acik,
-            })
 
     sirali = sorted(adaylar.values(), key=lambda a: -a["oran"])[:6]
     sonuc = []
@@ -384,11 +378,7 @@ def sikisiklik_onerileri(
         metin = f"{a['ad']}: haftalık {a['yuk']} saat yükü, {acik}"
         if a["acik"]:
             metin += f" (%{yuzde})"
-        if a["tur"] == "ogretmen":
-            oneri = (f"{a['ad']} öğretmeninin müsaitlik matrisinde birkaç saat açın "
-                     f"ya da yükünü başka öğretmene aktarın")
-        else:
-            oneri = (f"{a['ad']} şubesinin kapalı saatlerini azaltın ya da haftalık "
-                     f"ders saatini düşürün")
+        oneri = (f"{a['ad']} öğretmeninin müsaitlik matrisinde birkaç saat açın "
+                 f"ya da yükünü başka öğretmene aktarın")
         sonuc.append({"tur": a["tur"], "metin": metin, "oneri": oneri, "oran": yuzde})
     return sonuc

@@ -5,6 +5,10 @@ Dersper'in geliştirme günlüğü. Her değişiklik tek cümleyle, en yeni sür
 öncesinde ikinci hane özellik, üçüncü hane düzeltme demektir. Uygulamanın
 sürümü arayüzde yan menünün altında yazar.
 
+## 0.22.6 — 2026-09-10
+
+- Sıkışıklık ipuçlarında şubeler listelenmiyor ("7/A: 14 saat yükü, 14 açık saati var (%100)" gibi satırlar kalktı); şube programı tam dolduğu için bu oran bilgi taşımıyordu, yalnız öğretmenler kaldı.
+
 ## 0.22.5 — 2026-09-10
 
 - Birleşik derste ortak şubenin kapalı saatleri artık diğer şubenin kapasitesine yazılmıyor; 11/EA-1 gibi tam sığan bir şube "haftaya sığmıyor" diye yanlış engel almıyor.
