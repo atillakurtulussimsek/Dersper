@@ -20,14 +20,18 @@ from app.solver.engine import Lesson, Slot, sube_ciftleri
 
 @dataclass(frozen=True)
 class Darbogaz:
-    """Sığmayan ders kümesi: toplam saati, sığabileceği en çok saat, dersler."""
+    """Sığmayan ders kümesi: toplam saati, sığabileceği en çok saat, dersler.
+
+    `indirim`: birleştirme kurallarının bu kümeden düşebileceği en çok saat.
+    """
     gereken: int
     sigan: int
     dersler: tuple[Lesson, ...]
+    indirim: int = 0
 
     @property
     def fazla(self) -> int:
-        return self.gereken - self.sigan
+        return self.gereken - self.indirim - self.sigan
 
 
 def _en_buyuk_akis(kap: dict, kaynak, hedef) -> int:
@@ -57,12 +61,14 @@ def _en_buyuk_akis(kap: dict, kaynak, hedef) -> int:
         akis += darlik
 
 
-def darbogaz(slots: list[Slot], dersler: list[Lesson]) -> Darbogaz | None:
+def darbogaz(slots: list[Slot], dersler: list[Lesson], indirim: int = 0) -> Darbogaz | None:
     """Verilen dersler (aynı öğretmen ya da aynı şube) birlikte sığıyor mu?
 
     Sığmıyorsa Hall koşulunu bozan kümeyi döner: artık ağda kaynaktan
     ulaşılabilen dersler, ulaşılabilen saatlerden daha çok saat ister.
+    `indirim` kadar saat (birleştirme kuralı) gerekenden düşülür.
     """
+    dersler = [l for l in dersler if not l.ortak]
     if not dersler:
         return None
     kap: dict = defaultdict(lambda: defaultdict(int))
@@ -75,7 +81,7 @@ def darbogaz(slots: list[Slot], dersler: list[Lesson]) -> Darbogaz | None:
             kap[("s", s.period_id)]["h"] = 1
     gereken = sum(l.weekly_hours for l in dersler)
     sigan = _en_buyuk_akis(kap, "k", "h")
-    if sigan >= gereken:
+    if sigan >= gereken - indirim:
         return None
 
     # Artık ağda kaynaktan ulaşılabilen dersler = darboğaz kümesi.
@@ -91,7 +97,12 @@ def darbogaz(slots: list[Slot], dersler: list[Lesson]) -> Darbogaz | None:
     kume_gereken = sum(l.weekly_hours for l in kume)
     kume_sigan = sum(1 for v in ulasilan if isinstance(v, tuple) and v[0] == "s")
     kume.sort(key=lambda l: -l.weekly_hours)
-    return Darbogaz(gereken=kume_gereken, sigan=kume_sigan, dersler=tuple(kume))
+    if kume_gereken - indirim <= kume_sigan:
+        # Darboğaz kümesi indirimle sığıyor; tüm kümeyle bildir.
+        return Darbogaz(gereken=gereken, sigan=sigan, dersler=tuple(dersler),
+                        indirim=indirim)
+    return Darbogaz(gereken=kume_gereken, sigan=kume_sigan, dersler=tuple(kume),
+                    indirim=indirim)
 
 
 def _ders_listesi(dersler: tuple[Lesson, ...], sube_adiyla: bool) -> str:
@@ -104,26 +115,32 @@ def _ders_listesi(dersler: tuple[Lesson, ...], sube_adiyla: bool) -> str:
 
 
 def ogretmen_bulgulari(slots: list[Slot], lessons: list[Lesson],
-                       atla: set[int] = frozenset()) -> list[dict]:
-    """Her öğretmen için akış kontrolü. `atla`: zaten bildirilen öğretmenler."""
+                       atla: set[int] = frozenset(),
+                       indirim: dict[int, int] | None = None) -> list[dict]:
+    """Her öğretmen için akış kontrolü. `atla`: zaten bildirilen öğretmenler.
+    `indirim`: birleştirme kurallarının öğretmenden düşebileceği saat."""
     gruplar: dict[int, list[Lesson]] = defaultdict(list)
     for l in lessons:
-        gruplar[l.teacher_id].append(l)
+        if not l.ortak:
+            gruplar[l.teacher_id].append(l)
     bulgular = []
     for tid, dersler in gruplar.items():
         if tid in atla:
             continue
-        d = darbogaz(slots, dersler)
+        d = darbogaz(slots, dersler, (indirim or {}).get(tid, 0))
         if d is None:
             continue
         ad = dersler[0].teacher_name
         subeler = sorted({a for l in d.dersler for _, a in sube_ciftleri(l)})
+        indirim_notu = (f" Birleştirme kuralı en çok {d.indirim} saat düşürebilir."
+                        if d.indirim else "")
         bulgular.append({
             "kod": "ogretmen_akis",
             "baslik": f"{ad} öğretmenin dersleri şubelerin açık saatlerine sığmıyor",
             "detay": (f"{_ders_listesi(d.dersler, True)}: toplam {d.gereken} saat. "
                       f"Bu şubelerin {ad} öğretmenin de müsait olduğu açık saatleri "
-                      f"birlikte en çok {d.sigan} saat alıyor. {d.fazla} saat fazla."),
+                      f"birlikte en çok {d.sigan} saat alıyor.{indirim_notu} "
+                      f"{d.fazla} saat fazla."),
             "oneri": (f"Bu derslerden en az {d.fazla} saatini başka öğretmene verin "
                       f"ya da {', '.join(subeler)} şubelerinin müsaitliğinde "
                       f"{ad} için {d.fazla} ortak saat daha açın."),
@@ -141,6 +158,8 @@ def sube_bulgulari(slots: list[Slot], lessons: list[Lesson],
     gruplar: dict[int, list[Lesson]] = defaultdict(list)
     adlar: dict[int, str] = {}
     for l in lessons:
+        if l.ortak:
+            continue
         for si, ad in sube_ciftleri(l):
             gruplar[si].append(l)
             adlar[si] = ad

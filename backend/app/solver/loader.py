@@ -9,11 +9,12 @@ from sqlalchemy.orm import Session, selectinload
 from app import bloklar
 from app import cakisma
 from app.models import (
+    SectionMergeRule,
     Availability, CurriculumEntry, CurriculumEntrySection, Day, Section,
     SectionAvailability, Teacher,
     TeacherAvailability, Term,
 )
-from app.solver.engine import Lesson, Slot
+from app.solver.engine import Lesson, Slot, sube_ciftleri
 
 
 def sabah_mi(saatler: list, ders_saati) -> bool:
@@ -83,7 +84,7 @@ def gun_sinirlarini_yukle(db: Session, donem: Term) -> dict[int, int]:
 
 def dersleri_yukle(
     db: Session, donem: Term, section_ids: list[int] | None = None,
-    slots: list[Slot] | None = None,
+    slots: list[Slot] | None = None, ek_bulgular: list[dict] | None = None,
 ) -> list[Lesson]:
     """Dönemin dersleri. `section_ids` verilirse yalnızca o şubelerinkiler.
 
@@ -160,6 +161,7 @@ def dersleri_yukle(
             weekly_hours=e.weekly_hours,
             blocks=tuple(bloklar.coz(e.block_pattern, e.weekly_hours)),
             max_per_day=e.max_per_day,
+            subject_id=e.subject_id,
             building_id=binalar.pop() if len(binalar) == 1 else None,
             blocked_period_ids=frozenset(ogretmen_kapali.get(e.teacher_id, set())),
             # Şubelerden herhangi biri kapalıysa birleşik ders o saate konamaz.
@@ -170,4 +172,81 @@ def dersleri_yukle(
                 (sb.id, frozenset(sube_kapali.get(sb.id, set()))) for sb in subeler
             ),
         ))
-    return dersler
+    ortaklar, bulgular = birlesme_kurallari(db, donem, dersler, kapsam)
+    if ek_bulgular is not None:
+        ek_bulgular.extend(bulgular)
+    return dersler + ortaklar
+
+
+def birlesme_kurallari(
+    db: Session, donem: Term, dersler: list[Lesson], kapsam: set[int] | None = None,
+) -> tuple[list[Lesson], list[dict]]:
+    """Dönemin birleştirme kurallarından sanal ORTAK dersleri türetir.
+
+    Her kural için iki şubede aynı öğretmenin verdiği aynı ders eşlenir; her
+    eşleşme bir ortak ders olur (bkz. engine.Lesson.ortak). Çözücü hangi
+    eşleşmeden kaç saat kullanacağını seçer; toplam kuralın saatine eşitlenir.
+
+    İkinci dönüş: kuralın hiç eşleşmesi yoksa ya da eşleşmeler kuralın saatini
+    karşılamıyorsa üretim başlamadan söylenecek engel bulguları.
+    """
+    kurallar = db.scalars(
+        select(SectionMergeRule)
+        .options(selectinload(SectionMergeRule.section_a),
+                 selectinload(SectionMergeRule.section_b))
+        .where(SectionMergeRule.term_id == donem.id)
+        .order_by(SectionMergeRule.id)
+    ).all()
+    if not kurallar:
+        return [], []
+
+    tekli: dict[tuple[int, int, int], Lesson] = {}
+    for l in dersler:
+        if len(sube_ciftleri(l)) == 1:
+            tekli[(l.section_id, l.teacher_id, l.subject_id)] = l
+
+    ortaklar: list[Lesson] = []
+    bulgular: list[dict] = []
+    for k in kurallar:
+        if kapsam is not None and (k.section_a.id not in kapsam or k.section_b.id not in kapsam):
+            continue
+        ad = f"{k.section_a.name} + {k.section_b.name}"
+        gunler = frozenset(int(i) for i in (k.day_indexes or []))
+        ciftler = [
+            (a, tekli[(k.section_b_id, tid, sid)])
+            for (sid_, tid, sid), a in tekli.items()
+            if sid_ == k.section_a_id and (k.section_b_id, tid, sid) in tekli
+        ]
+        en_fazla = sum(min(a.weekly_hours, b.weekly_hours) for a, b in ciftler)
+        if not ciftler or en_fazla < k.hours:
+            neden = ("aynı öğretmenin verdiği ortak bir ders yok" if not ciftler
+                     else f"eşleşen derslerden en çok {en_fazla} saat ortak okutulabilir")
+            bulgular.append({
+                "kod": "birlestirme_kurali",
+                "baslik": f"{ad} birleştirme kuralı uygulanamıyor",
+                "detay": f"Kural haftada {k.hours} saat ortak ders istiyor, ama {neden}.",
+                "oneri": (f"Kuralın saatini düşürün ya da iki şubeye aynı öğretmenle "
+                          f"aynı dersi atayın."),
+                "onem": "engel",
+                "sube": ad,
+            })
+            continue
+        for a, b in sorted(ciftler, key=lambda ab: ab[0].subject_name):
+            en_az = min(a.weekly_hours, b.weekly_hours)
+            ortaklar.append(Lesson(
+                entry_id=-(len(ortaklar) + 1),
+                section_id=a.section_id, section_name=a.section_name,
+                sections=((a.section_id, a.section_name), (b.section_id, b.section_name)),
+                teacher_id=a.teacher_id, teacher_name=a.teacher_name,
+                subject_name=a.subject_name, subject_id=a.subject_id,
+                weekly_hours=en_az, blocks=(1,) * en_az,
+                max_per_day=min(a.max_per_day, b.max_per_day),
+                building_id=a.building_id if a.building_id == b.building_id else None,
+                blocked_period_ids=a.blocked_period_ids,
+                section_blocked_period_ids=(a.section_blocked_period_ids
+                                            | b.section_blocked_period_ids),
+                section_blocked_map=a.section_blocked_map + b.section_blocked_map,
+                ortak_kural_id=k.id, ortak_ebeveynler=(a.entry_id, b.entry_id),
+                kural_saat=k.hours, kural_adi=ad, izinli_gunler=gunler,
+            ))
+    return ortaklar, bulgular

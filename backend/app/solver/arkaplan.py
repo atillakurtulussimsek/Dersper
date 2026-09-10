@@ -91,9 +91,14 @@ def _dongu(run_id: int, term_id: int, dur: threading.Event) -> None:
             run = db.get(SolveRun, run_id)
             program = db.get(Timetable, run.timetable_id)
             slots = slotlari_yukle(db, donem)
-            lessons = dersleri_yukle(db, donem, program.section_ids, slots)
+            kural_bulgulari: list[dict] = []
+            lessons = dersleri_yukle(db, donem, program.section_ids, slots,
+                                     ek_bulgular=kural_bulgulari)
             gun_sinirlari = gun_sinirlarini_yukle(db, donem)
-            gereken = sum(l.weekly_hours for l in lessons)
+            gereken = sum(l.weekly_hours for l in lessons if not l.ortak)
+            # Ortak dersler (birleştirme kuralı): sanal kimlik -> (a, b) ebeveynleri.
+            ortak_map = {l.entry_id: l.ortak_ebeveynler for l in lessons if l.ortak}
+            ortak_ters = {ab: e for e, ab in ortak_map.items()}
 
             kilitli: dict[int, list[int]] = {}
             for a in db.scalars(
@@ -102,7 +107,12 @@ def _dongu(run_id: int, term_id: int, dur: threading.Event) -> None:
                     Assignment.is_locked.is_(True),
                 )
             ):
-                kilitli.setdefault(a.curriculum_entry_id, []).append(a.period_id)
+                anahtar: int | None = a.curriculum_entry_id
+                if a.merged_entry_id is not None:
+                    anahtar = (ortak_ters.get((a.curriculum_entry_id, a.merged_entry_id))
+                               or ortak_ters.get((a.merged_entry_id, a.curriculum_entry_id)))
+                if anahtar is not None:
+                    kilitli.setdefault(anahtar, []).append(a.period_id)
 
             run.required = gereken
             run.status = SolveStatus.CALISIYOR
@@ -112,7 +122,7 @@ def _dongu(run_id: int, term_id: int, dur: threading.Event) -> None:
             if not slots or not lessons:
                 _bitir(db, run_id, SolveStatus.HATA,
                        rapor_olustur(slots, lessons, {}, "VERI_YOK", 0.0,
-                                     gun_sinirlari))
+                                     gun_sinirlari, ek_bulgular=kural_bulgulari))
                 return
 
             en_iyi: list[tuple[int, int]] = []
@@ -132,6 +142,9 @@ def _dongu(run_id: int, term_id: int, dur: threading.Event) -> None:
             sonsuz = bool(program.endless_mode)
             # Sonsuz modda beşinci motor (yerel arama) da döngüye girer.
             stratejiler = list(STRATEJILER) if sonsuz else list(CPSAT_STRATEJILERI)
+            # Yerel arama ortak dersleri bilmez: birleştirme kuralı varken kapalı.
+            if ortak_map:
+                stratejiler = [s for s in stratejiler if s != "yerel"]
             gunluk: list[dict] = []
             son_deneme_yerlesimi: list | None = None
 
@@ -159,7 +172,7 @@ def _dongu(run_id: int, term_id: int, dur: threading.Event) -> None:
                 sonuc = yerel.coz(girdi) if strateji == "yerel" else solve(girdi)
                 if sonuc.proven_infeasible:
                     esnek = True
-                yerlesen = len(sonuc.placements)
+                yerlesen = _yerlesen_saat(sonuc.placements)
                 iyilesti = yerlesen > en_iyi_yerlesen
                 if iyilesti:
                     en_iyi_yerlesen = yerlesen
@@ -184,18 +197,19 @@ def _dongu(run_id: int, term_id: int, dur: threading.Event) -> None:
                     if imza != son_deneme_yerlesimi:
                         son_deneme_yerlesimi = imza
                         _deneme_surumunu_yaz(
-                            run_id, sonuc.placements, kilitli,
+                            run_id, _satirlar(sonuc.placements, ortak_map), kilitli,
                             f"Deneme {deneme} · {STRATEJILER[strateji]} — "
                             f"{yerlesen}/{gereken} ders saati",
                         )
                 # Sonsuz modda iyileşen deneme hemen ızgaraya yazılır: kullanıcı
                 # beklerken en iyi hâli görsün.
                 if sonsuz and iyilesti and not sonuc.ok:
-                    _yerlesimleri_yaz(run_id, en_iyi, kilitli, gereken)
+                    _yerlesimleri_yaz(run_id, en_iyi, kilitli, gereken, ortak_map)
 
                 son_rapor = rapor_olustur(slots, lessons, sonuc.unplaced,
                                           sonuc.status_name, sonuc.seconds,
-                                          gun_sinirlari, celisenler)
+                                          gun_sinirlari, celisenler,
+                                          ek_bulgular=kural_bulgulari)
 
                 _ilerlemeyi_yaz(run_id, deneme, en_iyi_yerlesen, gereken,
                                 sonuc.proven_infeasible, son_rapor, baslangic, gunluk)
@@ -224,12 +238,13 @@ def _dongu(run_id: int, term_id: int, dur: threading.Event) -> None:
                     if celisenler:
                         son_rapor = rapor_olustur(
                             slots, lessons, sonuc.unplaced, sonuc.status_name,
-                            sonuc.seconds, gun_sinirlari, celisenler)
+                            sonuc.seconds, gun_sinirlari, celisenler,
+                            ek_bulgular=kural_bulgulari)
                         _ilerlemeyi_yaz(run_id, deneme, en_iyi_yerlesen, gereken,
                                         True, son_rapor, baslangic, gunluk)
 
                 if sonuc.ok:
-                    _yerlesimleri_yaz(run_id, sonuc.placements, kilitli, gereken)
+                    _yerlesimleri_yaz(run_id, sonuc.placements, kilitli, gereken, ortak_map)
                     _bitir(db, run_id, SolveStatus.BASARILI, son_rapor, baslangic)
                     return
 
@@ -241,7 +256,7 @@ def _dongu(run_id: int, term_id: int, dur: threading.Event) -> None:
                 if (sonuc.proven_infeasible and sonuc.esnek_proven_infeasible
                         and not sonsuz):
                     if en_iyi:
-                        _yerlesimleri_yaz(run_id, en_iyi, kilitli, gereken)
+                        _yerlesimleri_yaz(run_id, en_iyi, kilitli, gereken, ortak_map)
                     _bitir(db, run_id, SolveStatus.COZUMSUZ, son_rapor, baslangic)
                     return
 
@@ -258,10 +273,11 @@ def _dongu(run_id: int, term_id: int, dur: threading.Event) -> None:
 
             # Durduruldu: o ana kadarki en iyi yerleşimi kaydet.
             if en_iyi:
-                _yerlesimleri_yaz(run_id, en_iyi, kilitli, gereken)
+                _yerlesimleri_yaz(run_id, en_iyi, kilitli, gereken, ortak_map)
             if son_rapor is None:
                 son_rapor = rapor_olustur(slots, lessons, en_iyi_eksik, "DURDURULDU",
-                                          0.0, gun_sinirlari, celisenler)
+                                          0.0, gun_sinirlari, celisenler,
+                                          ek_bulgular=kural_bulgulari)
             _bitir(db, run_id, SolveStatus.DURDURULDU, son_rapor, baslangic)
     except Exception:  # iş parçacığı sessizce ölmesin
         log.exception("Arka plan çözümü hata verdi (run_id=%s)", run_id)
@@ -277,6 +293,26 @@ def _dongu(run_id: int, term_id: int, dur: threading.Event) -> None:
 
 def _simdi() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def _yerlesen_saat(yerlesim: list[tuple[int, int]]) -> int:
+    """Yerleşen ders saati. Ortak saat (negatif kimlik) iki şubenin birer
+    saatini doldurur, iki sayılır."""
+    return sum(2 if e < 0 else 1 for e, _ in yerlesim)
+
+
+def _satirlar(yerlesim: list[tuple[int, int]],
+              ortak_map: dict[int, tuple[int, int]]) -> list[tuple[int, int, int | None]]:
+    """Çözücü yerleşimini veritabanı satırlarına çevirir:
+    (müfredat satırı, ders saati, ortak okutulan öbür satır | None)."""
+    satirlar = []
+    for e, p in yerlesim:
+        if e < 0:
+            a, b = ortak_map[e]
+            satirlar.append((a, p, b))
+        else:
+            satirlar.append((e, p, None))
+    return satirlar
 
 
 def _ilerlemeyi_yaz(run_id: int, deneme: int, en_iyi: int, gereken: int,
@@ -300,7 +336,7 @@ def _ilerlemeyi_yaz(run_id: int, deneme: int, en_iyi: int, gereken: int,
         db.commit()
 
 
-def _deneme_surumunu_yaz(run_id: int, yerlesim: list[tuple[int, int]],
+def _deneme_surumunu_yaz(run_id: int, yerlesim: list[tuple[int, int, int | None]],
                          kilitli: dict[int, list[int]], etiket: str) -> None:
     """Bir denemeyi ızgaraya dokunmadan geçmişe sürüm olarak yazar."""
     with SessionLocal() as db:
@@ -314,7 +350,8 @@ def _deneme_surumunu_yaz(run_id: int, yerlesim: list[tuple[int, int]],
 
 
 def _yerlesimleri_yaz(run_id: int, yerlesim: list[tuple[int, int]],
-                      kilitli: dict[int, list[int]], gereken: int) -> None:
+                      kilitli: dict[int, list[int]], gereken: int,
+                      ortak_map: dict[int, tuple[int, int]] | None = None) -> None:
     """Sonucu programa yazar. Yeni sonuç hazır olana kadar eskisi durur.
 
     Üretim de geçmişe bir sürüm bırakır: elle düzenlemelerle aynı zincirde
@@ -334,14 +371,22 @@ def _yerlesimleri_yaz(run_id: int, yerlesim: list[tuple[int, int]],
             db.delete(a)
         db.flush()
         for entry_id, period_id in yerlesim:
-            db.add(Assignment(
-                timetable_id=run.timetable_id, curriculum_entry_id=entry_id,
-                period_id=period_id, is_locked=period_id in kilitli.get(entry_id, []),
-            ))
+            kilit = period_id in kilitli.get(entry_id, [])
+            if entry_id < 0:
+                a, b = (ortak_map or {})[entry_id]
+                db.add(Assignment(
+                    timetable_id=run.timetable_id, curriculum_entry_id=a,
+                    merged_entry_id=b, period_id=period_id, is_locked=kilit,
+                ))
+            else:
+                db.add(Assignment(
+                    timetable_id=run.timetable_id, curriculum_entry_id=entry_id,
+                    period_id=period_id, is_locked=kilit,
+                ))
         db.flush()
         surumler.surum_yaz(
             db, program, VersionKind.URETIM,
-            f"Üretim — {len(yerlesim)}/{gereken} ders saati yerleşti",
+            f"Üretim — {_yerlesen_saat(yerlesim)}/{gereken} ders saati yerleşti",
         )
         db.commit()
 

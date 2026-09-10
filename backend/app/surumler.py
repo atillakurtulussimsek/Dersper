@@ -28,15 +28,23 @@ from app.models import (
 def anlik_goruntu(db: Session, timetable_id: int) -> list[list]:
     """Programın o anki yerleşimleri: [[müfredat satırı, ders saati, kilitli], ...]
 
+    Birleştirme kuralıyla ortak okutulan saatte dördüncü eleman öbür şubenin
+    müfredat satırıdır: [a, saat, kilitli, b]. Sıradan satır üç elemanlıdır.
     Sıralı üretilir; aynı içerik her zaman aynı listeyi verir, böylece iki
     sürümü karşılaştırmak anlamlıdır.
     """
     satirlar = db.execute(
-        select(Assignment.curriculum_entry_id, Assignment.period_id, Assignment.is_locked)
+        select(Assignment.curriculum_entry_id, Assignment.period_id,
+               Assignment.is_locked, Assignment.merged_entry_id)
         .where(Assignment.timetable_id == timetable_id)
         .order_by(Assignment.period_id, Assignment.curriculum_entry_id)
     ).all()
-    return [[e, p, bool(k)] for e, p, k in satirlar]
+    return [[e, p, bool(k)] + ([m] if m is not None else []) for e, p, k, m in satirlar]
+
+
+def satir_coz(satir: list) -> tuple[int, int, bool, int | None]:
+    """Sürüm satırını (müfredat, saat, kilitli, ortak müfredat | None) olarak açar."""
+    return satir[0], satir[1], bool(satir[2]), (satir[3] if len(satir) > 3 else None)
 
 
 def surum_yaz(
@@ -74,7 +82,7 @@ def surum_yaz(
 
 
 def deneme_surumu_yaz(
-    db: Session, program: Timetable, yerlesimler: list[tuple[int, int]],
+    db: Session, program: Timetable, yerlesimler: list[tuple],
     kilitli: dict[int, list[int]], label: str,
 ) -> TimetableVersion:
     """Bir çözücü denemesini sürüm olarak yazar; imleci OYNATMAZ.
@@ -88,8 +96,11 @@ def deneme_surumu_yaz(
         select(func.max(TimetableVersion.number))
         .where(TimetableVersion.timetable_id == program.id)
     ) or 0) + 1
+    # Satırlar (e, p) ya da (e, p, ortak) olabilir; ortak varsa dördüncü eleman.
     sirali = sorted(
-        [[e, p, p in kilitli.get(e, [])] for e, p in yerlesimler],
+        [[y[0], y[1], y[1] in kilitli.get(y[0], [])]
+         + ([y[2]] if len(y) > 2 and y[2] is not None else [])
+         for y in yerlesimler],
         key=lambda x: (x[1], x[0]),
     )
     surum = TimetableVersion(
@@ -110,8 +121,9 @@ def _gecerli_yerlesimler(
     değişmiş olabilir. Böyle satırlar atlanır; kaç tanesinin atlandığı
     çağırana bildirilir ki kullanıcıya söylenebilsin.
     """
-    entry_ids = {e for e, _, _ in yerlesimler}
-    period_ids = {p for _, p, _ in yerlesimler}
+    acik = [satir_coz(s) for s in yerlesimler]
+    entry_ids = {e for e, _, _, m in acik for e in ([e] + ([m] if m else []))}
+    period_ids = {p for _, p, _, _ in acik}
     yasayan_entry = set(db.scalars(
         select(CurriculumEntry.id).where(
             CurriculumEntry.id.in_(entry_ids), CurriculumEntry.deleted_at.is_(None)
@@ -121,10 +133,13 @@ def _gecerli_yerlesimler(
         select(Period.id).where(Period.id.in_(period_ids))
     )) if period_ids else set()
 
-    tutulan = [
-        satir for satir in yerlesimler
-        if satir[0] in yasayan_entry and satir[1] in yasayan_period
-    ]
+    tutulan = []
+    for satir in yerlesimler:
+        e, p, k, m = satir_coz(satir)
+        if e not in yasayan_entry or p not in yasayan_period:
+            continue
+        # Ortak okutulan öbür satır silinmişse saat sıradan saate döner.
+        tutulan.append([e, p, k] + ([m] if m is not None and m in yasayan_entry else []))
     return tutulan, len(yerlesimler) - len(tutulan)
 
 
@@ -139,12 +154,14 @@ def surumu_uygula(db: Session, program: Timetable, surum: TimetableVersion) -> i
     for a in db.scalars(select(Assignment).where(Assignment.timetable_id == program.id)):
         db.delete(a)
     db.flush()
-    for entry_id, period_id, kilitli in tutulan:
+    for satir in tutulan:
+        entry_id, period_id, kilitli, ortak = satir_coz(satir)
         db.add(Assignment(
             timetable_id=program.id,
             curriculum_entry_id=entry_id,
             period_id=period_id,
             is_locked=bool(kilitli),
+            merged_entry_id=ortak,
         ))
     program.current_version_id = surum.id
     db.commit()
@@ -288,7 +305,8 @@ def fark(db: Session, program: Timetable, a_no: int, b_no: int) -> dict:
     # entry_id -> {period_id: kilitli}
     def yerlesim(surum: TimetableVersion) -> dict[int, dict[int, bool]]:
         d: dict[int, dict[int, bool]] = defaultdict(dict)
-        for e, p, k in surum.placements or []:
+        for satir in surum.placements or []:
+            e, p, k, _ = satir_coz(satir)
             d[e][p] = bool(k)
         return d
 

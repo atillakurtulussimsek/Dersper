@@ -176,6 +176,30 @@ export interface Hucre {
   teacher_name: string;
   teacher_short: string | null;
   is_locked: boolean;
+  /** Birleştirme kuralıyla ortak okutulan saat: öbür şubenin ders ataması. */
+  merged_entry_id?: number | null;
+}
+
+/** Şube birleştirme kuralı: iki şube, izinli günler, tam saat. */
+export interface BirlestirmeCifti {
+  subject_name: string;
+  teacher_name: string;
+  hours_a: number;
+  hours_b: number;
+  max_hours: number;
+}
+
+export interface BirlestirmeKurali {
+  id: number;
+  section_a_id: number;
+  section_b_id: number;
+  section_a_name: string;
+  section_b_name: string;
+  hours: number;
+  day_indexes: number[];
+  day_names: string[];
+  pairs: BirlestirmeCifti[];
+  max_hours: number;
 }
 
 export interface ProgramUyarisi {

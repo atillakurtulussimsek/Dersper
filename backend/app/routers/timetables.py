@@ -54,6 +54,7 @@ def izgara_hucreleri(db: Session, timetable_id: int) -> list[GridCell]:
             selectinload(Assignment.entry)
             .selectinload(CurriculumEntry.extra_sections)
             .selectinload(CurriculumEntrySection.section),
+            selectinload(Assignment.merged_entry).selectinload(CurriculumEntry.section),
         )
         .where(Assignment.timetable_id == timetable_id)
     )
@@ -65,7 +66,10 @@ def izgara_hucreleri(db: Session, timetable_id: int) -> list[GridCell]:
         gun_index, ders_index = konum
         # Birleşik ders tek hücredir; her şubenin ızgarasında görünmesini
         # `section_ids` sağlar (arayüz üyeliğe bakar, eşitliğe değil).
+        # Birleştirme kuralıyla ortak okutulan saat de öyle: öbür şube eklenir.
         subeler = [a.entry.section] + [x.section for x in a.entry.extra_sections]
+        if a.merged_entry is not None:
+            subeler.append(a.merged_entry.section)
         hucreler.append(GridCell(
             assignment_id=a.id,
             period_id=a.period_id,
@@ -82,6 +86,7 @@ def izgara_hucreleri(db: Session, timetable_id: int) -> list[GridCell]:
             teacher_name=a.entry.teacher.full_name,
             teacher_short=a.entry.teacher.short_code,
             is_locked=a.is_locked,
+            merged_entry_id=a.merged_entry_id,
         ))
     return hucreler
 
@@ -348,7 +353,7 @@ def hedefler(
         atama = d._atama(assignment_id)
         blok = d.bloklar[atama.id]
         return d.hedefleri_degerlendir(
-            atama.entry, len(blok), {a.id for a in blok}
+            atama.entry, len(blok), {a.id for a in blok}, d.ek_subeler(atama)
         )
     if curriculum_entry_id is not None:
         entry = d._mufredat_satiri(curriculum_entry_id)

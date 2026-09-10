@@ -64,7 +64,8 @@ function ayniDers(a: Hucre, b: Hucre): boolean {
   return (
     a.section_id === b.section_id &&
     a.teacher_id === b.teacher_id &&
-    a.subject_name === b.subject_name
+    a.subject_name === b.subject_name &&
+    (a.merged_entry_id ?? null) === (b.merged_entry_id ?? null)
   );
 }
 

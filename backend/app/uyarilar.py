@@ -165,11 +165,15 @@ def uyarilari_hesapla(db: Session, program: Timetable) -> list[dict]:
             .selectinload(Section.building),
             selectinload(Assignment.entry).selectinload(CurriculumEntry.subject),
             selectinload(Assignment.entry).selectinload(CurriculumEntry.teacher),
+            selectinload(Assignment.merged_entry).selectinload(CurriculumEntry.section),
+            selectinload(Assignment.merged_entry).selectinload(CurriculumEntry.subject),
+            selectinload(Assignment.merged_entry).selectinload(CurriculumEntry.teacher),
         )
         .where(Assignment.timetable_id == program.id)
     ))
 
-    # (müfredat satırı, gün) -> ders saati sıraları
+    # (müfredat satırı, gün) -> ders saati sıraları. Ortak okutulan saat iki
+    # satırın da gününe yazılır: her iki şube o saatte dersi görür.
     gunluk: dict[tuple[int, int], list[int]] = defaultdict(list)
     satirlar: dict[int, CurriculumEntry] = {}
     gun_adlari: dict[int, str] = {}
@@ -180,6 +184,9 @@ def uyarilari_hesapla(db: Session, program: Timetable) -> list[dict]:
         gun, saat, gun_adi, _ = konum
         gunluk[(a.curriculum_entry_id, gun)].append(saat)
         satirlar[a.curriculum_entry_id] = a.entry
+        if a.merged_entry is not None:
+            gunluk[(a.merged_entry_id, gun)].append(saat)
+            satirlar[a.merged_entry_id] = a.merged_entry
         gun_adlari[gun] = gun_adi
 
     gizlenen = set(program.ignored_warnings or [])

@@ -111,12 +111,14 @@ def bloklari_cikar(
     saatleridir. Her yerleşim kendi bloğuna eşlenir, böylece hangi hücreye
     dokunulursa dokunulsun blok bulunur.
     """
-    gunluk: dict[tuple[int, int], list[Assignment]] = defaultdict(list)
+    # Ortak okutulan saatler (birleştirme kuralı) kendi bloğunu kurar: iki
+    # şubeyi birden tutar, dersin ayrı saatleriyle karışmaz.
+    gunluk: dict[tuple[int, int | None, int], list[Assignment]] = defaultdict(list)
     for a in atamalar:
         saat = saatler.get(a.period_id)
         if saat is None:
             continue
-        gunluk[(a.curriculum_entry_id, saat.gun_index)].append(a)
+        gunluk[(a.curriculum_entry_id, a.merged_entry_id, saat.gun_index)].append(a)
 
     sonuc: dict[int, list[Assignment]] = {}
     for grup in gunluk.values():
@@ -144,6 +146,7 @@ def _atamalari_oku(db: Session, timetable_id: int) -> list[Assignment]:
             selectinload(Assignment.entry)
             .selectinload(CurriculumEntry.extra_sections)
             .selectinload(CurriculumEntrySection.section),
+            selectinload(Assignment.merged_entry).selectinload(CurriculumEntry.section),
         )
         .where(Assignment.timetable_id == timetable_id)
     ))
@@ -182,6 +185,18 @@ def _sube_kimlikleri(entry: CurriculumEntry) -> set[int]:
 
 def _sube_etiketi(entry: CurriculumEntry) -> str:
     return " + ".join(sb.name for sb in _subeler(entry))
+
+
+def _atama_subeleri(a: Assignment) -> list:
+    """Yerleşimin tuttuğu şubeler: dersin şubeleri + ortak okutulan öbür şube."""
+    subeler = _subeler(a.entry)
+    if a.merged_entry is not None:
+        subeler = subeler + [a.merged_entry.section]
+    return subeler
+
+
+def _atama_sube_kimlikleri(a: Assignment) -> set[int]:
+    return {sb.id for sb in _atama_subeleri(a)}
 
 
 class Duzenleyici:
@@ -228,19 +243,27 @@ class Duzenleyici:
                 return a
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Yerleşim bulunamadı.")
 
+    def ek_subeler(self, atama: Assignment) -> list:
+        """Ortak okutulan saatin öbür şubesi; sıradan saatte boş."""
+        return [atama.merged_entry.section] if atama.merged_entry is not None else []
+
     def engel(
-        self, entry: CurriculumEntry, saat: Saat, yoksay: set[int]
+        self, entry: CurriculumEntry, saat: Saat, yoksay: set[int],
+        ek_subeler: list = (),
     ) -> str | None:
         """Bu ders bu saate konabilir mi? Konamazsa Türkçe gerekçe döner.
 
         `yoksay`, taşınmakta olan yerleşimlerin kimlikleridir: bir bloğu kendi
-        üstüne kaydırırken kendisiyle çakışmasın diye.
+        üstüne kaydırırken kendisiyle çakışmasın diye. `ek_subeler`, ortak
+        okutulan bloğun öbür şubesidir; o da boş olmalı.
         """
         if not saat.ders_mi:
             return "Bu saate ders konmaz (teneffüs ya da kapalı gün)."
         if saat.id in self.ogretmen_kapali.get(entry.teacher_id, set()):
             return f"{entry.teacher.full_name} bu saatte müsait değil."
-        for sb in _subeler(entry):
+        subeler = _subeler(entry) + list(ek_subeler)
+        kimlikler = {sb.id for sb in subeler}
+        for sb in subeler:
             if saat.id in self.sube_kapali.get(sb.id, set()):
                 return f"{sb.name} şubesi bu saate kapalı."
         for pid in sorted(self.es_zamanlilar.get(saat.id, {saat.id})):
@@ -252,9 +275,9 @@ class Duzenleyici:
                     continue
                 # Birleşik ders şubelerinin hepsini tutar; kesişen tek şube
                 # bile çakışmadır.
-                ortak = _sube_kimlikleri(entry) & _sube_kimlikleri(diger.entry)
+                ortak = kimlikler & _atama_sube_kimlikleri(diger)
                 if ortak:
-                    ad = next(sb.name for sb in _subeler(entry) if sb.id in ortak)
+                    ad = next(sb.name for sb in subeler if sb.id in ortak)
                     return (f"{ad} şubesinin {nerede} "
                             f"{diger.entry.subject.name} dersi var.")
                 if diger.entry.teacher_id == entry.teacher_id:
@@ -268,7 +291,8 @@ class Duzenleyici:
         return f"{saat.gun_adi} {saat.ad}" if saat else "başka bir"
 
     def hedefleri_degerlendir(
-        self, entry: CurriculumEntry, uzunluk: int, yoksay: set[int]
+        self, entry: CurriculumEntry, uzunluk: int, yoksay: set[int],
+        ek_subeler: list = (),
     ) -> list[dict]:
         """Her ders saati için "buraya konabilir mi" değerlendirmesi.
 
@@ -290,8 +314,8 @@ class Duzenleyici:
                 })
                 continue
             neden = next(
-                (self.engel(entry, s, yoksay) for s in dizi
-                 if self.engel(entry, s, yoksay) is not None),
+                (self.engel(entry, s, yoksay, ek_subeler) for s in dizi
+                 if self.engel(entry, s, yoksay, ek_subeler) is not None),
                 None,
             )
             sonuc.append({
@@ -349,6 +373,8 @@ class Duzenleyici:
 
         kendi = {a.id for a in blok}
         entry_on = blok[0].entry
+        ek_on = self.ek_subeler(blok[0])
+        kimlikler_on = _atama_sube_kimlikleri(blok[0])
         # Yer açması gerekenler yalnızca ÇAKIŞANLAR: bir ders saati okulun
         # tamamına ait, o saatte başka şubelerin dersleri de vardır ve onların
         # taşınmasına gerek yok. Engel olan, aynı şube ya da aynı öğretmendir.
@@ -357,7 +383,7 @@ class Duzenleyici:
             for s in dizi
             for a in self.doluluk.get(s.id, [])
             if a.id not in kendi
-            and (a.entry.section_id == entry_on.section_id
+            and (kimlikler_on & _atama_sube_kimlikleri(a)
                  or a.entry.teacher_id == entry_on.teacher_id)
         ]
         yer_degistiren: list[Assignment] = []
@@ -383,14 +409,15 @@ class Duzenleyici:
 
         yoksay = kendi | {a.id for a in yer_degistiren}
         for saat in dizi:
-            neden = self.engel(entry_on, saat, yoksay)
+            neden = self.engel(entry_on, saat, yoksay, ek_on)
             if neden:
                 raise HTTPException(status.HTTP_409_CONFLICT, neden)
 
         if yer_degistiren:
             karsi_entry = yer_degistiren[0].entry
+            ek_karsi = self.ek_subeler(yer_degistiren[0])
             for saat in kaynak_saatler:
-                neden = self.engel(karsi_entry, saat, yoksay)
+                neden = self.engel(karsi_entry, saat, yoksay, ek_karsi)
                 if neden:
                     raise HTTPException(
                         status.HTTP_409_CONFLICT,
@@ -507,6 +534,9 @@ class Duzenleyici:
                 continue
             gorulen.add(blok[0].id)
             yerlesen[a.curriculum_entry_id].append(len(blok))
+            # Ortak okutulan saat öbür şubenin dersini de doldurur.
+            if a.merged_entry_id is not None:
+                yerlesen[a.merged_entry_id].append(len(blok))
 
         sonuc: dict[int, list[int]] = {}
         for entry in self._donemin_satirlari():

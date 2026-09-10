@@ -5,6 +5,12 @@ Dersper'in geliştirme günlüğü. Her değişiklik tek cümleyle, en yeni sür
 öncesinde ikinci hane özellik, üçüncü hane düzeltme demektir. Uygulamanın
 sürümü arayüzde yan menünün altında yazar.
 
+## 0.26.0 — 2026-09-10
+
+- Şube birleştirme kuralı (Kısıtlamalar sayfası): "9-A ile 9-B, Cumartesi, tam 4 saat" denir; hangi dersin ortak okutulacağını program üretimi seçer. İki şubede aynı öğretmenin verdiği aynı dersler eşlenir, çözücü programın kurulmasını sağlayan dağılımı bulur; ortak saat iki şubeyi ve öğretmeni aynı anda doldurur, iki dersin haftalık saatinden birer düşer, blok desenleri korunur. Ortak saatler programda "9-A + 9-B" olarak görünür; elle taşımada iki şube birden gözetilir; sürüm geçmişi ortak saatleri korur.
+- Kural uygulanamıyorsa (eşleşen ders yok, saat fazla, seçilen günlere sığmıyor) üretim başlamadan kesin engel olarak yazılır; öğretmen kapasite denetimleri kuralın düşürebileceği saati hesaba katar.
+- Sonsuz moddaki yerel arama motoru birleştirme kuralı varken devre dışı kalır.
+
 ## 0.25.0 — 2026-09-10
 
 - Ders programlarında teneffüs ve öğle arası artık satır/sütun değil: ekrandaki ayrı sayfa ve çarşaf görünümlerinde, yayın sayfasında ve HTML/PDF/Excel çıktılarında yalnız ders saatleri var; dersler aralar atlanarak 1'den numaralanıyor.

@@ -13,7 +13,8 @@ export function ayniDers(a: Hucre, b: Hucre): boolean {
   return (
     a.section_id === b.section_id &&
     a.teacher_id === b.teacher_id &&
-    a.subject_name === b.subject_name
+    a.subject_name === b.subject_name &&
+    (a.merged_entry_id ?? null) === (b.merged_entry_id ?? null)
   );
 }
 
@@ -22,7 +23,7 @@ export function ayniDers(a: Hucre, b: Hucre): boolean {
 export function bloklariCikar(hucreler: Hucre[]): Map<number, Hucre[]> {
   const gunluk = new Map<string, Hucre[]>();
   for (const h of hucreler) {
-    const anahtar = `${h.section_id}:${h.teacher_id}:${h.subject_name}:${h.day_index}`;
+    const anahtar = `${h.section_id}:${h.teacher_id}:${h.subject_name}:${h.merged_entry_id ?? ""}:${h.day_index}`;
     const liste = gunluk.get(anahtar) ?? [];
     liste.push(h);
     gunluk.set(anahtar, liste);

@@ -400,6 +400,52 @@ class CurriculumCopyOut(BaseModel):
     skipped: list[str]
 
 
+# --- Şube birleştirme kuralı ---
+
+class MergeRuleIn(BaseModel):
+    section_a_id: int
+    section_b_id: int
+    hours: int = Field(ge=1, le=40)
+    # Ortak saatlerin konabileceği günler (Day.index).
+    day_indexes: list[int] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _dogrula(self) -> "MergeRuleIn":
+        if self.section_a_id == self.section_b_id:
+            raise ValueError("Bir şube kendisiyle birleştirilemez.")
+        self.day_indexes = sorted(set(self.day_indexes))
+        return self
+
+
+class MergePairOut(BaseModel):
+    """Kuralın eşleyebildiği ders çifti: iki şubede aynı öğretmen, aynı ders."""
+    subject_name: str
+    teacher_name: str
+    hours_a: int
+    hours_b: int
+    # Bu çiftten en çok kaç saat ortak okutulabilir.
+    max_hours: int
+
+
+class MergeRuleOut(ORMModel):
+    id: int
+    section_a_id: int
+    section_b_id: int
+    section_a_name: str = ""
+    section_b_name: str = ""
+    hours: int
+    day_indexes: list[int]
+    day_names: list[str] = []
+    pairs: list[MergePairOut] = []
+    # Tüm çiftlerin toplamı: kuralın saati bunu aşamaz.
+    max_hours: int = 0
+
+
+class MergePreviewOut(BaseModel):
+    pairs: list[MergePairOut]
+    max_hours: int
+
+
 # --- Program ---
 
 class TimetableIn(BaseModel):
@@ -482,6 +528,8 @@ class GridCell(BaseModel):
     teacher_name: str
     teacher_short: str | None
     is_locked: bool
+    # Birleştirme kuralıyla ortak okutulan saat: öbür şubenin ders ataması.
+    merged_entry_id: int | None = None
 
 
 class TimetableGrid(BaseModel):

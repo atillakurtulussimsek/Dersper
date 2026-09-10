@@ -132,6 +132,24 @@ class Lesson:
     # Kapasite tanıları buradan okur; birleşimi okusalardı ortağın kapalı
     # saatleri şubeye yazılır, tam sığan şube "sığmıyor" görünürdü.
     section_blocked_map: tuple[tuple[int, frozenset[int]], ...] = ()
+    subject_id: int | None = None
+
+    # --- Şube birleştirme kuralı (bkz. models.SectionMergeRule) ---
+    # Kuraldan türeyen ORTAK ders: iki şubede aynı öğretmenin verdiği aynı
+    # dersin birlikte okutulabilecek saatleri. Sanal satırdır: entry_id negatif,
+    # blokları isteğe bağlı tek saatlerdir; yerleşen her saati iki ebeveynin
+    # (a, b) haftalık saatinden birer düşer. Sıradan derste bu alanlar boştur.
+    ortak_kural_id: int | None = None
+    ortak_ebeveynler: tuple[int, int] = ()
+    # Kuralın istediği toplam ortak saat (tam sayı) ve iletilerdeki adı.
+    kural_saat: int = 0
+    kural_adi: str = ""
+    # Ortak saatlerin konabileceği günler (day_index). None = her gün.
+    izinli_gunler: frozenset[int] | None = None
+
+    @property
+    def ortak(self) -> bool:
+        return self.ortak_kural_id is not None
 
     @property
     def engelli_period_ids(self) -> frozenset[int]:
@@ -319,6 +337,17 @@ def _desen_etiketi(lesson: Lesson) -> Celisen:
     )
 
 
+def _birlesme_etiketi(lesson: Lesson) -> Celisen:
+    """Birleştirme kuralı: tam `kural_saat` ortak saat, izinli günlerde."""
+    return Celisen(
+        tur="birlesme",
+        metin=(f"{lesson.kural_adi} birleştirme kuralı: haftada tam "
+               f"{lesson.kural_saat} saat ortak ders"),
+        oneri=(f"{lesson.kural_adi} kuralının saatini düşürün, gün ekleyin "
+               f"ya da kuralı kaldırın"),
+    )
+
+
 def _gun_siniri_etiketi(teacher_id: int, ad: str, yarim_gun: int) -> Celisen:
     gun = f"{yarim_gun / 2:g}".replace(".", ",")
     return Celisen(
@@ -406,7 +435,12 @@ def etiket_gruplari(data: SolveInput) -> list[tuple[Celisen, frozenset[Celisen]]
     toplam = len(data.slots)
     ogretmen: dict[int, dict] = {}
     sube: dict[int, dict] = {}
+    kurallar: dict[int, Celisen] = {}
     for l in data.lessons:
+        if l.ortak:
+            # Ortak dersin yükü ebeveynlerde sayılır; kural kendi öbeğidir.
+            kurallar.setdefault(l.ortak_kural_id, _birlesme_etiketi(l))
+            continue
         etiketler = [_yuk_etiketi(l), _gunluk_etiketi(l), _desen_etiketi(l)]
         m = _musaitlik_etiketi(l)
         if m is not None:
@@ -431,6 +465,12 @@ def etiket_gruplari(data: SolveInput) -> list[tuple[Celisen, frozenset[Celisen]]
 
     def oran(k: dict) -> float:
         return k["yuk"] / k["acik"] if k["acik"] else 9.9
+
+    # Birleştirme kuralı: kaldırılınca program kuruluyorsa kural çelişkinin
+    # parçasıdır. Öğretmen/şube öbeklerinden önce sınanır: en dar kısıt.
+    kural_gruplari: list[tuple[float, Celisen, frozenset[Celisen]]] = [
+        (9.5, etiket, frozenset({etiket})) for etiket in kurallar.values()
+    ]
 
     def pay_metni(k: dict) -> str:
         """Yükün açık saate göre durumu — uyarının asıl gerekçesi.
@@ -460,7 +500,7 @@ def etiket_gruplari(data: SolveInput) -> list[tuple[Celisen, frozenset[Celisen]]
             return f"{k['ad']} için {secenekler[0]}"
         return f"{k['ad']} için " + ", ".join(secenekler[:-1]) + f" ya da {secenekler[-1]}"
 
-    gruplar: list[tuple[float, Celisen, frozenset[Celisen]]] = []
+    gruplar: list[tuple[float, Celisen, frozenset[Celisen]]] = list(kural_gruplari)
     for tid, k in ogretmen.items():
         gruplar.append((oran(k), Celisen(
             tur="ogretmen",
@@ -491,13 +531,14 @@ def _sube_dersleri(data: SolveInput, sube_adi: str) -> list[int]:
     toplam = len(data.slots)
     yuk: dict[int, int] = {}
     for l in data.lessons:
-        yuk[l.teacher_id] = yuk.get(l.teacher_id, 0) + l.weekly_hours
+        if not l.ortak:
+            yuk[l.teacher_id] = yuk.get(l.teacher_id, 0) + l.weekly_hours
     def sikisiklik(l: Lesson) -> float:
         acik = toplam - len(l.blocked_period_ids)
-        return yuk[l.teacher_id] / acik if acik else 9.9
+        return yuk.get(l.teacher_id, 0) / acik if acik else 9.9
     return sorted(
         (i for i, l in enumerate(data.lessons)
-         if any(ad == sube_adi for _, ad in sube_ciftleri(l))),
+         if not l.ortak and any(ad == sube_adi for _, ad in sube_ciftleri(l))),
         key=lambda i: -sikisiklik(data.lessons[i]),
     )
 
@@ -691,6 +732,19 @@ def _calistir(
             return etiket not in atlanan
         return etiket != atlanan
 
+    # Birleştirme kuralı: ebeveyn entry_id -> ortak ders indeksleri;
+    # kural -> ortak ders indeksleri. Ebeveynin blokları isteğe bağlı olur,
+    # saat muhasebesi ortak saatleri de sayar (aşağıda, döngüden sonra).
+    cocuklar: dict[int, list[int]] = {}
+    kural_uyeleri: dict[int, list[int]] = {}
+    for li, lesson in enumerate(data.lessons):
+        if lesson.ortak:
+            for ebeveyn in lesson.ortak_ebeveynler:
+                cocuklar.setdefault(ebeveyn, []).append(li)
+            kural_uyeleri.setdefault(lesson.ortak_kural_id, []).append(li)
+    # Haftalık saat muhasebesi döngüden sonra kurulur: li -> yerleşen saat ifadesi
+    yerlesen_ifade: dict[int, object] = {}
+
     # y[(lesson_idx, blok_idx)] -> {baslangic_slot_idx: BoolVar}
     baslangic: dict[tuple[int, int], dict[int, cp_model.IntVar]] = {}
     # x[(lesson_idx, slot_idx)] -> BoolVar (o saatte ders var mı)
@@ -708,7 +762,9 @@ def _calistir(
 
         for bi, boy in enumerate(bloklar):
             secenekler: dict[int, cp_model.IntVar] = {}
-            for gun_slotlari in gunler.values():
+            for gi, gun_slotlari in gunler.items():
+                if lesson.izinli_gunler is not None and gi not in lesson.izinli_gunler:
+                    continue
                 for konum in range(len(gun_slotlari) - boy + 1):
                     pencere = gun_slotlari[konum:konum + boy]
                     if not _ardisik_mi(slots, pencere):
@@ -727,17 +783,20 @@ def _calistir(
             baslangic[(li, bi)] = secenekler
 
         # (1) Haftalık saatin tamamı yerleşir. Gevşek modelde eksik kalabilir.
-        if gevsek:
+        # Birleştirme kuralındaki ebeveynin ve ortak dersin blokları isteğe
+        # bağlıdır: saat muhasebesi döngüden sonra, ortak saatlerle birlikte.
+        secimli = lesson.ortak or lesson.entry_id in cocuklar
+        if gevsek and not lesson.ortak:
             eksik = model.NewIntVar(0, lesson.weekly_hours, f"eksik_{li}")
             yerlesmeyen[li] = eksik
         for bi, boy in enumerate(bloklar):
             secenekler = baslangic[(li, bi)]
             if not secenekler:
                 # Bu blok hiçbir yere sığmıyor.
-                if not gevsek and gecerli(_yuk_etiketi(lesson)):
+                if not gevsek and not secimli and gecerli(_yuk_etiketi(lesson)):
                     kisit.ekle(sum([]) == 1, _yuk_etiketi(lesson))
                 continue
-            if gevsek:
+            if gevsek or secimli:
                 model.Add(sum(secenekler.values()) <= 1)
             elif gecerli(_yuk_etiketi(lesson)):
                 kisit.ekle(sum(secenekler.values()) == 1, _yuk_etiketi(lesson))
@@ -746,13 +805,11 @@ def _calistir(
                 # zorunda değil. Sıfıra indirmeyi değil, AZALTMAYI sınar.
                 model.Add(sum(secenekler.values()) <= 1)
 
-        if gevsek:
-            yerlesen = sum(
-                boy * var
-                for bi, boy in enumerate(bloklar)
-                for var in baslangic[(li, bi)].values()
-            )
-            model.Add(yerlesmeyen[li] == lesson.weekly_hours - yerlesen)
+        yerlesen_ifade[li] = sum(
+            boy * var
+            for bi, boy in enumerate(bloklar)
+            for var in baslangic[(li, bi)].values()
+        )
 
         # x değişkenleri: blok başlangıçlarından türetilir.
         for si in range(len(slots)):
@@ -766,9 +823,55 @@ def _calistir(
                 model.Add(x == sum(kapsayan))
                 dolu[(li, si)] = x
 
-        # (6) Aynı ders bir şubede günde en fazla max_per_day saat.
+        # (6) günlük sınır döngüden sonra kurulur: ebeveynin günlük sayısı
+        # ortak saatleri de kapsar, onlar ise ancak tüm dersler işlenince belli.
+
+        # (7) Aynı dersin blokları arka arkaya gelmesin: gün içinde kesintisiz
+        # dizi, en uzun bloğu aşamaz. Yalnızca raporlama için çalıştırılan
+        # gevşek modelde uygulanmaz; orada amaç en çok saati yerleştirmektir.
+        # Ortak ders bu kuralın dışındadır: tek saatlik bloklardan oluşur ve
+        # birleştirilen saatlerin art arda gelmesi tam da istenen şeydir.
+        en_uzun_blok = max(bloklar) if bloklar else 1
+        for gun_slotlari in ([] if gevsek or lesson.ortak else gunler.values()):
+            pencere = en_uzun_blok + 1
+            for konum in range(len(gun_slotlari) - pencere + 1):
+                dilim = gun_slotlari[konum:konum + pencere]
+                if not _ardisik_mi(slots, dilim):
+                    continue
+                hucreler = [dolu[(li, si)] for si in dilim if (li, si) in dolu]
+                if len(hucreler) > en_uzun_blok and gecerli(_desen_etiketi(lesson)):
+                    kisit.ekle(sum(hucreler) <= en_uzun_blok,
+                               _desen_etiketi(lesson))
+
+    # (1b) Haftalık saat muhasebesi. Ebeveynin yerleşen saatleri + ortak
+    # derslerinin yerleşen saatleri = haftalık saat. Ortak dersin kendisi için
+    # muhasebe yoktur; onu kural (aşağıda) sayar.
+    for li, lesson in enumerate(data.lessons):
+        if lesson.ortak:
+            continue
+        ortak_saatler = [
+            dolu[(ci, si)]
+            for ci in cocuklar.get(lesson.entry_id, [])
+            for si in range(len(slots)) if (ci, si) in dolu
+        ]
+        toplam = yerlesen_ifade[li] + sum(ortak_saatler)
+        if gevsek:
+            model.Add(yerlesmeyen[li] == lesson.weekly_hours - toplam)
+        elif lesson.entry_id in cocuklar:
+            if gecerli(_yuk_etiketi(lesson)):
+                kisit.ekle(toplam == lesson.weekly_hours, _yuk_etiketi(lesson))
+            else:
+                model.Add(toplam <= lesson.weekly_hours)
+
+    # (6) Aynı ders bir şubede günde en fazla max_per_day saat. Ebeveynde
+    # ortak saatler de sayılır: şube o gün dersi ortak da görse görür.
+    for li, lesson in enumerate(data.lessons):
+        if lesson.ortak:
+            continue
+        uyeler = [li] + cocuklar.get(lesson.entry_id, [])
         for gi, gun_slotlari in gunler.items():
-            gunluk = [dolu[(li, si)] for si in gun_slotlari if (li, si) in dolu]
+            gunluk = [dolu[(ui, si)] for ui in uyeler for si in gun_slotlari
+                      if (ui, si) in dolu]
             if len(gunluk) <= lesson.max_per_day:
                 continue
             if esnek_gunluk:
@@ -779,20 +882,22 @@ def _calistir(
                 kisit.ekle(sum(gunluk) <= lesson.max_per_day,
                            _gunluk_etiketi(lesson))
 
-        # (7) Aynı dersin blokları arka arkaya gelmesin: gün içinde kesintisiz
-        # dizi, en uzun bloğu aşamaz. Yalnızca raporlama için çalıştırılan
-        # gevşek modelde uygulanmaz; orada amaç en çok saati yerleştirmektir.
-        en_uzun_blok = max(bloklar) if bloklar else 1
-        for gun_slotlari in ([] if gevsek else gunler.values()):
-            pencere = en_uzun_blok + 1
-            for konum in range(len(gun_slotlari) - pencere + 1):
-                dilim = gun_slotlari[konum:konum + pencere]
-                if not _ardisik_mi(slots, dilim):
-                    continue
-                hucreler = [dolu[(li, si)] for si in dilim if (li, si) in dolu]
-                if len(hucreler) > en_uzun_blok and gecerli(_desen_etiketi(lesson)):
-                    kisit.ekle(sum(hucreler) <= en_uzun_blok,
-                               _desen_etiketi(lesson))
+    # (13) Birleştirme kuralı: kuralın ortak dersleri toplam TAM kural_saat
+    # saat yerleşir. Gevşek modelde eksik kalan ortak saat, yerleşmeyen ders
+    # saati gibi cezalandırılır ve raporda kuralın ilk ortak dersi adına görünür.
+    for kural_id, uyeler in kural_uyeleri.items():
+        ornek = data.lessons[uyeler[0]]
+        ortak_saatler = [dolu[(ui, si)] for ui in uyeler
+                         for si in range(len(slots)) if (ui, si) in dolu]
+        etiket = _birlesme_etiketi(ornek)
+        if gevsek:
+            eksik_kural = model.NewIntVar(0, ornek.kural_saat, f"eksik_kural_{kural_id}")
+            model.Add(eksik_kural == ornek.kural_saat - sum(ortak_saatler))
+            yerlesmeyen[uyeler[0]] = eksik_kural
+        elif gecerli(etiket):
+            kisit.ekle(sum(ortak_saatler) == ornek.kural_saat, etiket)
+        else:
+            model.Add(sum(ortak_saatler) <= ornek.kural_saat)
 
     # (2) Şube çakışması
     es_zamanlilar = cakisma.gruplar(

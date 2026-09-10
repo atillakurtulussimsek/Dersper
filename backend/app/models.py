@@ -386,6 +386,38 @@ class CurriculumEntry(Base, SoftDelete):
         return bool(self.extra_sections)
 
 
+class SectionMergeRule(Base):
+    """İki şubenin belirli günlerde birleştirilmesi kuralı.
+
+    Ders Atamaları'ndaki elle birleştirme (bkz. CurriculumEntrySection) hangi
+    dersin birlikte okutulacağını kullanıcı seçer ve saat sabittir. Bu kural
+    ise seçimi çözücüye bırakır: "9-A ile 9-B, Cumartesi, tam 4 saat" dendiğinde
+    iki şubede aynı öğretmenin aynı dersi eşlenir ve çözücü hangi derslerin kaç
+    saatinin ortak okutulacağına, programın kurulmasını sağlayacak biçimde
+    karar verir. Ortak saat iki şubeyi ve öğretmeni aynı anda doldurur, iki
+    dersin haftalık saatinden birer düşer.
+    """
+    __tablename__ = "section_merge_rules"
+    __table_args__ = (
+        UniqueConstraint("term_id", "section_a_id", "section_b_id",
+                         name="uq_merge_rule_pair"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    term_id: Mapped[int] = mapped_column(ForeignKey("terms.id", ondelete="CASCADE"))
+    # Çift sıralı saklanır: a < b. Aynı çift ters sırayla ikinci kez girilemez.
+    section_a_id: Mapped[int] = mapped_column(ForeignKey("sections.id", ondelete="CASCADE"))
+    section_b_id: Mapped[int] = mapped_column(ForeignKey("sections.id", ondelete="CASCADE"))
+    # Haftada TAM bu kadar saat ortak okutulur.
+    hours: Mapped[int] = mapped_column(Integer)
+    # Ortak saatlerin konabileceği günler: Day.index listesi.
+    day_indexes: Mapped[list] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    section_a: Mapped[Section] = relationship(foreign_keys=[section_a_id])
+    section_b: Mapped[Section] = relationship(foreign_keys=[section_b_id])
+
+
 class Timetable(Base, SoftDelete):
     __tablename__ = "timetables"
 
@@ -481,9 +513,18 @@ class Assignment(Base):
     )
     period_id: Mapped[int] = mapped_column(ForeignKey("periods.id", ondelete="CASCADE"))
     is_locked: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Birleştirme kuralıyla ortak okutulan saat: bu satır `entry`nin şubesiyle
+    # birlikte `merged_entry`nin şubesini de doldurur (aynı öğretmen, aynı
+    # ders). NULL = sıradan saat.
+    merged_entry_id: Mapped[int | None] = mapped_column(
+        ForeignKey("curriculum_entries.id", ondelete="SET NULL")
+    )
 
     timetable: Mapped[Timetable] = relationship(back_populates="assignments")
-    entry: Mapped[CurriculumEntry] = relationship()
+    entry: Mapped[CurriculumEntry] = relationship(foreign_keys=[curriculum_entry_id])
+    merged_entry: Mapped[CurriculumEntry | None] = relationship(
+        foreign_keys=[merged_entry_id]
+    )
     period: Mapped[Period] = relationship()
 
 
