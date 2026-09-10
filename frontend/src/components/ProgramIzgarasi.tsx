@@ -176,10 +176,13 @@ export default function ProgramIzgarasi({
   menuAc?: (e: { clientX: number; clientY: number }, hucre: Hucre) => void;
 }) {
   const aktifGunler = gunler.filter((g) => g.is_active);
-  const enFazla = Math.max(
-    0,
-    ...aktifGunler.map((g) => Math.max(0, ...g.periods.map((p) => p.index + 1))),
-  );
+  // Satırlar ders saatleridir. Teneffüs ve öğle arası satır değildir: en az bir
+  // günde ders olan dizinler sırayla numaralanır.
+  const satirlar = [
+    ...new Set(
+      aktifGunler.flatMap((g) => g.periods.filter((p) => !p.is_break).map((p) => p.index)),
+    ),
+  ].sort((a, b) => a - b);
 
   const benimkiler = hucreler.filter((h) =>
     bakis === "sube" ? subeyeAit(h, anahtar) : h.teacher_name === anahtar,
@@ -198,7 +201,7 @@ export default function ProgramIzgarasi({
   function saatAraligi(index: number): string | null {
     for (const g of aktifGunler) {
       const p = g.periods.find((x) => x.index === index);
-      if (p?.start_time && p?.end_time) {
+      if (p && !p.is_break && p.start_time && p.end_time) {
         return `${p.start_time.slice(0, 5)}–${p.end_time.slice(0, 5)}`;
       }
     }
@@ -230,13 +233,13 @@ export default function ProgramIzgarasi({
           </tr>
         </thead>
         <tbody>
-          {Array.from({ length: enFazla }, (_, i) => {
+          {satirlar.map((i, sira) => {
             const aralik = saatAraligi(i);
             return (
               <tr key={i}>
                 <th className="border border-cizgi bg-yuzey-alt px-1 py-1 text-center align-middle">
                   <span className="sayisal block text-[12px] font-semibold text-murekkep-yumusak">
-                    {i + 1}.
+                    {sira + 1}.
                   </span>
                   {aralik && (
                     <span className="sayisal block font-mono text-[9px] leading-tight text-murekkep-silik">
@@ -246,22 +249,13 @@ export default function ProgramIzgarasi({
                 </th>
                 {aktifGunler.map((g) => {
                   const p: DersSaati | undefined = g.periods.find((x) => x.index === i);
-                  if (!p) {
+                  // Bu günde o dizin yoksa ya da aradaysa: ders hücresi değil.
+                  if (!p || p.is_break) {
                     return (
                       <td
                         key={g.id}
                         className="h-14 border border-cizgi bg-[repeating-linear-gradient(45deg,#f8fafc,#f8fafc_6px,#f1f5f9_6px,#f1f5f9_12px)]"
                       />
-                    );
-                  }
-                  if (p.is_break) {
-                    return (
-                      <td
-                        key={g.id}
-                        className="h-14 border border-cizgi bg-uyari-zemin text-center text-[10px] font-medium text-uyari"
-                      >
-                        {p.is_lunch ? "öğle arası" : "teneffüs"}
-                      </td>
                     );
                   }
                   const h = yerlesim.get(`${g.index}:${i}`);

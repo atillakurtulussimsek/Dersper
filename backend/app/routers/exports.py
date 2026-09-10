@@ -24,8 +24,14 @@ BAKIS = {"sube": "Şube", "ogretmen": "Öğretmen"}
 DUZEN = {"ayri": "Ayrı sayfalar", "carsaf": "Çarşaf liste"}
 
 
+def _ders_indexleri(gun: Day) -> list[int]:
+    """Günün ders saati dizinleri, sırayla. Teneffüs ve öğle arası çıktıda yer almaz:
+    ders programı ders saatlerini gösterir, aralar satır/sütun değildir."""
+    return sorted(p.index for p in gun.periods if not p.is_break)
+
+
 def _izgara_yapisi(db: Session, donem: Term) -> tuple[list[Day], list[int]]:
-    """Dönemin aktif günleri ve haftadaki en geniş ders saati dizini listesi."""
+    """Dönemin aktif günleri ve haftada en az bir günde ders olan dizinler."""
     gunler = [
         g for g in db.scalars(
             select(Day).options(selectinload(Day.periods))
@@ -33,10 +39,7 @@ def _izgara_yapisi(db: Session, donem: Term) -> tuple[list[Day], list[int]]:
             .order_by(Day.index)
         )
     ]
-    en_fazla = max(
-        (max((p.index for p in g.periods), default=-1) for g in gunler), default=-1
-    )
-    return gunler, list(range(en_fazla + 1))
+    return gunler, sorted({di for g in gunler for di in _ders_indexleri(g)})
 
 
 def _tablolar(db: Session, timetable_id: int, bakis: str) -> dict[str, dict]:
@@ -95,8 +98,8 @@ def _html(db: Session, timetable_id: int, bakis: str, donem: Term) -> str:
         for g in gunler:
             parcalar.append(f"<th>{_kacis(g.name)}</th>")
         parcalar.append("</tr></thead><tbody>")
-        for di in ders_indexleri:
-            parcalar.append(f"<tr><th>{di + 1}. ders</th>")
+        for sira, di in enumerate(ders_indexleri, start=1):
+            parcalar.append(f"<tr><th>{sira}. ders</th>")
             for g in gunler:
                 h = hucre_map.get((g.index, di))
                 if h is None:
@@ -152,7 +155,6 @@ def _carsaf_satiri(
     parcalar: list[list] = []
     for p in saatler:
         if p.is_break:
-            parcalar.append(["ogle" if p.is_lunch else "teneffus", None, 1])
             continue
         h = hucre_map.get((gun_index, p.index))
         if h is None:
@@ -184,9 +186,7 @@ def _carsaf_html(db: Session, timetable_id: int, bakis: str, donem: Term) -> str
     kapali_map = _kapali_saatler(db, donem, bakis)
 
     # Her günün kendi ders saati dizini listesi — günler farklı uzunlukta olabilir.
-    gun_saatleri = [
-        (g, sorted(p.index for p in g.periods)) for g in gunler
-    ]
+    gun_saatleri = [(g, _ders_indexleri(g)) for g in gunler]
     gun_saatleri = [(g, idx) for g, idx in gun_saatleri if idx]
     sutun_sayisi = sum(len(idx) for _, idx in gun_saatleri)
 
@@ -207,9 +207,7 @@ def _carsaf_html(db: Session, timetable_id: int, bakis: str, donem: Term) -> str
         "th{background:#f1f5f9;font-weight:600}",
         "th.ad{width:70px;text-align:left;padding-left:4px}",
         "td.ad{text-align:left;padding-left:4px;font-weight:600;background:#f8fafc}",
-        "td.tnf{background:#e2e8f0}",
         "td.kpl{background:#f1f5f9;color:#94a3b8}",
-        "td.ogl{background:#e2e8f0;color:#475569;font-weight:600}",
         "th.gun{border-left:2px solid #64748b}",
         "td.gunbas,th.gunbas{border-left:2px solid #64748b}",
         ".ders{font-weight:600;display:block;line-height:1.15}",
@@ -225,9 +223,9 @@ def _carsaf_html(db: Session, timetable_id: int, bakis: str, donem: Term) -> str
         p.append(f'<th class="gun" colspan="{len(idx)}">{_kacis(g.name)}</th>')
     p.append("</tr><tr>")
     for g, idx in gun_saatleri:
-        for konum, di in enumerate(idx):
+        for konum in range(len(idx)):
             sinif = ' class="gunbas"' if konum == 0 else ""
-            p.append(f"<th{sinif}>{di + 1}</th>")
+            p.append(f"<th{sinif}>{konum + 1}</th>")
     p.append("</tr></thead><tbody>")
 
     for anahtar, hucre_map in gruplar.items():
@@ -241,11 +239,7 @@ def _carsaf_html(db: Session, timetable_id: int, bakis: str, donem: Term) -> str
             ):
                 sinif = "gunbas" if konum == 0 else ""
                 genis = f' colspan="{genislik}"' if genislik > 1 else ""
-                if tur == "teneffus":
-                    p.append(f'<td class="tnf {sinif}"{genis}></td>')
-                elif tur == "ogle":
-                    p.append(f'<td class="ogl {sinif}"{genis}>öğle</td>')
-                elif tur == "kapali":
+                if tur == "kapali":
                     p.append(f'<td class="kpl {sinif}"{genis}>×</td>')
                 elif tur == "bos":
                     p.append(f'<td class="{sinif}"{genis}></td>')
@@ -348,7 +342,7 @@ def excel_cikti(
             h.font, h.alignment, h.border = Font(bold=True), ortala, kenar
             ws.column_dimensions[h.column_letter].width = 24
         for r, di in enumerate(ders_indexleri, start=2):
-            b = ws.cell(row=r, column=1, value=f"{di + 1}. ders")
+            b = ws.cell(row=r, column=1, value=f"{r - 1}. ders")
             b.font, b.alignment, b.border = Font(bold=True), ortala, kenar
             ws.row_dimensions[r].height = 32
             for c, g in enumerate(gunler, start=2):
@@ -369,7 +363,7 @@ def excel_cikti(
 def _carsaf_excel(wb, gunler, gruplar, bakis, kenar, ortala, Font, Alignment) -> None:
     """Tek sayfada toplu liste: satırlar şube/öğretmen, sütunlar gün × ders saati."""
     ws = wb.create_sheet(title="Çarşaf")
-    gun_saatleri = [(g, sorted(p.index for p in g.periods)) for g in gunler]
+    gun_saatleri = [(g, _ders_indexleri(g)) for g in gunler]
     gun_saatleri = [(g, idx) for g, idx in gun_saatleri if idx]
 
     ws.column_dimensions["A"].width = 18
@@ -389,8 +383,8 @@ def _carsaf_excel(wb, gunler, gruplar, bakis, kenar, ortala, Font, Alignment) ->
         if len(idx) > 1:
             ws.merge_cells(start_row=1, start_column=sutun,
                            end_row=1, end_column=sutun + len(idx) - 1)
-        for konum, di in enumerate(idx):
-            h = ws.cell(row=2, column=sutun + konum, value=di + 1)
+        for konum in range(len(idx)):
+            h = ws.cell(row=2, column=sutun + konum, value=konum + 1)
             h.font, h.alignment, h.border = Font(bold=True), ortala, kenar
             ws.column_dimensions[h.column_letter].width = 12
         sutun += len(idx)
@@ -402,12 +396,9 @@ def _carsaf_excel(wb, gunler, gruplar, bakis, kenar, ortala, Font, Alignment) ->
         sutun = 2
         for g, idx in gun_saatleri:
             for konum, di in enumerate(idx):
-                period = next((x for x in g.periods if x.index == di), None)
                 h = hucre_map.get((g.index, di))
                 metin = ""
-                if period is not None and period.is_break:
-                    metin = "—"
-                elif h is not None:
+                if h is not None:
                     alt = h.teacher_name if bakis == "sube" else h.section_name
                     metin = f"{h.subject_name}\n{alt}"
                 x = ws.cell(row=satir, column=sutun + konum, value=metin)

@@ -1215,3 +1215,27 @@ def test_ders_ve_sube_listelerinde_haftalik_yuk(yonetici):
     assert yonetici.get("/api/subjects").json()[0]["weekly_load"] == 5
     yukler = {s["name"]: s["weekly_load"] for s in yonetici.get("/api/sections").json()}
     assert yukler == {"9-A": 5, "9-B": 2}
+
+
+def test_ciktilarda_aralar_ders_saati_olarak_gorunmez(yonetici: TestClient):
+    """Öğle arası ve teneffüs ders programında satır/sütun değildir; dersler
+    aralar atlanarak 1'den numaralanır."""
+    _ogle_arasi_ekle(yonetici, sira=4)            # 8 saatin 5.'si öğle arası
+    d = yonetici.post("/api/subjects", json={"name": "Matematik", "short_code": "MAT"}).json()["id"]
+    o = yonetici.post("/api/teachers", json={"full_name": "Ara Öğretmeni"}).json()["id"]
+    s = yonetici.post("/api/sections", json={"name": "9-A"}).json()["id"]
+    yonetici.post("/api/curriculum", json={
+        "section_id": s, "subject_id": d, "teacher_id": o, "weekly_hours": 2, "max_per_day": 1,
+    })
+    pid = yonetici.post("/api/timetables", json={"name": "Aralı"}).json()["id"]
+    uret_ve_bekle(yonetici, pid)
+
+    ayri = yonetici.get(f"/api/timetables/{pid}/export/html?bakis=sube&duzen=ayri").text
+    assert "<th>7. ders</th>" in ayri and "<th>8. ders</th>" not in ayri
+
+    carsaf = yonetici.get(f"/api/timetables/{pid}/export/html?bakis=sube&duzen=carsaf").text
+    assert "öğle" not in carsaf and 'class="ogl' not in carsaf and 'class="tnf' not in carsaf
+    assert carsaf.count("<th>7</th>") == 5 and "<th>8</th>" not in carsaf
+
+    r = yonetici.get(f"/api/timetables/{pid}/export/xlsx?bakis=sube&duzen=carsaf")
+    assert r.status_code == 200

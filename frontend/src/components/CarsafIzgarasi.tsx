@@ -42,10 +42,9 @@ const EN_AZ_SUTUN = 28;
 type Parca =
   | { tur: "ders"; hucre: Hucre; kilitli: boolean; genislik: number; anahtar: string }
   | {
-      tur: "bos" | "teneffus" | "kapali";
+      tur: "bos" | "kapali";
       genislik: number;
       anahtar: string;
-      ogle?: boolean;
     };
 
 function ust(hucre: Hucre): string {
@@ -79,10 +78,7 @@ function gunuBol(
   const parcalar: Parca[] = [];
   for (const p of saatler) {
     const anahtar = String(p.id);
-    if (p.is_break) {
-      parcalar.push({ tur: "teneffus", genislik: 1, anahtar, ogle: p.is_lunch });
-      continue;
-    }
+    if (p.is_break) continue;               // aralar sütun değildir
     const h = hucreler.get(`${gunIndex}:${p.index}`);
     if (!h) {
       parcalar.push({
@@ -173,7 +169,11 @@ export default function CarsafIzgarasi({
   // Her günün kendi ders saatleri — günler farklı uzunlukta olabilir.
   const gunSaatleri = gunler
     .filter((g) => g.is_active)
-    .map((g) => ({ gun: g, saatler: [...g.periods].sort((a, b) => a.index - b.index) }))
+    // Aralar (teneffüs, öğle) sütun değildir: yalnız ders saatleri.
+    .map((g) => ({
+      gun: g,
+      saatler: g.periods.filter((p) => !p.is_break).sort((a, b) => a.index - b.index),
+    }))
     .filter((x) => x.saatler.length > 0);
   const sutunSayisi = gunSaatleri.reduce((t, x) => t + x.saatler.length, 0);
 
@@ -241,15 +241,15 @@ export default function CarsafIzgarasi({
                   key={p.id}
                   title={
                     p.start_time && p.end_time
-                      ? `${x.gun.name} · ${p.index + 1}. ders (${p.start_time.slice(0, 5)}–${p.end_time.slice(0, 5)})`
-                      : `${x.gun.name} · ${p.index + 1}. ders`
+                      ? `${x.gun.name} · ${konum + 1}. ders (${p.start_time.slice(0, 5)}–${p.end_time.slice(0, 5)})`
+                      : `${x.gun.name} · ${konum + 1}. ders`
                   }
                   className={clsx(
                     "sayisal sticky top-[30px] z-20 border border-cizgi bg-yuzey-alt px-0.5 py-1 font-mono text-[10px] font-medium text-murekkep-silik",
                     konum === 0 && "border-l-2 border-l-cizgi-guclu",
                   )}
                 >
-                  {p.index + 1}
+                  {konum + 1}
                 </th>
               )),
             )}
@@ -290,23 +290,6 @@ export default function CarsafIzgarasi({
                             bakis={bakis}
                             gunbas={gunbas}
                           />
-                        );
-                      }
-                      if (parca.tur === "teneffus") {
-                        return (
-                          <td
-                            key={parca.anahtar}
-                            title={parca.ogle ? "öğle arası" : "teneffüs"}
-                            className={clsx(
-                              "h-9 border border-cizgi text-center align-middle text-[9px] leading-none text-uyari",
-                              // Öğle arası günü ikiye böler: yarım gün sınırı
-                              // buradan geçer, o yüzden gözle seçilebilmeli.
-                              parca.ogle ? "bg-uyari-zemin font-medium" : "bg-uyari-zemin",
-                              gunbas && "border-l-2 border-l-cizgi-guclu",
-                            )}
-                          >
-                            {parca.ogle ? "öğle" : ""}
-                          </td>
                         );
                       }
                       if (parca.tur === "kapali") {
