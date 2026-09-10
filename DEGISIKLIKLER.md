@@ -5,6 +5,10 @@ Dersper'in geliştirme günlüğü. Her değişiklik tek cümleyle, en yeni sür
 öncesinde ikinci hane özellik, üçüncü hane düzeltme demektir. Uygulamanın
 sürümü arayüzde yan menünün altında yazar.
 
+## 0.23.2 — 2026-09-10
+
+- Program sayfasında tablo en üstte; "Program neden tamamlanamadı" ve "Yapay zeka yorumu" kartları tablonun altına indi ve katlanır, kapalı başlıyor (başlıkta "5 saat yerleşemedi" özeti). Üstte yalnızca canlı üretim bilgisi kalıyor.
+
 ## 0.23.1 — 2026-09-10
 
 - Program sayfasındaki Uyarılar kartı katlanır ve kapalı başlar; başlıkta "3 uyarı, 1 gizli" gibi özet görünür.

@@ -61,6 +61,8 @@ export default function TaniRaporu({ deneme }: { deneme: Deneme }) {
             : "Program neden tamamlanamadı"
         }
         aciklama={`${rapor.ozet.yerlesmeyen_toplam} ders saati yerleşemedi · ${rapor.sure_sn} sn`}
+        katlanir
+        ozet={`${rapor.ozet.yerlesmeyen_toplam} saat yerleşemedi`}
       >
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -232,6 +234,8 @@ export default function TaniRaporu({ deneme }: { deneme: Deneme }) {
         baslik="Yapay zeka yorumu"
         aciklama="Raporun sade Türkçe özeti ve öneriler"
         sag={<Sparkles className="h-4 w-4 text-murekkep-silik" />}
+        katlanir
+        ozet={deneme.ai_explanation ? "yorum hazır" : "kapalı"}
       >
         {deneme.ai_explanation ? (
           <Markdown metin={deneme.ai_explanation} />

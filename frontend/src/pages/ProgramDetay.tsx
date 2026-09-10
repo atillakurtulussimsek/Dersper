@@ -560,13 +560,6 @@ export default function ProgramDetay() {
 
       {surenUretim && <UretimIzleme deneme={surenUretim} sonsuz={program.endless_mode} />}
 
-      {/* Bulgular üretim sürerken de gösterilir: kullanıcı beklerken düzeltebilir. */}
-      {surenUretim?.report ? (
-        <TaniRaporu deneme={surenUretim} />
-      ) : (
-        gosterRapor && <TaniRaporu deneme={sonDeneme!} />
-      )}
-
       {hucreler.length > 0 && (
         <Kart className="overflow-hidden">
           <ProgramAracCubugu
@@ -656,6 +649,14 @@ export default function ProgramDetay() {
           suruklenen={suruklenen}
           menuAc={rafMenusu}
         />
+      )}
+
+      {/* Program tablosu en üstte; bulgular onun altında, katlanmış. Üretim
+       * sürerken de gösterilir: kullanıcı beklerken düzeltebilir. */}
+      {surenUretim?.report ? (
+        <TaniRaporu deneme={surenUretim} />
+      ) : (
+        gosterRapor && <TaniRaporu deneme={sonDeneme!} />
       )}
 
       {hucreler.length > 0 && id && <ProgramUyarilari timetableId={id} />}
