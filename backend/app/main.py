@@ -16,8 +16,8 @@ from fastapi.staticfiles import StaticFiles
 from app.config import settings
 from app.solver.arkaplan import yarim_kalanlari_isaretle
 from app.routers import (
-    ai_settings, auth, birlestirme, catalog, exports, public, terms, timegrid,
-    timetables, users,
+    ai_settings, auth, birlestirme, catalog, ders_gruplari, exports, public, terms,
+    timegrid, timetables, users,
 )
 
 @asynccontextmanager
@@ -48,7 +48,7 @@ app.add_middleware(
 
 for r in (auth.router, users.router, terms.router, timegrid.router, catalog.router,
           timetables.router, exports.router, ai_settings.router, public.router,
-          birlestirme.router):
+          birlestirme.router, ders_gruplari.router):
     app.include_router(r, prefix="/api")
 
 

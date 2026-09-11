@@ -5,17 +5,91 @@
  *  burada durur; yeni kısıt türleri de buraya kart olarak eklenir.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlarmClock, Building2, Merge, Shuffle, Trash2 } from "lucide-react";
+import { AlarmClock, Building2, Layers, Merge, Shuffle, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
 import { Alan, Buton, Girdi, Kart, SayfaBasligi, Secim, Uyari, Yukleniyor } from "../components/ui";
+import { CokluSecim } from "../components/CokluSecim";
 import { del, get, post, put } from "../lib/api";
 import { OLCUT_SECENEKLERI } from "../lib/cakisma";
 import { useListe } from "../lib/hooks";
 import type {
-  Bina, BirlestirmeCifti, BirlestirmeKurali, CakismaOlcutu, Donem, Gun, Sube,
+  Bina, BirlestirmeCifti, BirlestirmeKurali, CakismaOlcutu, Ders, DersGrubu, Donem, Gun,
+  Sube,
 } from "../lib/types";
+
+/** Ders grupları: "Matematik" = Temel Matematik + İleri Matematik + Geometri.
+ *  Aynı gruptaki dersler bir şubede arka arkaya gelmez. */
+function DersGruplari({ dersler }: { dersler: Ders[] }) {
+  const qc = useQueryClient();
+  const gruplar = useQuery({
+    queryKey: ["ders-gruplari"],
+    queryFn: () => get<DersGrubu[]>("/subject-groups"),
+  });
+  const [ad, setAd] = useState("");
+  const [secili, setSecili] = useState<number[]>([]);
+  const tazele = () => qc.invalidateQueries({ queryKey: ["ders-gruplari"] });
+  const ekle = useMutation({
+    mutationFn: () => post<DersGrubu>("/subject-groups", { name: ad, subject_ids: secili }),
+    onSuccess: () => { tazele(); setAd(""); setSecili([]); },
+  });
+  const sil = useMutation({
+    mutationFn: (id: number) => del(`/subject-groups/${id}`),
+    onSuccess: tazele,
+  });
+  // Zaten bir grupta olan dersler yeni gruba seçilemez.
+  const gruplu = new Set((gruplar.data ?? []).flatMap((g) => g.subject_ids));
+
+  return (
+    <Kart
+      baslik="Ders grupları"
+      aciklama="Benzer dersler (Temel Matematik, İleri Matematik, Geometri gibi) bir grupta toplanır; aynı gruptaki dersler bir şubede arka arkaya gelmez. “Aynı ders arka arkaya gelmesin” kuralından bağımsız çalışır, ikisi birlikte geçerlidir."
+      sag={<Layers className="h-4 w-4 text-murekkep-silik" />}
+    >
+      {(gruplar.data ?? []).length > 0 && (
+        <ul className="mb-5 divide-y divide-cizgi rounded-lg border border-cizgi">
+          {gruplar.data!.map((g) => (
+            <li key={g.id} className="flex items-start gap-3 px-4 py-3">
+              <div className="min-w-0 flex-1 text-sm">
+                <p className="font-medium text-murekkep">{g.name}</p>
+                <p className="mt-0.5 text-xs text-murekkep-silik">{g.subject_names.join(" · ")}</p>
+              </div>
+              <Buton tur="sade" onClick={() => sil.mutate(g.id)} yukleniyor={sil.isPending}
+                     title="Grubu kaldır" className="shrink-0">
+                <Trash2 className="h-4 w-4" />
+              </Buton>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Alan etiket="Grup adı">
+          <Girdi value={ad} onChange={(e) => setAd(e.target.value)} placeholder="örn. Matematik" />
+        </Alan>
+        <Alan etiket="Dersler" ipucu="En az iki ders. Bir ders yalnız bir grupta olabilir.">
+          <CokluSecim
+            secenekler={dersler
+              .filter((d) => !gruplu.has(d.id))
+              .map((d) => ({ id: d.id, etiket: d.name }))}
+            secili={secili}
+            degistir={setSecili}
+            ekleEtiketi="Ders ekle"
+            arama="Ders ara…"
+            bos="Ders seçin"
+          />
+        </Alan>
+      </div>
+      {ekle.error && <div className="mt-3"><Uyari tur="hata">{(ekle.error as Error).message}</Uyari></div>}
+      <div className="mt-4">
+        <Buton onClick={() => ekle.mutate()} disabled={!ad.trim() || secili.length < 2}
+               yukleniyor={ekle.isPending}>
+          Grubu ekle
+        </Buton>
+      </div>
+    </Kart>
+  );
+}
 
 /** Şube birleştirme kuralları: "9-A ile 9-B, Cumartesi, tam 4 saat".
  *  Hangi dersin ortak okutulacağını program üretimi seçer: iki şubede aynı
@@ -160,6 +234,7 @@ export default function Kisitlamalar() {
   const qc = useQueryClient();
   const donemler = useQuery({ queryKey: ["donemler"], queryFn: () => get<Donem[]>("/terms") });
   const subeler = useListe<Sube>("subeler", "/sections");
+  const dersler = useListe<Ders>("dersler", "/subjects");
   const binalar = useListe<Bina>("binalar", "/buildings");
   const aktifDonem = (donemler.data ?? []).find((d) => d.is_active);
 
@@ -221,6 +296,8 @@ export default function Kisitlamalar() {
           </span>
         </label>
       </Kart>
+
+      <DersGruplari dersler={(dersler.data ?? []).filter((d) => d.is_active)} />
 
       <SubeBirlestirme subeler={(subeler.data ?? []).filter((s) => s.is_active)} />
 

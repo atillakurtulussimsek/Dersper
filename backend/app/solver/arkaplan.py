@@ -30,7 +30,7 @@ from app.solver.engine import (
     CPSAT_STRATEJILERI, STRATEJILER, SolveInput, celiskiyi_bul, solve,
 )
 from app.solver.loader import (
-    dersleri_yukle, gun_sinirlarini_yukle, slotlari_yukle,
+    ders_gruplarini_yukle, dersleri_yukle, gun_sinirlarini_yukle, slotlari_yukle,
 )
 
 log = logging.getLogger("dersper.arkaplan")
@@ -95,6 +95,7 @@ def _dongu(run_id: int, term_id: int, dur: threading.Event) -> None:
             lessons = dersleri_yukle(db, donem, program.section_ids, slots,
                                      ek_bulgular=kural_bulgulari)
             gun_sinirlari = gun_sinirlarini_yukle(db, donem)
+            ders_gruplari = ders_gruplarini_yukle(db, donem)
             gereken = sum(l.weekly_hours for l in lessons if not l.ortak)
             # Ortak dersler (birleştirme kuralı): sanal kimlik -> (a, b) ebeveynleri.
             ortak_map = {l.entry_id: l.ortak_ebeveynler for l in lessons if l.ortak}
@@ -167,6 +168,7 @@ def _dongu(run_id: int, term_id: int, dur: threading.Event) -> None:
                     time_limit_seconds=sure, seed=deneme, esnek_gunluk=esnek,
                     strateji=strateji, ipucu=ipucu,
                     ayni_ders_ayri=donem.same_subject_apart,
+                    ders_gruplari=ders_gruplari,
                 )
                 # Yerel arama CP-SAT değil: kanıt üretmez, en iyiden başlayıp
                 # eksik saati düşürmeye çalışır.
@@ -232,6 +234,7 @@ def _dongu(run_id: int, term_id: int, dur: threading.Event) -> None:
                             bina_gecisi_engelle=donem.block_building_switch,
                             cakisma_olcutu=donem.conflict_basis.value,
                             ayni_ders_ayri=donem.same_subject_apart,
+                            ders_gruplari=ders_gruplari,
                         ), devam=lambda: not dur.is_set())
                     except Exception:
                         # Çözümleme başarısız olursa üretim sürsün; rapor yine

@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, selectinload
 from app import bloklar
 from app import cakisma
 from app.models import (
-    SectionMergeRule,
+    SectionMergeRule, SubjectGroup, SubjectGroupMember,
     Availability, CurriculumEntry, CurriculumEntrySection, Day, Section,
     SectionAvailability, Teacher,
     TeacherAvailability, Term,
@@ -65,6 +65,16 @@ def slotlari_yukle(db: Session, donem: Term) -> list[Slot]:
                 bitis=cakisma.dakikaya(p.end_time),
             ))
     return slots
+
+
+def ders_gruplarini_yukle(db: Session, donem: Term) -> dict[int, tuple[int, str]]:
+    """subject_id -> (grup kimliği, grup adı). Gruptaki dersler bir şubede
+    arka arkaya gelmez (bkz. engine kural 7b)."""
+    return {
+        m.subject_id: (m.group_id, g.name)
+        for g in db.scalars(select(SubjectGroup).where(SubjectGroup.term_id == donem.id))
+        for m in g.members
+    }
 
 
 def gun_sinirlarini_yukle(db: Session, donem: Term) -> dict[int, int]:

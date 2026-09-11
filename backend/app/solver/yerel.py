@@ -26,7 +26,7 @@ from collections import defaultdict
 from app import cakisma
 from app.solver.engine import (
     CEZA_BINA_GECISI, CEZA_BINA_GIDIP_GELME, CEZA_GUN_SINIRI, CEZA_YERLESMEYEN,
-    Lesson, Slot, SolveInput, SolveOutput, ayni_ders_gruplari, subeleri,
+    Lesson, Slot, SolveInput, SolveOutput, ayrilacak_gruplar, subeleri,
 )
 
 STATUS = "YEREL"
@@ -116,10 +116,10 @@ class _Durum:
 
         # Aynı ders, farklı öğretmen: li -> bitişik olamayacağı öbür satırlar.
         self.ayni_ders: dict[int, set[int]] = defaultdict(set)
-        if data.ayni_ders_ayri:
-            for uyeler in ayni_ders_gruplari(data.lessons).values():
-                for a in uyeler:
-                    self.ayni_ders[a].update(u for u in uyeler if u != a)
+        for _, uyeler in ayrilacak_gruplar(data.lessons, data.ayni_ders_ayri,
+                                           data.ders_gruplari):
+            for a in uyeler:
+                self.ayni_ders[a].update(u for u in uyeler if u != a)
 
         self.yer: list[tuple[int, ...] | None] = [None] * len(self.bloklar)
         self.ogretmen_dolu: dict[tuple[int, int], int] = defaultdict(int)

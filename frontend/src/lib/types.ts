@@ -182,6 +182,14 @@ export interface Hucre {
   merged_entry_id?: number | null;
 }
 
+/** Ders grubu: benzer dersler bir şubede arka arkaya gelmez. */
+export interface DersGrubu {
+  id: number;
+  name: string;
+  subject_ids: number[];
+  subject_names: string[];
+}
+
 /** Şube birleştirme kuralı: iki şube, izinli günler, tam saat. */
 export interface BirlestirmeCifti {
   subject_name: string;

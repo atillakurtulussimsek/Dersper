@@ -258,29 +258,39 @@ def uyarilari_hesapla(db: Session, program: Timetable) -> list[dict]:
                 "ignored": anahtar in gizlenen,
             })
 
-    if program.term.same_subject_apart:
-        uyarilar += _ayni_ders_uyarilari(gunluk, satirlar, gun_adlari, gizlenen)
+    from app.solver.loader import ders_gruplarini_yukle
+
+    gruplar = ders_gruplarini_yukle(db, program.term)
+    if program.term.same_subject_apart or gruplar:
+        uyarilar += _ayrilma_uyarilari(gunluk, satirlar, gun_adlari, gizlenen,
+                                       program.term.same_subject_apart, gruplar)
 
     return uyarilar
 
 
-def _ayni_ders_uyarilari(gunluk: dict, satirlar: dict, gun_adlari: dict,
-                         gizlenen: set[str]) -> list[dict]:
-    """Bir şubede aynı ders, farklı öğretmenlerin satırlarında arka arkaya.
-
-    Yalnız kural açıkken hesaplanır; çözücü buna izin vermez, elle taşımayla
-    oluşabilir.
-    """
-    # (şube, ders, gün) -> [(saat, entry_id)]
-    ortak: dict[tuple[str, str, int], list[tuple[int, int]]] = defaultdict(list)
+def _ayrilma_uyarilari(gunluk: dict, satirlar: dict, gun_adlari: dict,
+                       gizlenen: set[str], ayni_ders: bool,
+                       gruplar: dict[int, tuple[int, str]]) -> list[dict]:
+    """Bir şubede arka arkaya gelmemesi gereken satırlar bitişik yerleşmiş:
+    aynı ders farklı öğretmende (kural açıkken) ya da aynı ders grubu.
+    Çözücü buna izin vermez; elle taşımayla oluşabilir."""
+    # (şube, küme adı, gün) -> [(saat, entry_id)]
+    kumeler: dict[tuple[str, str, int], list[tuple[int, int]]] = defaultdict(list)
     for (entry_id, gun), saatler in gunluk.items():
         e = satirlar[entry_id]
+        adlar = []
+        if ayni_ders:
+            adlar.append(e.subject.name)
+        grup = gruplar.get(e.subject_id)
+        if grup is not None:
+            adlar.append(f"{grup[1]} grubu")
         for sb in e.sections:
-            for saat in saatler:
-                ortak[(sb.name, e.subject.name, gun)].append((saat, entry_id))
+            for ad in adlar:
+                for saat in saatler:
+                    kumeler[(sb.name, ad, gun)].append((saat, entry_id))
 
     uyarilar: list[dict] = []
-    for (sube, ders, gun), liste in sorted(ortak.items()):
+    for (sube, ad, gun), liste in sorted(kumeler.items()):
         if len({eid for _, eid in liste}) < 2:
             continue
         liste.sort()
@@ -288,18 +298,19 @@ def _ayni_ders_uyarilari(gunluk: dict, satirlar: dict, gun_adlari: dict,
                    if b[0] - a[0] == 1 and a[1] != b[1]]
         if not bitisik:
             continue
-        ogretmenler = sorted({satirlar[eid].teacher.full_name for _, eid in liste})
-        anahtar = f"aynider:{sube}:{ders}:{gun}"
+        dersler = sorted({f"{satirlar[eid].subject.name} ({satirlar[eid].teacher.full_name})"
+                          for _, eid in liste})
+        anahtar = f"ayrilma:{sube}:{ad}:{gun}"
         uyarilar.append({
             "key": anahtar,
             "tur": "bitisik",
-            "baslik": f"{sube} · {ders}: {gun_adlari[gun]} günü farklı öğretmenlerde arka arkaya",
-            "detay": (f"{', '.join(ogretmenler)} aynı dersi paylaşıyor ve saatleri "
-                      f"{gun_adlari[gun]} günü bitişik. \"Aynı ders arka arkaya "
-                      f"gelmesin\" kuralı açık; araya başka bir ders koyun."),
+            "baslik": f"{sube} · {ad}: {gun_adlari[gun]} günü arka arkaya",
+            "detay": (f"{'; '.join(dersler)} {gun_adlari[gun]} günü bitişik saatlerde. "
+                      f"Kısıtlamalar'daki kurala göre bunlar arka arkaya gelmemeli; "
+                      f"araya başka bir ders koyun."),
             "sube": sube,
-            "ders": ders,
-            "ogretmen": ", ".join(ogretmenler),
+            "ders": ad,
+            "ogretmen": "",
             "gun": gun_adlari[gun],
             "konan": len(bitisik) + 1,
             "sinir": 1,

@@ -411,6 +411,27 @@ class CurriculumCopyOut(BaseModel):
     skipped: list[str]
 
 
+# --- Ders grupları ---
+
+class SubjectGroupIn(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    subject_ids: list[int] = Field(min_length=2)
+
+    @model_validator(mode="after")
+    def _tekil(self) -> "SubjectGroupIn":
+        self.subject_ids = list(dict.fromkeys(self.subject_ids))
+        if len(self.subject_ids) < 2:
+            raise ValueError("Bir grupta en az iki farklı ders olmalı.")
+        return self
+
+
+class SubjectGroupOut(BaseModel):
+    id: int
+    name: str
+    subject_ids: list[int]
+    subject_names: list[str]
+
+
 # --- Şube birleştirme kuralı ---
 
 class MergeRuleIn(BaseModel):

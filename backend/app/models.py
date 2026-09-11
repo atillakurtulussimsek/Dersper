@@ -392,6 +392,37 @@ class CurriculumEntry(Base, SoftDelete):
         return bool(self.extra_sections)
 
 
+class SubjectGroup(Base):
+    """Benzer dersler öbeği: "Matematik" = Temel Matematik + İleri Matematik +
+    Geometri. Aynı öbekteki dersler bir şubede arka arkaya gelmez (kural 7b,
+    aynı ders–farklı öğretmen kuralıyla birlikte). Bir ders tek öbekte olur."""
+    __tablename__ = "subject_groups"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    term_id: Mapped[int] = mapped_column(ForeignKey("terms.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(String(100))
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    members: Mapped[list[SubjectGroupMember]] = relationship(
+        cascade="all, delete-orphan", lazy="selectin"
+    )
+
+
+class SubjectGroupMember(Base):
+    __tablename__ = "subject_group_members"
+    __table_args__ = (UniqueConstraint("subject_id", name="uq_subject_group_member"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    group_id: Mapped[int] = mapped_column(
+        ForeignKey("subject_groups.id", ondelete="CASCADE")
+    )
+    subject_id: Mapped[int] = mapped_column(
+        ForeignKey("subjects.id", ondelete="CASCADE")
+    )
+
+    subject: Mapped[Subject] = relationship(lazy="selectin")
+
+
 class SectionMergeRule(Base):
     """İki şubenin belirli günlerde birleştirilmesi kuralı.
 

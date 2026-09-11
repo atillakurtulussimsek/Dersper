@@ -199,6 +199,9 @@ class SolveInput:
     # Açıkken bir şubede aynı ders, farklı öğretmenlerde de olsa, arka arkaya
     # gelmez (bkz. kural 7 ve Term.same_subject_apart).
     ayni_ders_ayri: bool = False
+    # Ders grupları: subject_id -> (grup kimliği, adı). Aynı gruptaki dersler
+    # bir şubede arka arkaya gelmez; aynı ders kuralından bağımsız çalışır.
+    ders_gruplari: dict[int, tuple[int, str]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -370,14 +373,35 @@ def _ayni_ders_etiketi(sube_adi: str, ders_adi: str) -> Celisen:
     )
 
 
-def ayni_ders_gruplari(lessons: list[Lesson]) -> dict[tuple[int, str, str], list[int]]:
-    """(şube, ders) -> o dersi o şubede okutan satırların indeksleri.
-    Yalnız birden fazla satırı olan gruplar döner; ortak dersler dahil."""
-    gruplar: dict[tuple[int, str, str], list[int]] = {}
+def _ders_grubu_etiketi(sube_adi: str, grup_adi: str) -> Celisen:
+    return Celisen(
+        tur="ders_grubu",
+        metin=f"{sube_adi} · {grup_adi} grubundaki dersler arka arkaya gelmesin",
+        oneri=f"Kısıtlamalar sayfasından \"{grup_adi}\" ders grubunu düzenleyin ya da kaldırın",
+    )
+
+
+def ayrilacak_gruplar(
+    lessons: list[Lesson], ayni_ders_ayri: bool,
+    ders_gruplari: dict[int, tuple[int, str]] | None = None,
+) -> list[tuple[Celisen, list[int]]]:
+    """Bir şubede arka arkaya gelmemesi gereken satır kümeleri (etiketiyle).
+
+    İki kaynak: aynı ders (kural açıkken; farklı öğretmenlerin satırları) ve
+    ders grupları (Temel Matematik + İleri Matematik + Geometri gibi).
+    Yalnız birden fazla satırı olan kümeler döner; ortak dersler dahil.
+    """
+    kumeler: dict[tuple, tuple[Celisen, list[int]]] = {}
     for li, l in enumerate(lessons):
         for si, ad in sube_ciftleri(l):
-            gruplar.setdefault((si, ad, l.subject_name), []).append(li)
-    return {k: v for k, v in gruplar.items() if len(v) > 1}
+            if ayni_ders_ayri:
+                anahtar = ("ders", si, l.subject_name)
+                kumeler.setdefault(anahtar, (_ayni_ders_etiketi(ad, l.subject_name), []))[1].append(li)
+            grup = (ders_gruplari or {}).get(l.subject_id) if l.subject_id is not None else None
+            if grup is not None:
+                anahtar = ("grup", si, grup[0])
+                kumeler.setdefault(anahtar, (_ders_grubu_etiketi(ad, grup[1]), []))[1].append(li)
+    return [(etiket, uyeler) for etiket, uyeler in kumeler.values() if len(uyeler) > 1]
 
 
 def _gun_siniri_etiketi(teacher_id: int, ad: str, yarim_gun: int) -> Celisen:
@@ -468,7 +492,12 @@ def etiket_gruplari(data: SolveInput) -> list[tuple[Celisen, frozenset[Celisen]]
     ogretmen: dict[int, dict] = {}
     sube: dict[int, dict] = {}
     kurallar: dict[int, Celisen] = {}
-    ayni_gruplar = ayni_ders_gruplari(data.lessons) if data.ayni_ders_ayri else {}
+    # Satır -> arka arkaya gelmeme etiketleri (aynı ders, ders grubu).
+    ayrilma_etiketleri: dict[int, list[Celisen]] = {}
+    for etiket, uyeler in ayrilacak_gruplar(data.lessons, data.ayni_ders_ayri,
+                                            data.ders_gruplari):
+        for li in uyeler:
+            ayrilma_etiketleri.setdefault(data.lessons[li].entry_id, []).append(etiket)
     for l in data.lessons:
         if l.ortak:
             # Ortak dersin yükü ebeveynlerde sayılır; kural kendi öbeğidir.
@@ -478,10 +507,7 @@ def etiket_gruplari(data: SolveInput) -> list[tuple[Celisen, frozenset[Celisen]]
         m = _musaitlik_etiketi(l)
         if m is not None:
             etiketler.append(m)
-        if data.ayni_ders_ayri:
-            for si, ad in sube_ciftleri(l):
-                if (si, ad, l.subject_name) in ayni_gruplar:
-                    etiketler.append(_ayni_ders_etiketi(ad, l.subject_name))
+        etiketler.extend(ayrilma_etiketleri.get(l.entry_id, []))
         o = ogretmen.setdefault(l.teacher_id, {
             "ad": l.teacher_name, "yuk": 0, "acik": toplam - len(l.blocked_period_ids),
             "etiketler": set(),
@@ -936,11 +962,11 @@ def _calistir(
         else:
             model.Add(sum(ortak_saatler) <= ornek.kural_saat)
 
-    # (7b) Aynı ders, farklı öğretmen: bir şubede dersi paylaşan satırların
-    # saatleri arka arkaya gelmez. Gevşek modelde uygulanmaz (kural 7 gibi).
-    if data.ayni_ders_ayri and not gevsek:
-        for (si, sube_adi, ders_adi), uyeler in ayni_ders_gruplari(data.lessons).items():
-            etiket = _ayni_ders_etiketi(sube_adi, ders_adi)
+    # (7b) Aynı ders (farklı öğretmen) ve ders grupları: bir şubede birbirine
+    # benzeyen derslerin saatleri arka arkaya gelmez. Gevşek modelde uygulanmaz.
+    if not gevsek:
+        for etiket, uyeler in ayrilacak_gruplar(data.lessons, data.ayni_ders_ayri,
+                                                data.ders_gruplari):
             if not gecerli(etiket):
                 continue
             for gun_slotlari in gunler.values():

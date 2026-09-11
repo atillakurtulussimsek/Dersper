@@ -758,3 +758,31 @@ def test_ayni_ders_kurali_baska_dersi_etkilemez():
     b = ders(2, 1, 11, "Fizik", 2, gunluk=2)
     assert solve(SolveInput(slots=slots, lessons=[a, b], time_limit_seconds=5,
                             ayni_ders_ayri=True)).ok
+
+
+def test_ders_grubu_dersleri_bitisik_olmaz():
+    """Temel Matematik ve İleri Matematik aynı grupta: günde 4 saatlik ızgarada
+    2+2 saat ancak araya ders girerse sığar; başka ders yoksa sert model çözümsüz."""
+    from app.solver.engine import _calistir
+    slots = izgara(1, 4)
+    a = ders(1, 1, 10, "Temel Matematik", 2, gunluk=2)
+    a = type(a)(**{**a.__dict__, "subject_id": 1})
+    b = ders(2, 1, 11, "İleri Matematik", 2, gunluk=2)
+    b = type(b)(**{**b.__dict__, "subject_id": 2})
+    gruplar = {1: (7, "Matematik"), 2: (7, "Matematik")}
+    assert _calistir(SolveInput(slots=slots, lessons=[a, b], time_limit_seconds=5),
+                     gevsek=False).ok
+    sert = _calistir(SolveInput(slots=slots, lessons=[a, b], time_limit_seconds=5,
+                                ders_gruplari=gruplar), gevsek=False)
+    assert not sert.ok and sert.status_name == "INFEASIBLE"
+    # Araya girecek dört saatlik başka bir ders varsa (8 saatlik gün) kurulur:
+    # T F İ F T F İ F gibi — matematik saatlerinin hiçbiri bitişik değil.
+    slots6 = izgara(1, 8)
+    c = ders(3, 1, 12, "Fizik", 4, gunluk=4)
+    sonuc = _calistir(SolveInput(slots=slots6, lessons=[a, b, c], time_limit_seconds=5,
+                                 ders_gruplari=gruplar), gevsek=False)
+    assert sonuc.ok
+    konum = {s.period_id: s.period_index for s in slots6}
+    dizi = sorted((konum[p], e) for e, p in sonuc.placements)
+    for (_, x), (_, y) in zip(dizi, dizi[1:]):
+        assert {x, y} != {1, 2}, dizi

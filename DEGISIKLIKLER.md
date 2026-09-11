@@ -5,6 +5,10 @@ Dersper'in geliştirme günlüğü. Her değişiklik tek cümleyle, en yeni sür
 öncesinde ikinci hane özellik, üçüncü hane düzeltme demektir. Uygulamanın
 sürümü arayüzde yan menünün altında yazar.
 
+## 0.29.0 — 2026-09-11
+
+- Kısıtlamalar'a "Ders grupları": benzer dersler (Temel Matematik, İleri Matematik, Geometri) bir grupta toplanır ve aynı gruptaki dersler bir şubede arka arkaya gelmez. "Aynı ders arka arkaya gelmesin" kuralıyla birlikte çalışır. Çözücü, yerel arama ve çözümleme raporu grubu tanır; elle taşımayla bozulursa uyarı verir. Bir ders tek grupta olabilir.
+
 ## 0.28.0 — 2026-09-11
 
 - Kısıtlamalar'a "Aynı ders arka arkaya gelmesin" kuralı: bir dersin saatleri bir şubede birden fazla öğretmene bölünmüşse bu satırlar da birbirinden ayrılır, aynı gün bitişik saatlere düşmez. Çözücü, sonsuz moddaki yerel arama ve çözümleme raporu kuralı tanır; elle taşımayla bozulursa uyarı verir. Dönem kopyalanırken ayar taşınır.
