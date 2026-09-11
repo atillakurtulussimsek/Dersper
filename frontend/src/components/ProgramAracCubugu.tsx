@@ -53,6 +53,8 @@ export default function ProgramAracCubugu({
   ozet,
   yazdir,
   indir,
+  saatGoster,
+  saatGosterDegistir,
 }: {
   bakis: Bakis;
   bakisDegistir: (b: Bakis) => void;
@@ -67,6 +69,9 @@ export default function ProgramAracCubugu({
   ozet?: ReactNode;
   yazdir: () => void;
   indir: (bicim: "pdf" | "xlsx") => void;
+  /** Çarşafta satır adının yanında yerleşen saat sayısı: "Ad (34)". */
+  saatGoster?: boolean;
+  saatGosterDegistir?: (v: boolean) => void;
 }) {
   return (
     <div className="sticky top-0 z-20 -mx-5 -mt-5 mb-4 space-y-2.5 border-b border-cizgi bg-yuzey/95 px-5 py-3 backdrop-blur">
@@ -97,6 +102,18 @@ export default function ProgramAracCubugu({
             },
           ]}
         />
+
+        {duzen === "carsaf" && saatGosterDegistir && (
+          <label className="flex cursor-pointer items-center gap-1.5 text-xs text-murekkep-yumusak">
+            <input
+              type="checkbox"
+              checked={Boolean(saatGoster)}
+              onChange={(e) => saatGosterDegistir(e.target.checked)}
+              className="h-3.5 w-3.5 rounded border-cizgi-guclu"
+            />
+            Saat sayısı
+          </label>
+        )}
 
         <div className="ml-auto flex shrink-0 gap-1.5">
           <Buton tur="ikincil" onClick={yazdir} title="Yazdır">

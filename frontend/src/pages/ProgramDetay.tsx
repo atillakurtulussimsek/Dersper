@@ -76,6 +76,14 @@ export default function ProgramDetay() {
   const qc = useQueryClient();
   const [bakis, setBakis] = useState<Bakis>("sube");
   const [duzen, setDuzen] = useState<Duzen>("ayri");
+  // Çarşafta ad yanında saat sayısı; tercih tarayıcıda kalır.
+  const [saatGoster, setSaatGoster] = useState<boolean>(() => {
+    try { return localStorage.getItem("dersper_carsaf_saat") === "1"; } catch { return false; }
+  });
+  function saatGosterDegistir(v: boolean) {
+    setSaatGoster(v);
+    try { localStorage.setItem("dersper_carsaf_saat", v ? "1" : "0"); } catch { /* yok say */ }
+  }
   const [anahtar, setAnahtar] = useState<string | null>(null);
   const [hata, setHata] = useState<string | null>(null);
   const [suruklenen, setSuruklenen] = useState<Suruklenen | null>(null);
@@ -406,7 +414,7 @@ export default function ProgramDetay() {
   const program = izgaraSorgu.data!.timetable;
 
   function ciktiAdresi(bicim: "pdf" | "xlsx" | "html") {
-    return `/api/timetables/${id}/export/${bicim}?bakis=${bakis}&duzen=${duzen}`;
+    return `/api/timetables/${id}/export/${bicim}?bakis=${bakis}&duzen=${duzen}${saatGoster ? "&saat=true" : ""}`;
   }
 
   /** Çıktı uçları jeton ister; bu yüzden yeni sekme yerine fetch ile indirilir. */
@@ -570,6 +578,8 @@ export default function ProgramDetay() {
             }}
             duzen={duzen}
             duzenDegistir={setDuzen}
+            saatGoster={saatGoster}
+            saatGosterDegistir={saatGosterDegistir}
             anahtarlar={duzen === "ayri" ? anahtarlar : []}
             seciliAnahtar={seciliAnahtar}
             anahtarDegistir={setAnahtar}
@@ -601,6 +611,7 @@ export default function ProgramDetay() {
                 gunler={gunler.data ?? []}
                 hucreler={hucreler}
                 bakis={bakis}
+                saatGoster={saatGoster}
                 subeSirasi={izgaraSorgu.data?.section_names ?? []}
                 kapali={
                   bakis === "sube" ? kapali.data?.sections : kapali.data?.teachers

@@ -173,7 +173,14 @@ def _carsaf_satiri(
     return [(a, b, c) for a, b, c in parcalar]
 
 
-def _carsaf_html(db: Session, timetable_id: int, bakis: str, donem: Term) -> str:
+def _satir_adi(anahtar: str, hucre_map: dict, saat: bool) -> str:
+    """Çarşaf satır başlığı; istenirse yerleşen ders saati sayısıyla:
+    "Mustafa DİRİM (34)". Birleşik/ortak ders tek hücredir, bir kez sayılır."""
+    return f"{anahtar} ({len(hucre_map)})" if saat else anahtar
+
+
+def _carsaf_html(db: Session, timetable_id: int, bakis: str, donem: Term,
+                 saat: bool = False) -> str:
     """Tüm şubeleri (ya da öğretmenleri) tek sayfada gösteren toplu liste.
 
     Satırlar şube/öğretmen, sütunlar gün × ders saati. Hücrelerde yer dar
@@ -229,7 +236,7 @@ def _carsaf_html(db: Session, timetable_id: int, bakis: str, donem: Term) -> str
     p.append("</tr></thead><tbody>")
 
     for anahtar, hucre_map in gruplar.items():
-        p.append(f'<tr><td class="ad">{_kacis(anahtar)}</td>')
+        p.append(f'<tr><td class="ad">{_kacis(_satir_adi(anahtar, hucre_map, saat))}</td>')
         kapali = kapali_map.get(anahtar, set())
         for g, idx in gun_saatleri:
             saatler = [x for x in sorted(g.periods, key=lambda y: y.index)
@@ -268,9 +275,10 @@ def _kacis(s: str) -> str:
     return (s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
 
 
-def _icerik(db: Session, timetable_id: int, bakis: str, duzen: str, donem: Term) -> str:
+def _icerik(db: Session, timetable_id: int, bakis: str, duzen: str, donem: Term,
+            saat: bool = False) -> str:
     if duzen == "carsaf":
-        return _carsaf_html(db, timetable_id, bakis, donem)
+        return _carsaf_html(db, timetable_id, bakis, donem, saat)
     return _html(db, timetable_id, bakis, donem)
 
 
@@ -279,11 +287,14 @@ def html_cikti(
     timetable_id: int,
     bakis: str = Query("sube", pattern="^(sube|ogretmen)$"),
     duzen: str = Query("ayri", pattern="^(ayri|carsaf)$"),
+    # Çarşafta satır adının yanına yerleşen ders saati sayısı: "Ad (34)".
+    saat: bool = Query(False),
     db: Session = Depends(get_db),
     donem: Term = Depends(aktif_donem),
 ) -> Response:
     return Response(
-        _icerik(db, timetable_id, bakis, duzen, donem), media_type="text/html; charset=utf-8"
+        _icerik(db, timetable_id, bakis, duzen, donem, saat),
+        media_type="text/html; charset=utf-8",
     )
 
 
@@ -292,6 +303,7 @@ def pdf_cikti(
     timetable_id: int,
     bakis: str = Query("sube", pattern="^(sube|ogretmen)$"),
     duzen: str = Query("ayri", pattern="^(ayri|carsaf)$"),
+    saat: bool = Query(False),
     db: Session = Depends(get_db),
     donem: Term = Depends(aktif_donem),
 ) -> Response:
@@ -304,7 +316,7 @@ def pdf_cikti(
             f"(macOS: brew install pango). Ayrıntı: {e}. "
             "Bu arada HTML çıktısını tarayıcıdan yazdırabilirsiniz.",
         )
-    pdf = HTML(string=_icerik(db, timetable_id, bakis, duzen, donem)).write_pdf()
+    pdf = HTML(string=_icerik(db, timetable_id, bakis, duzen, donem, saat)).write_pdf()
     ad = f"ders-programi-{duzen}-{bakis}.pdf"
     return Response(pdf, media_type="application/pdf",
                     headers={"Content-Disposition": f'attachment; filename="{ad}"'})
@@ -315,6 +327,7 @@ def excel_cikti(
     timetable_id: int,
     bakis: str = Query("sube", pattern="^(sube|ogretmen)$"),
     duzen: str = Query("ayri", pattern="^(ayri|carsaf)$"),
+    saat: bool = Query(False),
     db: Session = Depends(get_db),
     donem: Term = Depends(aktif_donem),
 ) -> Response:
@@ -331,7 +344,7 @@ def excel_cikti(
     ortala = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
     if duzen == "carsaf":
-        _carsaf_excel(wb, gunler, gruplar, bakis, kenar, ortala, Font, Alignment)
+        _carsaf_excel(wb, gunler, gruplar, bakis, kenar, ortala, Font, Alignment, saat)
         return _excel_yanit(wb, f"carsaf-{bakis}")
 
     for anahtar, hucre_map in gruplar.items():
@@ -360,7 +373,8 @@ def excel_cikti(
     return _excel_yanit(wb, f"ders-programi-{bakis}")
 
 
-def _carsaf_excel(wb, gunler, gruplar, bakis, kenar, ortala, Font, Alignment) -> None:
+def _carsaf_excel(wb, gunler, gruplar, bakis, kenar, ortala, Font, Alignment,
+                  saat: bool = False) -> None:
     """Tek sayfada toplu liste: satırlar şube/öğretmen, sütunlar gün × ders saati."""
     ws = wb.create_sheet(title="Çarşaf")
     gun_saatleri = [(g, _ders_indexleri(g)) for g in gunler]
@@ -390,7 +404,7 @@ def _carsaf_excel(wb, gunler, gruplar, bakis, kenar, ortala, Font, Alignment) ->
         sutun += len(idx)
 
     for satir, (anahtar, hucre_map) in enumerate(gruplar.items(), start=3):
-        ad = ws.cell(row=satir, column=1, value=anahtar)
+        ad = ws.cell(row=satir, column=1, value=_satir_adi(anahtar, hucre_map, saat))
         ad.font, ad.border = Font(bold=True), kenar
         ws.row_dimensions[satir].height = 30
         sutun = 2

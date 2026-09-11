@@ -156,6 +156,7 @@ export default function CarsafIzgarasi({
   subeSirasi,
   kapali,
   ac,
+  saatGoster,
 }: {
   gunler: Gun[];
   hucreler: Hucre[];
@@ -166,6 +167,8 @@ export default function CarsafIzgarasi({
   kapali?: Record<number, number[]>;
   /** Satır adına tıklanınca çağrılır; ayrı sayfa görünümüne geçmek için. */
   ac?: (anahtar: string) => void;
+  /** Ad yanında yerleşen ders saati sayısı: "Mustafa DİRİM (34)". */
+  saatGoster?: boolean;
 }) {
   // Her günün kendi ders saatleri — günler farklı uzunlukta olabilir.
   const gunSaatleri = gunler
@@ -259,6 +262,8 @@ export default function CarsafIzgarasi({
         <tbody>
           {sirali.map(([ad, satir]) => {
             const kapaliSaatler = new Set(kapali?.[satir.id] ?? []);
+            // Birleşik/ortak ders tek hücredir; öğretmen için bir kez sayılır.
+            const etiket = saatGoster ? `${ad} (${satir.hucreler.size})` : ad;
             return (
               <tr key={ad} className="group">
                 <th
@@ -271,11 +276,11 @@ export default function CarsafIzgarasi({
                       title={`${ad} — ayrı sayfa görünümünde aç`}
                       className="block w-full truncate text-left text-[11px] font-semibold text-murekkep underline-offset-2 hover:underline"
                     >
-                      {ad}
+                      {etiket}
                     </button>
                   ) : (
                     <span className="block truncate text-[11px] font-semibold text-murekkep">
-                      {ad}
+                      {etiket}
                     </span>
                   )}
                 </th>

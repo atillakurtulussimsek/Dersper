@@ -5,6 +5,10 @@ Dersper'in geliştirme günlüğü. Her değişiklik tek cümleyle, en yeni sür
 öncesinde ikinci hane özellik, üçüncü hane düzeltme demektir. Uygulamanın
 sürümü arayüzde yan menünün altında yazar.
 
+## 0.27.0 — 2026-09-11
+
+- Çarşaf görünümünde "Saat sayısı" seçeneği: satır adının yanında yerleşen ders saati yazılır ("Mustafa DİRİM (34)"). Seçim tarayıcıda hatırlanır ve HTML/PDF/Excel çarşaf çıktılarına da yansır.
+
 ## 0.26.1 — 2026-09-11
 
 - Bina kuralı esnetilmek zorunda kalınca öğretmen artık gün içinde binalar arasında gidip gelmiyor: önce bir binadaki dersleri biter, sonra öbürüne geçer. Çözücü geçiş sayısını cezalandırır; ikinci ve sonraki geçişler çok daha pahalıdır ve ancak program başka türlü kurulamıyorsa olur. Uyarı da geçiş sırasını ("A → B → A") ve kaç kez değiştiğini yazar.

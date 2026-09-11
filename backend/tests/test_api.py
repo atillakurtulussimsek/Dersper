@@ -1239,3 +1239,11 @@ def test_ciktilarda_aralar_ders_saati_olarak_gorunmez(yonetici: TestClient):
 
     r = yonetici.get(f"/api/timetables/{pid}/export/xlsx?bakis=sube&duzen=carsaf")
     assert r.status_code == 200
+
+
+def test_carsaf_ciktisinda_ad_yaninda_saat_sayisi(yonetici: TestClient):
+    pid, _ = _carsaf_okul(yonetici)
+    yalin = yonetici.get(f"/api/timetables/{pid}/export/html?bakis=ogretmen&duzen=carsaf").text
+    saatli = yonetici.get(f"/api/timetables/{pid}/export/html?bakis=ogretmen&duzen=carsaf&saat=true").text
+    assert 'class="ad">Ayşe Yılmaz (2)</td>' in saatli
+    assert "(2)</td>" not in yalin
