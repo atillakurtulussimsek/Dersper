@@ -5,6 +5,10 @@ Dersper'in geliştirme günlüğü. Her değişiklik tek cümleyle, en yeni sür
 öncesinde ikinci hane özellik, üçüncü hane düzeltme demektir. Uygulamanın
 sürümü arayüzde yan menünün altında yazar.
 
+## 0.27.1 — 2026-09-11
+
+- Ayrı sayfa çıktısında (öğretmenlere/şubelere dağıtılan program) her kayıt tek A4 yatay sayfaya sığıyor: satır yüksekliği ders saati sayısına göre hesaplanır, hücre metni tek satırda kalır, uzun ders adları kısa koduyla yazılır. Gerçek programda 12 saatlik günlerle 25 öğretmen ve 33 şube taşmadan ölçüldü.
+
 ## 0.27.0 — 2026-09-11
 
 - Çarşaf görünümünde "Saat sayısı" seçeneği: satır adının yanında yerleşen ders saati yazılır ("Mustafa DİRİM (34)"). Seçim tarayıcıda hatırlanır ve HTML/PDF/Excel çarşaf çıktılarına da yansır.

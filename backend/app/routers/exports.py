@@ -76,18 +76,33 @@ def _html(db: Session, timetable_id: int, bakis: str, donem: Term) -> str:
     gunler, ders_indexleri = _izgara_yapisi(db, donem)
     gruplar = _tablolar(db, timetable_id, bakis)
 
+    # Her kayıt TEK sayfaya sığar: A4 yatay sayfanın içi 277×190 mm'dir.
+    # Başlıklar (~12 mm) ve gün satırı (8 mm) düşülür, kalan yükseklik ders
+    # satırlarına eşit bölünür; hücre metni tek satır ve kesilir (…), satırlar
+    # büyümez, sayfa taşmaz. Satır sayısı arttıkça yazı küçülür.
+    satir_sayisi = max(1, len(ders_indexleri))
+    # 188 − başlıklar 14 − gün satırı 8 − kenarlık payı 3 = 163 mm ders satırlarına.
+    satir_mm = min(13.0, 163.0 / satir_sayisi)
+    punto = max(7.0, min(11.0, satir_mm * 0.75))
     parcalar = [
         "<style>",
-        "@page{size:A4 landscape;margin:12mm}",
+        "@page{size:A4 landscape;margin:10mm}",
         "html{color-scheme:light}",
-        "body{font-family:'Helvetica Neue',Arial,sans-serif;font-size:11px;"
+        f"body{{font-family:'Helvetica Neue',Arial,sans-serif;font-size:{punto:g}px;"
         "color:#0f172a;background:#fff;margin:0}",
-        "h1{font-size:16px;margin:0 0 2px}h2{font-size:13px;margin:0 0 8px;color:#475569;font-weight:500}",
-        "section{page-break-after:always}section:last-child{page-break-after:auto}",
-        "table{border-collapse:collapse;width:100%}",
-        "th,td{border:1px solid #cbd5e1;padding:5px 6px;text-align:center;vertical-align:middle;height:34px}",
-        "th{background:#f1f5f9;font-weight:600}",
-        "td .ders{font-weight:600}td .alt{font-size:9px;color:#64748b}",
+        "h1{font-size:16px;margin:0 0 2px;line-height:1.2}"
+        "h2{font-size:12px;margin:0 0 6px;color:#475569;font-weight:500;line-height:1.2}",
+        "section{height:188mm;overflow:hidden;box-sizing:border-box;page-break-after:always}"
+        "section:last-child{page-break-after:auto}",
+        "table{border-collapse:collapse;width:100%;table-layout:fixed}",
+        "tr{page-break-inside:avoid}",
+        "th,td{border:1px solid #cbd5e1;padding:0 4px;text-align:center;"
+        "vertical-align:middle;overflow:hidden}",
+        f"th{{background:#f1f5f9;font-weight:600;height:8mm;white-space:nowrap}}",
+        f"td{{height:{satir_mm:.2f}mm}}",
+        "th:first-child{width:22mm}",
+        "td div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.25}",
+        f"td .ders{{font-weight:600}}td .alt{{font-size:{max(6.0, punto - 2):g}px;color:#64748b}}",
         "</style>",
     ]
     for anahtar, hucre_map in gruplar.items():
@@ -106,9 +121,14 @@ def _html(db: Session, timetable_id: int, bakis: str, donem: Term) -> str:
                     parcalar.append("<td></td>")
                 else:
                     alt = h.teacher_name if bakis == "sube" else h.section_name
+                    # Hücre tek satırdır; uzun ders adı (İnkılap Tarihi…) kesilmesin
+                    # diye kısa kodu varsa o yazılır.
+                    ders = (h.subject_short
+                            if len(h.subject_name) > 22 and h.subject_short
+                            else h.subject_name)
                     parcalar.append(
                         f'<td style="background:{h.subject_color}22">'
-                        f'<div class="ders">{_kacis(h.subject_name)}</div>'
+                        f'<div class="ders">{_kacis(ders)}</div>'
                         f'<div class="alt">{_kacis(alt)}</div></td>'
                     )
             parcalar.append("</tr>")
