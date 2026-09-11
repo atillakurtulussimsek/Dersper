@@ -5,6 +5,11 @@ Dersper'in geliştirme günlüğü. Her değişiklik tek cümleyle, en yeni sür
 öncesinde ikinci hane özellik, üçüncü hane düzeltme demektir. Uygulamanın
 sürümü arayüzde yan menünün altında yazar.
 
+## 0.28.0 — 2026-09-11
+
+- Kısıtlamalar'a "Aynı ders arka arkaya gelmesin" kuralı: bir dersin saatleri bir şubede birden fazla öğretmene bölünmüşse bu satırlar da birbirinden ayrılır, aynı gün bitişik saatlere düşmez. Çözücü, sonsuz moddaki yerel arama ve çözümleme raporu kuralı tanır; elle taşımayla bozulursa uyarı verir. Dönem kopyalanırken ayar taşınır.
+- Dönemin adını ya da tarihlerini değiştiren istek artık kural ayarlarını (bina geçişi, çakışma ölçütü, şube sırası) sıfırlamıyor.
+
 ## 0.27.1 — 2026-09-11
 
 - Ayrı sayfa çıktısında (öğretmenlere/şubelere dağıtılan program) her kayıt tek A4 yatay sayfaya sığıyor: satır yüksekliği ders saati sayısına göre hesaplanır, hücre metni tek satırda kalır, uzun ders adları kısa koduyla yazılır. Gerçek programda 12 saatlik günlerle 25 öğretmen ve 33 şube taşmadan ölçüldü.

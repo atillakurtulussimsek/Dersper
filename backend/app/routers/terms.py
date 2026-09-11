@@ -91,7 +91,7 @@ def donem_olustur(
     Izgara olmadan müsaitlik işaretlenemez ve ders yerleştirilemez; bu yüzden
     Pazartesi–Cuma, günde 8 ders saatlik düzenlenebilir bir iskelet kurulur.
     """
-    donem = Term(institution_id=inst.id, **payload.model_dump())
+    donem = Term(institution_id=inst.id, **payload.alanlar())
     db.add(donem)
     db.flush()
     varsayilan_izgara(db, donem)
@@ -109,7 +109,7 @@ def donem_guncelle(
     inst: Institution = Depends(aktif_kurum),
 ) -> TermOut:
     donem = _getir(db, term_id, inst)
-    for alan, deger in payload.model_dump().items():
+    for alan, deger in payload.alanlar().items():
         setattr(donem, alan, deger)
     db.commit()
     db.refresh(donem)

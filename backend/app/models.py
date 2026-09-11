@@ -136,6 +136,12 @@ class Term(Base, SoftDelete):
         Enum(SectionOrder), default=SectionOrder.AD,
         server_default=SectionOrder.AD.name,
     )
+    # Açıkken bir şubede aynı ders, FARKLI öğretmenlerde de olsa, arka arkaya
+    # gelmez. (Aynı satırın blokları için bu zaten kuraldır; bu ayar dersi
+    # paylaşan öğretmenlerin satırlarını da birbirinden ayırır.)
+    same_subject_apart: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="0"
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 

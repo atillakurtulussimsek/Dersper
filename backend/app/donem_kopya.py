@@ -54,6 +54,7 @@ def donemi_kopyala(
         block_building_switch=kaynak.block_building_switch,
         conflict_basis=kaynak.conflict_basis,
         section_order=kaynak.section_order,
+        same_subject_apart=kaynak.same_subject_apart,
     )
     db.add(yeni)
     db.flush()

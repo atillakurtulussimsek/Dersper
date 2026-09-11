@@ -733,3 +733,28 @@ def test_kucuk_modelde_varsayim_yolu_calisir():
                                             time_limit_seconds=5))
     assert sonuc and sonuc[0].tur in ("musaitlik", "yuk")
     assert sonuc[0].tek_basina_yeterli in (True, False, None)
+
+
+def test_ayni_ders_farkli_ogretmenlerde_bitisik_olmaz():
+    """Matematik 2 saat Ayşe'de, 2 saat Mehmet'te; günde 4 saat.
+    Kural kapalı: a b a b sığar. Açık: hiçbir dizilim sığmaz (a a da yasak, a b de)."""
+    slots = izgara(1, 4)
+    a = ders(1, 1, 10, "Matematik", 2, gunluk=2)
+    b = ders(2, 1, 11, "Matematik", 2, gunluk=2)
+    assert solve(SolveInput(slots=slots, lessons=[a, b], time_limit_seconds=5)).ok
+    from app.solver.engine import _calistir
+    girdi = SolveInput(slots=slots, lessons=[a, b], time_limit_seconds=5, ayni_ders_ayri=True)
+    sert = _calistir(girdi, gevsek=False)
+    assert not sert.ok and sert.status_name == "INFEASIBLE"
+    # Tam akış: sert model kanıtlı çözümsüz; gevşek model kuralı bırakıp
+    # yerleştirir (kural 7 gibi), ihlal uyarı olarak görünür.
+    sonuc = solve(girdi)
+    assert sonuc.proven_infeasible
+
+
+def test_ayni_ders_kurali_baska_dersi_etkilemez():
+    slots = izgara(1, 4)
+    a = ders(1, 1, 10, "Matematik", 2, gunluk=2)
+    b = ders(2, 1, 11, "Fizik", 2, gunluk=2)
+    assert solve(SolveInput(slots=slots, lessons=[a, b], time_limit_seconds=5,
+                            ayni_ders_ayri=True)).ok

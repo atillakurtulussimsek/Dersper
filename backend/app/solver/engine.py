@@ -17,6 +17,9 @@ Sert kısıtlar (v1):
   6. Aynı ders bir şubede günde `max_per_day` saatten fazla olmaz.
   7. Aynı dersin iki bloğu arka arkaya gelmez; aralarında başka bir ders olur.
      (Yoksa "2+2" deseni gün içinde 4 saatlik tek bloğa dönüşürdü.)
+     Dönem ayarı `ayni_ders_ayri` açıkken bu, dersi paylaşan FARKLI
+     öğretmenlerin satırları için de geçerlidir: bir şubede aynı ders iki
+     öğretmende de olsa arka arkaya gelmez.
   8. Teneffüslere ders konmaz.
   9. Kilitli yerleşimler yerinde kalır.
  10. Öğretmen haftada sınırından fazla gün okulda bulunmaz. Sınır yarım gün
@@ -193,6 +196,9 @@ class SolveInput:
     # Önceki en iyi yerleşim, ipucu olarak: (entry_id, period_id). Çözücü
     # buradan başlar; sonsuz modda her tur bir öncekinin üstüne koyar.
     ipucu: tuple[tuple[int, int], ...] = ()
+    # Açıkken bir şubede aynı ders, farklı öğretmenlerde de olsa, arka arkaya
+    # gelmez (bkz. kural 7 ve Term.same_subject_apart).
+    ayni_ders_ayri: bool = False
 
 
 @dataclass(frozen=True)
@@ -355,6 +361,25 @@ def _birlesme_etiketi(lesson: Lesson) -> Celisen:
     )
 
 
+def _ayni_ders_etiketi(sube_adi: str, ders_adi: str) -> Celisen:
+    return Celisen(
+        tur="ayni_ders",
+        metin=(f"{sube_adi} · {ders_adi}: farklı öğretmenlerin saatleri de "
+               f"arka arkaya gelmesin"),
+        oneri="Kısıtlamalar sayfasından \"aynı ders arka arkaya gelmesin\" kuralını kapatın",
+    )
+
+
+def ayni_ders_gruplari(lessons: list[Lesson]) -> dict[tuple[int, str, str], list[int]]:
+    """(şube, ders) -> o dersi o şubede okutan satırların indeksleri.
+    Yalnız birden fazla satırı olan gruplar döner; ortak dersler dahil."""
+    gruplar: dict[tuple[int, str, str], list[int]] = {}
+    for li, l in enumerate(lessons):
+        for si, ad in sube_ciftleri(l):
+            gruplar.setdefault((si, ad, l.subject_name), []).append(li)
+    return {k: v for k, v in gruplar.items() if len(v) > 1}
+
+
 def _gun_siniri_etiketi(teacher_id: int, ad: str, yarim_gun: int) -> Celisen:
     gun = f"{yarim_gun / 2:g}".replace(".", ",")
     return Celisen(
@@ -443,6 +468,7 @@ def etiket_gruplari(data: SolveInput) -> list[tuple[Celisen, frozenset[Celisen]]
     ogretmen: dict[int, dict] = {}
     sube: dict[int, dict] = {}
     kurallar: dict[int, Celisen] = {}
+    ayni_gruplar = ayni_ders_gruplari(data.lessons) if data.ayni_ders_ayri else {}
     for l in data.lessons:
         if l.ortak:
             # Ortak dersin yükü ebeveynlerde sayılır; kural kendi öbeğidir.
@@ -452,6 +478,10 @@ def etiket_gruplari(data: SolveInput) -> list[tuple[Celisen, frozenset[Celisen]]
         m = _musaitlik_etiketi(l)
         if m is not None:
             etiketler.append(m)
+        if data.ayni_ders_ayri:
+            for si, ad in sube_ciftleri(l):
+                if (si, ad, l.subject_name) in ayni_gruplar:
+                    etiketler.append(_ayni_ders_etiketi(ad, l.subject_name))
         o = ogretmen.setdefault(l.teacher_id, {
             "ad": l.teacher_name, "yuk": 0, "acik": toplam - len(l.blocked_period_ids),
             "etiketler": set(),
@@ -905,6 +935,23 @@ def _calistir(
             kisit.ekle(sum(ortak_saatler) == ornek.kural_saat, etiket)
         else:
             model.Add(sum(ortak_saatler) <= ornek.kural_saat)
+
+    # (7b) Aynı ders, farklı öğretmen: bir şubede dersi paylaşan satırların
+    # saatleri arka arkaya gelmez. Gevşek modelde uygulanmaz (kural 7 gibi).
+    if data.ayni_ders_ayri and not gevsek:
+        for (si, sube_adi, ders_adi), uyeler in ayni_ders_gruplari(data.lessons).items():
+            etiket = _ayni_ders_etiketi(sube_adi, ders_adi)
+            if not gecerli(etiket):
+                continue
+            for gun_slotlari in gunler.values():
+                for onceki, sonraki in zip(gun_slotlari, gun_slotlari[1:]):
+                    if not _ardisik_mi(slots, [onceki, sonraki]):
+                        continue
+                    for a in uyeler:
+                        for b in uyeler:
+                            if a != b and (a, onceki) in dolu and (b, sonraki) in dolu:
+                                kisit.ekle(dolu[(a, onceki)] + dolu[(b, sonraki)] <= 1,
+                                           etiket)
 
     # (2) Şube çakışması
     es_zamanlilar = cakisma.gruplar(

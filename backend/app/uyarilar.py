@@ -258,6 +258,53 @@ def uyarilari_hesapla(db: Session, program: Timetable) -> list[dict]:
                 "ignored": anahtar in gizlenen,
             })
 
+    if program.term.same_subject_apart:
+        uyarilar += _ayni_ders_uyarilari(gunluk, satirlar, gun_adlari, gizlenen)
+
+    return uyarilar
+
+
+def _ayni_ders_uyarilari(gunluk: dict, satirlar: dict, gun_adlari: dict,
+                         gizlenen: set[str]) -> list[dict]:
+    """Bir şubede aynı ders, farklı öğretmenlerin satırlarında arka arkaya.
+
+    Yalnız kural açıkken hesaplanır; çözücü buna izin vermez, elle taşımayla
+    oluşabilir.
+    """
+    # (şube, ders, gün) -> [(saat, entry_id)]
+    ortak: dict[tuple[str, str, int], list[tuple[int, int]]] = defaultdict(list)
+    for (entry_id, gun), saatler in gunluk.items():
+        e = satirlar[entry_id]
+        for sb in e.sections:
+            for saat in saatler:
+                ortak[(sb.name, e.subject.name, gun)].append((saat, entry_id))
+
+    uyarilar: list[dict] = []
+    for (sube, ders, gun), liste in sorted(ortak.items()):
+        if len({eid for _, eid in liste}) < 2:
+            continue
+        liste.sort()
+        bitisik = [(a, b) for a, b in zip(liste, liste[1:])
+                   if b[0] - a[0] == 1 and a[1] != b[1]]
+        if not bitisik:
+            continue
+        ogretmenler = sorted({satirlar[eid].teacher.full_name for _, eid in liste})
+        anahtar = f"aynider:{sube}:{ders}:{gun}"
+        uyarilar.append({
+            "key": anahtar,
+            "tur": "bitisik",
+            "baslik": f"{sube} · {ders}: {gun_adlari[gun]} günü farklı öğretmenlerde arka arkaya",
+            "detay": (f"{', '.join(ogretmenler)} aynı dersi paylaşıyor ve saatleri "
+                      f"{gun_adlari[gun]} günü bitişik. \"Aynı ders arka arkaya "
+                      f"gelmesin\" kuralı açık; araya başka bir ders koyun."),
+            "sube": sube,
+            "ders": ders,
+            "ogretmen": ", ".join(ogretmenler),
+            "gun": gun_adlari[gun],
+            "konan": len(bitisik) + 1,
+            "sinir": 1,
+            "ignored": anahtar in gizlenen,
+        })
     return uyarilar
 
 

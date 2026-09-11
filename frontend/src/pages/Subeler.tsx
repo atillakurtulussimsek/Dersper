@@ -56,6 +56,7 @@ export default function Subeler() {
         ends_on: aktifDonem!.ends_on,
         block_building_switch: aktifDonem!.block_building_switch,
         conflict_basis: aktifDonem!.conflict_basis,
+        same_subject_apart: aktifDonem!.same_subject_apart,
         section_order: secilen,
       }),
     onSuccess: () => {

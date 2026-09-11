@@ -166,6 +166,7 @@ def _dongu(run_id: int, term_id: int, dur: threading.Event) -> None:
                     bosluk_politikasi=program.gap_policy.value,
                     time_limit_seconds=sure, seed=deneme, esnek_gunluk=esnek,
                     strateji=strateji, ipucu=ipucu,
+                    ayni_ders_ayri=donem.same_subject_apart,
                 )
                 # Yerel arama CP-SAT değil: kanıt üretmez, en iyiden başlayıp
                 # eksik saati düşürmeye çalışır.
@@ -230,6 +231,7 @@ def _dongu(run_id: int, term_id: int, dur: threading.Event) -> None:
                             ogretmen_yarim_gun=gun_sinirlari,
                             bina_gecisi_engelle=donem.block_building_switch,
                             cakisma_olcutu=donem.conflict_basis.value,
+                            ayni_ders_ayri=donem.same_subject_apart,
                         ), devam=lambda: not dur.is_set())
                     except Exception:
                         # Çözümleme başarısız olursa üretim sürsün; rapor yine

@@ -5,7 +5,7 @@
  *  burada durur; yeni kısıt türleri de buraya kart olarak eklenir.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlarmClock, Building2, Merge, Trash2 } from "lucide-react";
+import { AlarmClock, Building2, Merge, Shuffle, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -166,7 +166,9 @@ export default function Kisitlamalar() {
   // Dönem ayarı PUT tüm alanları yazar; bir kuralı değiştirirken öbürleri
   // olduğu gibi gönderilir.
   const ayar = useMutation({
-    mutationFn: (yama: Partial<Pick<Donem, "block_building_switch" | "conflict_basis">>) =>
+    mutationFn: (
+      yama: Partial<Pick<Donem, "block_building_switch" | "conflict_basis" | "same_subject_apart">>,
+    ) =>
       put<Donem>(`/terms/${aktifDonem!.id}`, {
         name: aktifDonem!.name,
         starts_on: aktifDonem!.starts_on,
@@ -174,6 +176,7 @@ export default function Kisitlamalar() {
         block_building_switch: aktifDonem!.block_building_switch,
         conflict_basis: aktifDonem!.conflict_basis,
         section_order: aktifDonem!.section_order,
+        same_subject_apart: aktifDonem!.same_subject_apart,
         ...yama,
       }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["donemler"] }),
@@ -192,6 +195,32 @@ export default function Kisitlamalar() {
       />
 
       {ayar.error && <Uyari tur="hata">{(ayar.error as Error).message}</Uyari>}
+
+      <Kart
+        baslik="Aynı ders arka arkaya gelmesin"
+        aciklama="Bir dersin saatleri bir şubede birden fazla öğretmene bölünmüşse (örneğin Matematik'in 3 saati bir, 2 saati başka öğretmende) bu satırlar birbirinden bağımsız yerleşir ve aynı gün bitişik saatlere düşebilir."
+        sag={<Shuffle className="h-4 w-4 text-murekkep-silik" />}
+      >
+        <label className="flex cursor-pointer items-start gap-3">
+          <input
+            type="checkbox"
+            checked={aktifDonem.same_subject_apart}
+            disabled={ayar.isPending}
+            onChange={(e) => ayar.mutate({ same_subject_apart: e.target.checked })}
+            className="mt-0.5 h-4 w-4 rounded border-cizgi-guclu"
+          />
+          <span className="text-sm">
+            <span className="font-medium text-murekkep">
+              Aynı ders, farklı öğretmenlerde de olsa, bir şubede arka arkaya gelmesin
+            </span>
+            <span className="mt-0.5 block text-murekkep-silik">
+              Aynı satırın blokları için bu zaten kuraldır; bu seçenek dersi paylaşan
+              öğretmenlerin saatlerini de ayırır. Sert kuraldır: program başka türlü
+              kurulamıyorsa çözümlemede adıyla görünür. Elle taşımayla bozulursa uyarı verir.
+            </span>
+          </span>
+        </label>
+      </Kart>
 
       <SubeBirlestirme subeler={(subeler.data ?? []).filter((s) => s.is_active)} />
 

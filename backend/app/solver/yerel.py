@@ -26,7 +26,7 @@ from collections import defaultdict
 from app import cakisma
 from app.solver.engine import (
     CEZA_BINA_GECISI, CEZA_BINA_GIDIP_GELME, CEZA_GUN_SINIRI, CEZA_YERLESMEYEN,
-    Lesson, Slot, SolveInput, SolveOutput, subeleri,
+    Lesson, Slot, SolveInput, SolveOutput, ayni_ders_gruplari, subeleri,
 )
 
 STATUS = "YEREL"
@@ -114,6 +114,13 @@ class _Durum:
             for L in serbest:
                 self.bloklar.append((li, L))
 
+        # Aynı ders, farklı öğretmen: li -> bitişik olamayacağı öbür satırlar.
+        self.ayni_ders: dict[int, set[int]] = defaultdict(set)
+        if data.ayni_ders_ayri:
+            for uyeler in ayni_ders_gruplari(data.lessons).values():
+                for a in uyeler:
+                    self.ayni_ders[a].update(u for u in uyeler if u != a)
+
         self.yer: list[tuple[int, ...] | None] = [None] * len(self.bloklar)
         self.ogretmen_dolu: dict[tuple[int, int], int] = defaultdict(int)
         self.sube_dolu: dict[tuple[int, int], int] = defaultdict(int)
@@ -165,8 +172,12 @@ class _Durum:
         # Aynı dersin başka bloğuyla bitişik olmasın.
         onceki = {si for si in range(len(self.slots)) if self.sonraki[si] in saatler}
         sonraki = {self.sonraki[saatler[-1]]} - {None}
+        ayni = self.ayni_ders.get(li, set())
         for obi, oyer in enumerate(self.yer):
-            if obi == bi or oyer is None or self.bloklar[obi][0] != li:
+            if obi == bi or oyer is None:
+                continue
+            oli = self.bloklar[obi][0]
+            if oli != li and oli not in ayni:
                 continue
             if set(oyer) & (onceki | sonraki):
                 return False

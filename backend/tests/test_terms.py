@@ -445,3 +445,17 @@ def test_ders_saati_silinince_yalnizca_onun_isareti_gider(yonetici: TestClient):
              yonetici.get(f"/api/sections/{v['sube']}/availability").json()}
     assert kalan == {pazartesi[0]["id"], pazartesi[1]["id"]}
     assert silinen not in kalan
+
+
+def test_ad_degisikligi_kurallari_sifirlamaz(yonetici):
+    d = yonetici.get("/api/terms").json()[0]
+    r = yonetici.put(f"/api/terms/{d['id']}", json={**d, "same_subject_apart": True,
+                                                    "block_building_switch": True})
+    assert r.status_code == 200, r.text
+    assert r.json()["same_subject_apart"] is True
+    # Yalnız ad gönderen istek kuralları korur.
+    r = yonetici.put(f"/api/terms/{d['id']}", json={"name": "Yeni Ad"})
+    assert r.status_code == 200, r.text
+    assert r.json()["name"] == "Yeni Ad"
+    assert r.json()["same_subject_apart"] is True
+    assert r.json()["block_building_switch"] is True

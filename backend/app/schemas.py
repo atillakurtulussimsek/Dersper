@@ -24,12 +24,22 @@ class TermIn(BaseModel):
     name: str = Field(min_length=1, max_length=150)
     starts_on: date | None = None
     ends_on: date | None = None
+    # Kural alanları: gönderilmezse (None) yeni kayıtta varsayılan kullanılır,
+    # güncellemede mevcut değer korunur. Böylece yalnız adı değiştiren bir
+    # istek kuralları sıfırlamaz.
     # Açıkken bir öğretmen bir günde tek binada ders verir.
-    block_building_switch: bool = False
+    block_building_switch: bool | None = None
     # Çakışma neye göre ölçülür: ızgaranın satırı mı, gerçek saat aralığı mı?
-    conflict_basis: ConflictBasis = ConflictBasis.DERS_SAATI
+    conflict_basis: ConflictBasis | None = None
     # Şubeler ada göre mi, elle verilen sırayla mı dizilir?
-    section_order: SectionOrder = SectionOrder.AD
+    section_order: SectionOrder | None = None
+    # Açıkken aynı ders bir şubede, farklı öğretmenlerde de olsa, arka arkaya gelmez.
+    same_subject_apart: bool | None = None
+
+    def alanlar(self) -> dict:
+        """Yalnızca gönderilen alanlar (None olanlar atlanır)."""
+        return {k: v for k, v in self.model_dump().items()
+                if v is not None or k in ("starts_on", "ends_on")}
 
 
 class TermOut(ORMModel):
@@ -40,6 +50,7 @@ class TermOut(ORMModel):
     block_building_switch: bool = False
     conflict_basis: ConflictBasis = ConflictBasis.DERS_SAATI
     section_order: SectionOrder = SectionOrder.AD
+    same_subject_apart: bool = False
     created_at: datetime
     is_active: bool = False
     # Dönemde tanımlı kayıt sayıları — listede özet göstermek için.
