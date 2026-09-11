@@ -26,6 +26,9 @@ Sert kısıtlar (v1):
  11. (İsteğe bağlı) Bir öğretmen bir günde tek binada ders verir. Binalar uzak
      olabildiği için gün içinde geçiş zordur; kural açıkken bir binanın
      dersleri bir güne toplanır. Binasız şubeler kuralın dışındadır.
+     Esnetilmek zorunda kalınırsa geçiş sayısı cezalandırılır: öğretmen önce
+     bir binadaki derslerini bitirir, sonra öbürüne geçer. İkinci ve sonraki
+     geçişler (gidip gelme) çok daha pahalıdır; ancak başka çare yoksa olur.
 
 Bunların üstünde bir de TERCİH vardır (kural değil): `bosluk_politikasi`.
 "siki" öğretmenin gün içindeki boşluklarını en aza indirir, "bosluklu" tam
@@ -62,6 +65,10 @@ AGIRLIK_BOSLUK = 1
 # Esnek kipte bir öğretmenin bir günde ikinci binaya geçmesinin bedeli.
 # Gün sınırı kadar ağır: ikisi de fiziksel/sözleşmesel bir engeli zorlar.
 CEZA_BINA_GECISI = 40
+# Aynı gün içinde İKİNCİ ve sonraki her geçişin (gidip gelme) ek bedeli.
+# Tek geçiş kabul edilebilir bir esnetmedir: önce bir bina, sonra öbürü.
+# Gidip gelmek ise ancak program başka türlü kurulamıyorsa olmalı.
+CEZA_BINA_GIDIP_GELME = 200
 # Esnek kipte öğretmenin gün sınırını her yarım günlük aşmasının bedeli.
 # Günlük tekrar sınırından ağır: o pedagojik bir tercih, bu ise öğretmenle
 # yapılmış bir anlaşma. Çözücü zorunlu kalmadıkça bu sınırı bozmamalı.
@@ -916,7 +923,8 @@ def _calistir(
     gun_asimlari = _gun_siniri(model, data, dolu, gunler, slots,
                                esnek=esnek_gunluk, kisit=kisit, gecerli=gecerli)
 
-    # (11) Bina kuralı: bir öğretmen bir günde tek binada ders verir.
+    # (11) Bina kuralı: bir öğretmen bir günde tek binada ders verir. Esnek
+    # kipte (ağırlık, geçiş sayısı) amaç terimleri döner.
     bina_asimlari = _bina_kurali(model, data, dolu, gunler, esnek=esnek_gunluk,
                                  kisit=kisit, gecerli=gecerli)
 
@@ -943,7 +951,7 @@ def _calistir(
         model.Minimize(
             sum(CEZA_GUNLUK_ASIM * v for v in asimlar.values())
             + sum(CEZA_GUN_SINIRI * v for v in gun_asimlari.values())
-            + sum(CEZA_BINA_GECISI * v for v in bina_asimlari.values())
+            + sum(agirlik * v for agirlik, v in bina_asimlari)
             + bosluk_yonu * AGIRLIK_BOSLUK * sum(bosluklar)
         )
 
@@ -1110,7 +1118,7 @@ def _bosluklar(
 def _bina_kurali(
     model, data: SolveInput, dolu: dict, gunler: dict[int, list[int]], *,
     esnek: bool, kisit=None, gecerli=None,
-) -> dict[tuple[int, int], cp_model.IntVar]:
+) -> list[tuple[int, cp_model.IntVar]]:
     """Bir öğretmen bir günde tek binada ders verir.
 
     Binalar birbirinden uzak olabildiği için gün içinde geçiş yapmak zordur;
@@ -1120,11 +1128,11 @@ def _bina_kurali(
     Binası olmayan şubelerin dersleri kuralın dışındadır: tek binalı kurumda
     ya da henüz bina atanmamış şubelerde yapay bir çakışma üretmemek için.
 
-    Esnek kipte ikinci bina yasak değil cezalıdır; (öğretmen, gün) başına
-    fazladan bina sayısı döner.
+    Esnek kipte geçiş yasak değil cezalıdır: (ağırlık, değişken) amaç
+    terimleri döner (bkz. _bina_gecisleri).
     """
     if not data.bina_gecisi_engelle:
-        return {}
+        return []
 
     # (öğretmen, bina) -> o binadaki ders indeksleri
     ogretmen_bina: dict[tuple[int, int], list[int]] = {}
@@ -1139,12 +1147,16 @@ def _bina_kurali(
     for tid, bid in ogretmen_bina:
         ogretmenler.setdefault(tid, set()).add(bid)
 
-    asimlar: dict[tuple[int, int], cp_model.IntVar] = {}
+    terimler: list[tuple[int, cp_model.IntVar]] = []
     for tid, binalar in ogretmenler.items():
         # Tek binada ders veren öğretmen zaten geçiş yapmaz.
         if len(binalar) < 2:
             continue
         for gi, gun_slotlari in gunler.items():
+            if esnek:
+                terimler.extend(_bina_gecisleri(model, tid, gi, gun_slotlari,
+                                                sorted(binalar), ogretmen_bina, dolu))
+                continue
             gun_binalari = []
             for bid in sorted(binalar):
                 hucreler = [
@@ -1164,19 +1176,81 @@ def _bina_kurali(
 
             if len(gun_binalari) < 2:
                 continue
-            if esnek:
-                asim = model.NewIntVar(0, len(gun_binalari), f"binaasim_{tid}_{gi}")
-                model.Add(asim >= sum(gun_binalari) - 1)
-                asimlar[(tid, gi)] = asim
-            else:
-                etiket = _bina_etiketi(adlar.get(tid, "Öğretmen"))
-                if gecerli is None or gecerli(etiket):
-                    if kisit is None:
-                        model.Add(sum(gun_binalari) <= 1)
-                    else:
-                        kisit.ekle(sum(gun_binalari) <= 1, etiket)
+            etiket = _bina_etiketi(adlar.get(tid, "Öğretmen"))
+            if gecerli is None or gecerli(etiket):
+                if kisit is None:
+                    model.Add(sum(gun_binalari) <= 1)
+                else:
+                    kisit.ekle(sum(gun_binalari) <= 1, etiket)
 
-    return asimlar
+    return terimler
+
+
+def _bina_gecisleri(model, tid: int, gi: int, gun_slotlari: list[int],
+                    binalar: list[int], ogretmen_bina: dict, dolu: dict,
+                    ) -> list[tuple[int, cp_model.IntVar]]:
+    """Esnek kip: öğretmenin o gün kaç kez bina değiştirdiğini sayar.
+
+    Gün boyunca "son görülen bina" durumu taşınır: ders varsa dersin binası,
+    yoksa önceki durum. Bir derste bina, son görülenden farklıysa bu bir
+    geçiştir. Amaç terimleri: her geçiş CEZA_BINA_GECISI, ikinci ve sonraki
+    her geçiş ayrıca CEZA_BINA_GIDIP_GELME. Böylece "önce A'dakiler, sonra
+    B'dekiler" tek geçişle ucuz, A-B-A-B gidip gelmesi pahalıdır.
+    """
+    son_onceki: dict[int, cp_model.IntVar] = {}
+    gecisler: list[cp_model.IntVar] = []
+    for si in gun_slotlari:
+        simdi: dict[int, cp_model.IntVar] = {}
+        for bid in binalar:
+            hucreler = [dolu[(li, si)] for li in ogretmen_bina[(tid, bid)]
+                        if (li, si) in dolu]
+            if hucreler:
+                v = model.NewBoolVar(f"binada_{tid}_{gi}_{si}_{bid}")
+                model.Add(v == sum(hucreler))     # çakışma kuralı: en çok bir
+                simdi[bid] = v
+        if not simdi:
+            continue
+        herhangi = model.NewBoolVar(f"binada_{tid}_{gi}_{si}")
+        model.Add(herhangi == sum(simdi.values()))
+
+        if son_onceki:
+            g = model.NewBoolVar(f"binagecis_{tid}_{gi}_{si}")
+            for bid, v in simdi.items():
+                for cid, onceki in son_onceki.items():
+                    if cid != bid:
+                        # v ve onceki birlikte doğruysa geçiş var.
+                        model.AddBoolOr([v.Not(), onceki.Not(), g])
+            gecisler.append(g)
+
+        son: dict[int, cp_model.IntVar] = {}
+        for bid in binalar:
+            s = model.NewBoolVar(f"sonbina_{tid}_{gi}_{si}_{bid}")
+            v = simdi.get(bid)
+            onceki = son_onceki.get(bid)
+            # s = v VEYA (onceki VE herhangi değil)
+            if v is not None:
+                model.AddImplication(v, s)
+            if onceki is not None:
+                model.AddBoolOr([onceki.Not(), herhangi, s])
+            ust = [x for x in (v, onceki) if x is not None]
+            if not ust:
+                model.Add(s == 0)
+            else:
+                model.Add(s <= sum(ust))
+            if v is not None:
+                model.Add(s <= v + (1 - herhangi))
+            else:
+                model.Add(s <= 1 - herhangi)
+            son[bid] = s
+        son_onceki = son
+
+    if not gecisler:
+        return []
+    toplam = model.NewIntVar(0, len(gecisler), f"binagecis_{tid}_{gi}")
+    model.Add(toplam == sum(gecisler))
+    fazla = model.NewIntVar(0, len(gecisler), f"binagidipgelme_{tid}_{gi}")
+    model.Add(fazla >= toplam - 1)
+    return [(CEZA_BINA_GECISI, toplam), (CEZA_BINA_GIDIP_GELME, fazla)]
 
 
 def _gun_siniri(

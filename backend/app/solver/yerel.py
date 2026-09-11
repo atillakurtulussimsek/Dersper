@@ -25,11 +25,16 @@ from collections import defaultdict
 
 from app import cakisma
 from app.solver.engine import (
-    CEZA_BINA_GECISI, CEZA_GUN_SINIRI, CEZA_YERLESMEYEN, Lesson, Slot,
-    SolveInput, SolveOutput, subeleri,
+    CEZA_BINA_GECISI, CEZA_BINA_GIDIP_GELME, CEZA_GUN_SINIRI, CEZA_YERLESMEYEN,
+    Lesson, Slot, SolveInput, SolveOutput, subeleri,
 )
 
 STATUS = "YEREL"
+
+
+def bina_gecis_sayisi(binalar: list[int]) -> int:
+    """Gün içinde sırayla görülen binalarda kaç kez bina değişiyor."""
+    return sum(1 for a, b in zip(binalar, binalar[1:]) if a != b)
 
 
 class _Durum:
@@ -177,7 +182,8 @@ class _Durum:
                 toplam += CEZA_YERLESMEYEN * self.bloklar[bi][1]
         # Öğretmen gün sınırı ve bina geçişi.
         yarim: dict[int, set[tuple[int, bool]]] = defaultdict(set)
-        bina: dict[tuple[int, int], set[int]] = defaultdict(set)
+        # (öğretmen, gün) -> [(ders saati sırası, bina)]: geçişler sırayla sayılır.
+        bina: dict[tuple[int, int], list[tuple[int, int]]] = defaultdict(list)
         for bi, yer in enumerate(self.yer):
             if yer is None:
                 continue
@@ -186,14 +192,15 @@ class _Durum:
                 s = self.slots[si]
                 yarim[l.teacher_id].add((s.day_index, s.sabah))
                 if d.bina_gecisi_engelle and l.building_id is not None:
-                    bina[(l.teacher_id, s.day_index)].add(l.building_id)
+                    bina[(l.teacher_id, s.day_index)].append((s.period_index, l.building_id))
         for tid, sinir in d.ogretmen_yarim_gun.items():
             kullanilan = yarim.get(tid, set())
             gun_tavani = -(-sinir // 2)
             asim = max(0, len(kullanilan) - sinir) + max(0, len({g for g, _ in kullanilan}) - gun_tavani)
             toplam += CEZA_GUN_SINIRI * asim
-        for binalar in bina.values():
-            toplam += CEZA_BINA_GECISI * max(0, len(binalar) - 1)
+        for sira in bina.values():
+            gecis = bina_gecis_sayisi([b for _, b in sorted(sira)])
+            toplam += CEZA_BINA_GECISI * gecis + CEZA_BINA_GIDIP_GELME * max(0, gecis - 1)
         return toplam
 
     # --- hamleler ---

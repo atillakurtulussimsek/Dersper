@@ -113,8 +113,8 @@ def _bina_uyarilari(
 
     Binası olmayan şubeler sayılmaz — kural onları da kapsamıyor.
     """
-    # (öğretmen, gün) -> {bina adı}
-    gunluk: dict[tuple[int, int], set[str]] = defaultdict(set)
+    # (öğretmen, gün) -> [(ders saati sırası, bina adı)]
+    gunluk: dict[tuple[int, int], list[tuple[int, str]]] = defaultdict(list)
     ogretmenler: dict[int, object] = {}
     gun_adlari: dict[int, str] = {}
     for a in atamalar:
@@ -122,33 +122,42 @@ def _bina_uyarilari(
         bina = a.entry.section.building
         if konum is None or bina is None:
             continue
-        gun, _, gun_adi, _ = konum
-        gunluk[(a.entry.teacher_id, gun)].add(bina.name)
+        gun, saat, gun_adi, _ = konum
+        gunluk[(a.entry.teacher_id, gun)].append((saat, bina.name))
         ogretmenler[a.entry.teacher_id] = a.entry.teacher
         gun_adlari[gun] = gun_adi
 
     uyarilar: list[dict] = []
-    for (tid, gun), binalar in sorted(gunluk.items()):
+    for (tid, gun), sira in sorted(gunluk.items()):
+        binalar = {b for _, b in sira}
         if len(binalar) < 2:
             continue
+        dizi = [b for _, b in sorted(sira)]
+        gecis = sum(1 for a, b in zip(dizi, dizi[1:]) if a != b)
+        # Ardışık tekrarları at: "A, B, A" gibi okunsun.
+        yol = [b for i, b in enumerate(dizi) if i == 0 or b != dizi[i - 1]]
         ogretmen = ogretmenler[tid]
         anahtar = f"bina:{tid}:{gun}"
+        gidip_gelme = gecis > 1
         uyarilar.append({
             "key": anahtar,
             "tur": "bina_gecisi",
             "baslik": (f"{ogretmen.full_name}: {gun_adlari[gun]} günü "
-                       f"{len(binalar)} binada ders var"),
+                       + (f"{gecis} kez bina değiştiriyor" if gidip_gelme
+                          else f"{len(binalar)} binada ders var")),
             "detay": (
-                f"{', '.join(sorted(binalar))} binalarında ders verecek. Program "
-                f"başka türlü tamamlanamadığı için bina kuralı esnetildi. Dersleri "
-                f"binaya göre ayrı günlere toplamak için öğretmenin yükünü ya da "
-                f"müsaitliğini gözden geçirin."
+                f"Sıra: {' → '.join(yol)}. Program başka türlü tamamlanamadığı "
+                f"için bina kuralı esnetildi"
+                + (", üstelik önce bir binayı bitirip öbürüne geçmek de mümkün "
+                   "olmadı; öğretmen gün içinde gidip geliyor" if gidip_gelme else "")
+                + ". Dersleri binaya göre ayrı günlere toplamak için öğretmenin "
+                f"yükünü ya da müsaitliğini gözden geçirin."
             ),
             "sube": "",
             "ders": "",
             "ogretmen": ogretmen.full_name,
             "gun": gun_adlari[gun],
-            "konan": len(binalar),
+            "konan": gecis,
             "sinir": 1,
             "ignored": anahtar in gizlenen,
         })

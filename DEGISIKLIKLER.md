@@ -5,6 +5,10 @@ Dersper'in geliştirme günlüğü. Her değişiklik tek cümleyle, en yeni sür
 öncesinde ikinci hane özellik, üçüncü hane düzeltme demektir. Uygulamanın
 sürümü arayüzde yan menünün altında yazar.
 
+## 0.26.1 — 2026-09-11
+
+- Bina kuralı esnetilmek zorunda kalınca öğretmen artık gün içinde binalar arasında gidip gelmiyor: önce bir binadaki dersleri biter, sonra öbürüne geçer. Çözücü geçiş sayısını cezalandırır; ikinci ve sonraki geçişler çok daha pahalıdır ve ancak program başka türlü kurulamıyorsa olur. Uyarı da geçiş sırasını ("A → B → A") ve kaç kez değiştiğini yazar.
+
 ## 0.26.0 — 2026-09-10
 
 - Şube birleştirme kuralı (Kısıtlamalar sayfası): "9-A ile 9-B, Cumartesi, tam 4 saat" denir; hangi dersin ortak okutulacağını program üretimi seçer. İki şubede aynı öğretmenin verdiği aynı dersler eşlenir, çözücü programın kurulmasını sağlayan dağılımı bulur; ortak saat iki şubeyi ve öğretmeni aynı anda doldurur, iki dersin haftalık saatinden birer düşer, blok desenleri korunur. Ortak saatler programda "9-A + 9-B" olarak görünür; elle taşımada iki şube birden gözetilir; sürüm geçmişi ortak saatleri korur.

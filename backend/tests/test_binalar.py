@@ -231,3 +231,33 @@ def test_binalar_baska_kuruma_sizmaz(yonetici: TestClient, istemci: TestClient):
         "email": "oteki3@ornek.com", "password": "sifre1234"}).json()["access_token"]
     istemci.headers["Authorization"] = f"Bearer {jeton}"
     assert istemci.get("/api/buildings").json() == []
+
+
+# --- Esnetilince bile gidip gelme yok: önce bir bina, sonra öbürü ---
+
+def test_esnek_kipte_binalar_gun_icinde_gruplanir():
+    """Tek güne sığmak zorunda olan 8 saat, iki binada: A A A A B B B B gibi
+    tek geçişle yerleşmeli; A B A B gidip gelmesi olmamalı."""
+    from app.solver.engine import SolveInput, solve
+    from tests.test_engine import ders, izgara
+
+    slots = izgara(1, 8)
+    def binali(eid, sube, bina):
+        l = ders(eid, sube, 10, "Matematik", 2, desen="2", gunluk=2)
+        return type(l)(**{**l.__dict__, "building_id": bina})
+    dersler = [binali(1, 1, 100), binali(2, 2, 100), binali(3, 3, 200), binali(4, 4, 200)]
+    sonuc = solve(SolveInput(slots=slots, lessons=dersler, bina_gecisi_engelle=True,
+                             esnek_gunluk=True, time_limit_seconds=10))
+    assert sonuc.ok, sonuc.status_name
+    konum = {s.period_id: s.period_index for s in slots}
+    bina_by_entry = {1: "A", 2: "A", 3: "B", 4: "B"}
+    dizi = [bina_by_entry[e] for e, p in sorted(sonuc.placements, key=lambda x: konum[x[1]])]
+    gecis = sum(1 for a, b in zip(dizi, dizi[1:]) if a != b)
+    assert gecis == 1, dizi
+
+
+def test_yerel_ceza_gecis_sayar():
+    from app.solver.yerel import bina_gecis_sayisi
+    assert bina_gecis_sayisi([1, 1, 2, 2]) == 1
+    assert bina_gecis_sayisi([1, 2, 1, 2]) == 3
+    assert bina_gecis_sayisi([1, 1, 1]) == 0
