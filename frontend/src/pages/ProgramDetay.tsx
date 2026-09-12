@@ -15,7 +15,7 @@ import { Copy, Globe, Inbox, Infinity, Lock, LockOpen, MoveRight, Play, Redo2, U
 
 import { BaglamMenusu, HedefSecici, type MenuOgesi } from "../components/BaglamMenusu";
 import BekleyenDersler from "../components/BekleyenDersler";
-import CarsafIzgarasi from "../components/CarsafIzgarasi";
+import CarsafIzgarasi, { type Yogunluk } from "../components/CarsafIzgarasi";
 import GecmisCalistirmalar from "../components/GecmisCalistirmalar";
 import ProgramAracCubugu, { type Duzen, type PdfSecenek } from "../components/ProgramAracCubugu";
 import ProgramIzgarasi, { HucreIcerigi, type Bakis } from "../components/ProgramIzgarasi";
@@ -83,6 +83,15 @@ export default function ProgramDetay() {
   function saatGosterDegistir(v: boolean) {
     setSaatGoster(v);
     try { localStorage.setItem("dersper_carsaf_saat", v ? "1" : "0"); } catch { /* yok say */ }
+  }
+  // Çarşaf hücre büyüklüğü; varsayılan rahat.
+  const [yogunluk, setYogunluk] = useState<Yogunluk>(() => {
+    try { return localStorage.getItem("dersper_carsaf_yogunluk") === "sikisik" ? "sikisik" : "rahat"; }
+    catch { return "rahat"; }
+  });
+  function yogunlukDegistir(y: Yogunluk) {
+    setYogunluk(y);
+    try { localStorage.setItem("dersper_carsaf_yogunluk", y); } catch { /* yok say */ }
   }
   // Çarşafta kapalı saatler (×): idare için açık, dağıtılan çıktı için kapatılır.
   const [kapaliGoster, setKapaliGoster] = useState<boolean>(() => {
@@ -614,6 +623,8 @@ export default function ProgramDetay() {
             saatGosterDegistir={saatGosterDegistir}
             kapaliGoster={kapaliGoster}
             kapaliGosterDegistir={kapaliGosterDegistir}
+            yogunluk={yogunluk}
+            yogunlukDegistir={yogunlukDegistir}
             anahtarlar={duzen === "ayri" ? anahtarlar : []}
             seciliAnahtar={seciliAnahtar}
             anahtarDegistir={setAnahtar}
@@ -647,6 +658,7 @@ export default function ProgramDetay() {
                 hucreler={hucreler}
                 bakis={bakis}
                 saatGoster={saatGoster}
+                yogunluk={yogunluk}
                 subeSirasi={izgaraSorgu.data?.section_names ?? []}
                 kapali={
                   !kapaliGoster ? undefined

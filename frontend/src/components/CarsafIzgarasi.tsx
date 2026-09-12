@@ -38,6 +38,26 @@ import { siraKarsilastirici } from "../lib/siralama";
 const AD_GENISLIK = 110;
 const EN_AZ_SUTUN = 28;
 
+/** Yoğunluk: "sikisik" haftayı tek ekrana sığdırır (28px sütun); "rahat"
+ *  hücreleri büyütür ve yazıyı okunur kılar, gerekirse tablo yatay kayar. */
+export type Yogunluk = "sikisik" | "rahat";
+
+const OLCULER: Record<Yogunluk, {
+  ad: number; sutun: number; satir: string; ust: string; alt: string; baslik: string;
+  gunYukseklik: string; saatUst: string;
+}> = {
+  sikisik: {
+    ad: AD_GENISLIK, sutun: EN_AZ_SUTUN, satir: "h-9",
+    ust: "text-[10px]", alt: "text-[9px]", baslik: "text-[11px]",
+    gunYukseklik: "h-[30px]", saatUst: "top-[30px]",
+  },
+  rahat: {
+    ad: 160, sutun: 46, satir: "h-12",
+    ust: "text-[12px]", alt: "text-[10px]", baslik: "text-[12px]",
+    gunYukseklik: "h-[34px]", saatUst: "top-[34px]",
+  },
+};
+
 /** Bir satırın bir gündeki hücrelerinin çizim planı. */
 type Parca =
   | { tur: "ders"; hucre: Hucre; kilitli: boolean; genislik: number; anahtar: string }
@@ -107,10 +127,12 @@ function DersHucresi({
   parca,
   bakis,
   gunbas,
+  olcu,
 }: {
   parca: Extract<Parca, { tur: "ders" }>;
   bakis: Bakis;
   gunbas: boolean;
+  olcu: (typeof OLCULER)[Yogunluk];
 }) {
   const { hucre, kilitli, genislik } = parca;
   const kim = bakis === "sube" ? hucre.teacher_name : subeEtiketi(hucre);
@@ -119,12 +141,12 @@ function DersHucresi({
       colSpan={genislik}
       title={`${hucre.subject_name} · ${kim}${genislik > 1 ? ` · ${genislik} saatlik blok` : ""}${kilitli ? " · kilitli" : ""}${ortakNotu(hucre) ? ` · ${ortakNotu(hucre)}` : ""}`}
       className={clsx(
-        "h-9 border border-cizgi p-px align-middle",
+        olcu.satir, "border border-cizgi p-px align-middle",
         gunbas && "border-l-2 border-l-cizgi-guclu",
       )}
     >
       <div
-        className="relative flex h-full w-full flex-col justify-center overflow-hidden rounded-sm px-0.5 text-center"
+        className="relative flex h-full w-full flex-col justify-center overflow-hidden rounded-sm px-1 text-center"
         style={dersZemini(hucre.subject_color, 2)}
       >
         {/* Ortak ders: hücre birkaç şubenin satırında birden görünür. Çarşaf
@@ -135,13 +157,13 @@ function DersHucresi({
             aria-label="Ortak ders"
           />
         )}
-        <span className="sayisal flex items-center justify-center gap-0.5 truncate font-mono text-[10px] font-medium leading-tight text-murekkep">
+        <span className={clsx("sayisal flex items-center justify-center gap-0.5 truncate font-mono font-medium leading-tight text-murekkep", olcu.ust)}>
           {kilitli && <Lock className="h-2 w-2 shrink-0 text-murekkep-silik" />}
           <span className="truncate">{ust(hucre)}</span>
         </span>
         {/* Ders renginin üzerinde `silik` ton koyu temada 3.2:1'e düşüyor;
           * `yumusak` en kötü durumda 5.7:1 (bkz. erişilebilirlik denetimi). */}
-        <span className="truncate text-[9px] leading-tight text-murekkep-yumusak">
+        <span className={clsx("truncate leading-tight text-murekkep-yumusak", olcu.alt)}>
           {alt(hucre, bakis)}
         </span>
       </div>
@@ -157,6 +179,7 @@ export default function CarsafIzgarasi({
   kapali,
   ac,
   saatGoster,
+  yogunluk,
 }: {
   gunler: Gun[];
   hucreler: Hucre[];
@@ -169,7 +192,10 @@ export default function CarsafIzgarasi({
   ac?: (anahtar: string) => void;
   /** Ad yanında yerleşen ders saati sayısı: "Mustafa DİRİM (34)". */
   saatGoster?: boolean;
+  /** Hücre büyüklüğü; varsayılan rahat. */
+  yogunluk?: Yogunluk;
 }) {
+  const olcu = OLCULER[yogunluk ?? "rahat"];
   // Her günün kendi ders saatleri — günler farklı uzunlukta olabilir.
   const gunSaatleri = gunler
     .filter((g) => g.is_active)
@@ -210,10 +236,10 @@ export default function CarsafIzgarasi({
     <div className="max-h-[70vh] overflow-auto">
       <table
         className="w-full table-fixed border-collapse"
-        style={{ minWidth: AD_GENISLIK + sutunSayisi * EN_AZ_SUTUN }}
+        style={{ minWidth: olcu.ad + sutunSayisi * olcu.sutun }}
       >
         <colgroup>
-          <col style={{ width: AD_GENISLIK }} />
+          <col style={{ width: olcu.ad }} />
           {gunSaatleri.flatMap((x) =>
             x.saatler.map((p) => <col key={p.id} />),
           )}
@@ -222,7 +248,7 @@ export default function CarsafIzgarasi({
           <tr>
             <th
               rowSpan={2}
-              className="sticky left-0 top-0 z-30 border border-cizgi bg-yuzey-alt px-2 py-1.5 text-left text-[11px] font-semibold text-murekkep-yumusak"
+              className={clsx("sticky left-0 top-0 z-30 border border-cizgi bg-yuzey-alt px-2 py-1.5 text-left font-semibold text-murekkep-yumusak", olcu.baslik)}
             >
               {bakis === "sube" ? "Şube" : "Öğretmen"}
             </th>
@@ -232,7 +258,7 @@ export default function CarsafIzgarasi({
                 colSpan={x.saatler.length}
                 // Yükseklik açıkça verilir: ikinci başlık satırının yapışkan
                 // konumu (top-[30px]) buna dayanıyor, yazı tipine değil.
-                className="sticky top-0 z-20 h-[30px] border border-cizgi border-l-2 border-l-cizgi-guclu bg-yuzey-alt px-1 text-[11px] font-semibold text-murekkep-yumusak"
+                className={clsx("sticky top-0 z-20 border border-cizgi border-l-2 border-l-cizgi-guclu bg-yuzey-alt px-1 font-semibold text-murekkep-yumusak", olcu.gunYukseklik, olcu.baslik)}
               >
                 {x.gun.name}
               </th>
@@ -249,7 +275,8 @@ export default function CarsafIzgarasi({
                       : `${x.gun.name} · ${konum + 1}. ders`
                   }
                   className={clsx(
-                    "sayisal sticky top-[30px] z-20 border border-cizgi bg-yuzey-alt px-0.5 py-1 font-mono text-[10px] font-medium text-murekkep-silik",
+                    "sayisal sticky z-20 border border-cizgi bg-yuzey-alt px-0.5 py-1 font-mono font-medium text-murekkep-silik",
+                    olcu.saatUst, olcu.ust,
                     konum === 0 && "border-l-2 border-l-cizgi-guclu",
                   )}
                 >
@@ -274,12 +301,12 @@ export default function CarsafIzgarasi({
                     <button
                       onClick={() => ac(ad)}
                       title={`${ad} — ayrı sayfa görünümünde aç`}
-                      className="block w-full truncate text-left text-[11px] font-semibold text-murekkep underline-offset-2 hover:underline"
+                      className={clsx("block w-full truncate text-left font-semibold text-murekkep underline-offset-2 hover:underline", olcu.baslik)}
                     >
                       {etiket}
                     </button>
                   ) : (
-                    <span className="block truncate text-[11px] font-semibold text-murekkep">
+                    <span className={clsx("block truncate font-semibold text-murekkep", olcu.baslik)}>
                       {etiket}
                     </span>
                   )}
@@ -295,6 +322,7 @@ export default function CarsafIzgarasi({
                             parca={parca}
                             bakis={bakis}
                             gunbas={gunbas}
+                            olcu={olcu}
                           />
                         );
                       }
@@ -304,7 +332,7 @@ export default function CarsafIzgarasi({
                             key={parca.anahtar}
                             title={`${ad} bu saatte uygun değil`}
                             className={clsx(
-                              "h-9 border border-cizgi bg-yuzey-alt text-center align-middle text-[10px] leading-none text-murekkep-silik",
+                              olcu.satir, "border border-cizgi bg-yuzey-alt text-center align-middle leading-none text-murekkep-silik", olcu.ust,
                               gunbas && "border-l-2 border-l-cizgi-guclu",
                             )}
                           >
@@ -316,7 +344,7 @@ export default function CarsafIzgarasi({
                         <td
                           key={parca.anahtar}
                           className={clsx(
-                            "h-9 border border-cizgi bg-yuzey-alt/60",
+                            olcu.satir, "border border-cizgi bg-yuzey-alt/60",
                             gunbas && "border-l-2 border-l-cizgi-guclu",
                           )}
                         />

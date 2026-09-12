@@ -10,6 +10,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { Buton } from "./ui";
 import type { Bakis } from "./ProgramIzgarasi";
+import type { Yogunluk } from "./CarsafIzgarasi";
 
 export type Duzen = "ayri" | "carsaf";
 
@@ -154,6 +155,8 @@ export default function ProgramAracCubugu({
   saatGosterDegistir,
   kapaliGoster,
   kapaliGosterDegistir,
+  yogunluk,
+  yogunlukDegistir,
   pdfIndir,
 }: {
   bakis: Bakis;
@@ -175,6 +178,9 @@ export default function ProgramAracCubugu({
   /** Çarşafta kapalı saatler (×) görünsün mü? Dağıtılan çıktıda kapatılır. */
   kapaliGoster?: boolean;
   kapaliGosterDegistir?: (v: boolean) => void;
+  /** Çarşaf hücre büyüklüğü. */
+  yogunluk?: Yogunluk;
+  yogunlukDegistir?: (y: Yogunluk) => void;
   /** PDF menüsü: çarşaf, toplu, tek kişilik ya da ZIP. */
   pdfIndir: (s: PdfSecenek) => void;
 }) {
@@ -208,6 +214,16 @@ export default function ProgramAracCubugu({
           ]}
         />
 
+        {duzen === "carsaf" && yogunluk && yogunlukDegistir && (
+          <Segment
+            deger={yogunluk}
+            degistir={yogunlukDegistir}
+            secenekler={[
+              { id: "rahat", etiket: "Rahat", ipucu: "Büyük hücreler, okunur yazı; gerekirse yatay kayar" },
+              { id: "sikisik", etiket: "Sıkışık", ipucu: "Haftayı tek ekrana sığdırır" },
+            ]}
+          />
+        )}
         {duzen === "carsaf" && saatGosterDegistir && (
           <label className="flex cursor-pointer items-center gap-1.5 text-xs text-murekkep-yumusak">
             <input
