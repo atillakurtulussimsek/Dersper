@@ -207,8 +207,12 @@ def _satir_adi(anahtar: str, hucre_map: dict, saat: bool) -> str:
     return f"{anahtar} ({len(hucre_map)})" if saat else anahtar
 
 
+# Çarşaf kâğıdı: yatay sayfanın iç genişliği (mm, 8 mm kenar boşluğuyla).
+KAGIT_GENISLIK_MM = {"a4": 281.0, "a3": 404.0}
+
+
 def _carsaf_html(db: Session, timetable_id: int, bakis: str, donem: Term,
-                 saat: bool = False, kapali: bool = True) -> str:
+                 saat: bool = False, kapali: bool = True, kagit: str = "a3") -> str:
     """Tüm şubeleri (ya da öğretmenleri) tek sayfada gösteren toplu liste.
 
     Satırlar şube/öğretmen, sütunlar gün × ders saati. Hücrelerde yer dar
@@ -225,76 +229,107 @@ def _carsaf_html(db: Session, timetable_id: int, bakis: str, donem: Term,
     # Her günün kendi ders saati dizini listesi — günler farklı uzunlukta olabilir.
     gun_saatleri = [(g, _ders_indexleri(g)) for g in gunler]
     gun_saatleri = [(g, idx) for g, idx in gun_saatleri if idx]
-    sutun_sayisi = sum(len(idx) for _, idx in gun_saatleri)
 
-    # Sütun sayısı arttıkça yazı küçülür; A4 yatay sayfaya sığması için.
-    punto = 7.5 if sutun_sayisi <= 25 else 6.5 if sutun_sayisi <= 35 else 5.5
+    # Okunurluk sütun genişliğinden gelir. 70 sütunluk (6 gün × 12 saat) hafta
+    # A3'e bile 5 mm'lik sütunlarla sığar; bu okunmaz. Bunun yerine günler
+    # sayfalara bölünür: her sayfada en çok EN_COK_SUTUN sütun, ad sütunu her
+    # sayfada yinelenir. Kısa hafta tek sayfada kalır.
+    en_cok_sutun = 40 if kagit == "a3" else 28
+    sayfalar: list[list[tuple]] = [[]]
+    for g, idx in gun_saatleri:
+        dolu = sum(len(i) for _, i in sayfalar[-1])
+        if sayfalar[-1] and dolu + len(idx) > en_cok_sutun:
+            sayfalar.append([])
+        sayfalar[-1].append((g, idx))
+    sutun_sayisi = max(sum(len(idx) for _, idx in sayfa) for sayfa in sayfalar)
+
+    # Yazı boyu sütun genişliğinden türetilir. Üst satır (kısa kod, ~4
+    # karakter) tek satırda sığmalı: yazı ≈ sütun/3.6. Alt satır (öğretmen/
+    # şube) daha küçük ve iki satıra sarabilir; satır yüksekliği buna göre.
+    ad_mm = 30.0
+    sutun_mm = (KAGIT_GENISLIK_MM.get(kagit, KAGIT_GENISLIK_MM["a3"]) - ad_mm) / max(1, sutun_sayisi)
+    sutun_px = sutun_mm * 3.78
+    punto = max(6.0, min(10.0, sutun_px / 3.6))
+    alt_punto = max(5.5, punto * 0.8)
+    satir_px = punto * 1.2 + alt_punto * 2.3 + 6
 
     p: list[str] = [
         "<style>",
-        "@page{size:A4 landscape;margin:8mm}",
+        f"@page{{size:{kagit.upper()} landscape;margin:8mm}}",
         "html{color-scheme:light}",
         "body{font-family:'Helvetica Neue',Arial,sans-serif;color:#0f172a;"
         "background:#fff;margin:0}",
         "h1{font-size:13px;margin:0 0 1px}",
         "h2{font-size:10px;margin:0 0 6px;color:#475569;font-weight:500}",
-        f"table{{border-collapse:collapse;width:100%;table-layout:fixed;font-size:{punto}px}}",
+        "section{page-break-after:always}section:last-child{page-break-after:auto}",
+        f"table{{border-collapse:collapse;width:100%;table-layout:fixed;font-size:{punto:.1f}px}}",
+        "td span{display:block;overflow:hidden}",
+        "thead{display:table-header-group}tr{page-break-inside:avoid}",
         "th,td{border:1px solid #cbd5e1;padding:1px;text-align:center;"
         "overflow:hidden;background:#fff}",
+        f"td{{height:{satir_px:.0f}px}}",
         "th{background:#f1f5f9;font-weight:600}",
-        "th.ad{width:70px;text-align:left;padding-left:4px}",
-        "td.ad{text-align:left;padding-left:4px;font-weight:600;background:#f8fafc}",
+        f"th.ad{{width:{ad_mm:.0f}mm;text-align:left;padding-left:4px}}",
+        f"td.ad{{text-align:left;padding-left:4px;font-weight:600;background:#f8fafc;"
+        f"font-size:{punto + 1:.1f}px;white-space:nowrap;text-overflow:ellipsis}}",
         "td.kpl{background:#f1f5f9;color:#94a3b8}",
         "th.gun{border-left:2px solid #64748b}",
         "td.gunbas,th.gunbas{border-left:2px solid #64748b}",
-        ".ders{font-weight:600;display:block;line-height:1.15}",
-        ".alt{color:#475569;display:block;line-height:1.15}",
+        ".ders{font-weight:600;line-height:1.2;white-space:nowrap;text-overflow:ellipsis}",
+        f".alt{{color:#475569;font-size:{alt_punto:.1f}px;line-height:1.15;max-height:2.3em;"
+        f"word-break:break-word}}",
         "</style>",
-        f"<h1>{_kacis(kurum_adi)}</h1>",
-        f"<h2>{'Şube' if bakis == 'sube' else 'Öğretmen'} çarşafı</h2>",
-        "<table><thead><tr>",
-        f'<th class="ad" rowspan="2">{"Şube" if bakis == "sube" else "Öğretmen"}</th>',
     ]
-    for g, idx in gun_saatleri:
-        p.append(f'<th class="gun" colspan="{len(idx)}">{_kacis(g.name)}</th>')
-    p.append("</tr><tr>")
-    for g, idx in gun_saatleri:
-        for konum in range(len(idx)):
-            sinif = ' class="gunbas"' if konum == 0 else ""
-            p.append(f"<th{sinif}>{konum + 1}</th>")
-    p.append("</tr></thead><tbody>")
+    baslik = f"{'Şube' if bakis == 'sube' else 'Öğretmen'} çarşafı"
+    for sayfa_no, sayfa in enumerate(sayfalar, start=1):
+        gun_adlari = ", ".join(g.name for g, _ in sayfa)
+        p.append("<section>")
+        p.append(f"<h1>{_kacis(kurum_adi)}</h1>")
+        p.append(f"<h2>{baslik}"
+                 + (f" · {_kacis(gun_adlari)} ({sayfa_no}/{len(sayfalar)})"
+                    if len(sayfalar) > 1 else "")
+                 + "</h2>")
+        p.append("<table><thead><tr>")
+        p.append(f'<th class="ad" rowspan="2">{"Şube" if bakis == "sube" else "Öğretmen"}</th>')
+        for g, idx in sayfa:
+            p.append(f'<th class="gun" colspan="{len(idx)}">{_kacis(g.name)}</th>')
+        p.append("</tr><tr>")
+        for g, idx in sayfa:
+            for konum in range(len(idx)):
+                sinif = ' class="gunbas"' if konum == 0 else ""
+                p.append(f"<th{sinif}>{konum + 1}</th>")
+        p.append("</tr></thead><tbody>")
 
-    for anahtar, hucre_map in gruplar.items():
-        p.append(f'<tr><td class="ad">{_kacis(_satir_adi(anahtar, hucre_map, saat))}</td>')
-        kapali = kapali_map.get(anahtar, set())
-        for g, idx in gun_saatleri:
-            saatler = [x for x in sorted(g.periods, key=lambda y: y.index)
-                       if x.index in set(idx)]
-            for konum, (tur, h, genislik) in enumerate(
-                _carsaf_satiri(saatler, hucre_map, g.index, kapali)
-            ):
-                sinif = "gunbas" if konum == 0 else ""
-                genis = f' colspan="{genislik}"' if genislik > 1 else ""
-                if tur == "kapali":
-                    p.append(f'<td class="kpl {sinif}"{genis}>×</td>')
-                elif tur == "bos":
-                    p.append(f'<td class="{sinif}"{genis}></td>')
-                else:
-                    ders = h.subject_short or h.subject_name
-                    alt = (
-                        (h.teacher_short or h.teacher_name)
-                        if bakis == "sube"
-                        else h.section_name
-                    )
-                    p.append(
-                        f'<td class="{sinif}"{genis} '
-                        f'style="background:{h.subject_color}1f">'
-                        f'<span class="ders">{_kacis(ders)}</span>'
-                        f'<span class="alt">{_kacis(alt)}</span></td>'
-                    )
-        p.append("</tr>")
-
-    p.append("</tbody></table>")
+        for anahtar, hucre_map in gruplar.items():
+            p.append(f'<tr><td class="ad">{_kacis(_satir_adi(anahtar, hucre_map, saat))}</td>')
+            kapali = kapali_map.get(anahtar, set())
+            for g, idx in sayfa:
+                saatler = [x for x in sorted(g.periods, key=lambda y: y.index)
+                           if x.index in set(idx)]
+                for konum, (tur, h, genislik) in enumerate(
+                    _carsaf_satiri(saatler, hucre_map, g.index, kapali)
+                ):
+                    sinif = "gunbas" if konum == 0 else ""
+                    genis = f' colspan="{genislik}"' if genislik > 1 else ""
+                    if tur == "kapali":
+                        p.append(f'<td class="kpl {sinif}"{genis}>×</td>')
+                    elif tur == "bos":
+                        p.append(f'<td class="{sinif}"{genis}></td>')
+                    else:
+                        ders = h.subject_short or h.subject_name
+                        alt = (
+                            (h.teacher_short or h.teacher_name)
+                            if bakis == "sube"
+                            else h.section_name
+                        )
+                        p.append(
+                            f'<td class="{sinif}"{genis} '
+                            f'style="background:{h.subject_color}1f">'
+                            f'<span class="ders">{_kacis(ders)}</span>'
+                            f'<span class="alt">{_kacis(alt)}</span></td>'
+                        )
+            p.append("</tr>")
+        p.append("</tbody></table></section>")
     if not gruplar:
         p.append("<p>Bu programda yerleşmiş ders yok.</p>")
     return "".join(p)
@@ -314,9 +349,10 @@ def _kacis(s: str) -> str:
 
 
 def _icerik(db: Session, timetable_id: int, bakis: str, duzen: str, donem: Term,
-            saat: bool = False, kayit: str | None = None, kapali: bool = True) -> str:
+            saat: bool = False, kayit: str | None = None, kapali: bool = True,
+            kagit: str = "a3") -> str:
     if duzen == "carsaf":
-        return _carsaf_html(db, timetable_id, bakis, donem, saat, kapali)
+        return _carsaf_html(db, timetable_id, bakis, donem, saat, kapali, kagit)
     return _html(db, timetable_id, bakis, donem, kayit)
 
 
@@ -331,11 +367,13 @@ def html_cikti(
     kayit: str | None = Query(None),
     # Çarşafta kapalı saatler (×) gösterilsin mi? Dağıtılan çıktıda kapatılır.
     kapali: bool = Query(True),
+    # Çarşaf kâğıdı: a3 (geniş, okunur) ya da a4. Tarayıcıdan yazdırmada a4.
+    kagit: str = Query("a4", pattern="^(a4|a3)$"),
     db: Session = Depends(get_db),
     donem: Term = Depends(aktif_donem),
 ) -> Response:
     return Response(
-        _icerik(db, timetable_id, bakis, duzen, donem, saat, kayit, kapali),
+        _icerik(db, timetable_id, bakis, duzen, donem, saat, kayit, kapali, kagit),
         media_type="text/html; charset=utf-8",
     )
 
@@ -348,6 +386,7 @@ def pdf_cikti(
     saat: bool = Query(False),
     kayit: str | None = Query(None),
     kapali: bool = Query(True),
+    kagit: str = Query("a3", pattern="^(a4|a3)$"),
     db: Session = Depends(get_db),
     donem: Term = Depends(aktif_donem),
 ) -> Response:
@@ -360,7 +399,8 @@ def pdf_cikti(
             f"(macOS: brew install pango). Ayrıntı: {e}. "
             "Bu arada HTML çıktısını tarayıcıdan yazdırabilirsiniz.",
         )
-    pdf = HTML(string=_icerik(db, timetable_id, bakis, duzen, donem, saat, kayit, kapali)).write_pdf()
+    pdf = HTML(string=_icerik(db, timetable_id, bakis, duzen, donem, saat, kayit, kapali,
+                              kagit)).write_pdf()
     ad = f"ders-programi-{_dosya_adi(kayit) if kayit else f'{duzen}-{bakis}'}.pdf"
     return Response(pdf, media_type="application/pdf",
                     headers={"Content-Disposition": f'attachment; filename="{ad}"'})

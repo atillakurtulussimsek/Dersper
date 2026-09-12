@@ -432,14 +432,15 @@ export default function ProgramDetay() {
 
   function ciktiAdresi(
     bicim: "pdf" | "xlsx" | "html" | "zip",
-    secenek: { bakis: Bakis; duzen: Duzen; kayit?: string } = { bakis, duzen },
+    secenek: { bakis: Bakis; duzen: Duzen; kayit?: string; kagit?: "a3" | "a4" } = { bakis, duzen },
   ) {
     if (bicim === "zip") return `/api/timetables/${id}/export/zip?bakis=${secenek.bakis}`;
     return (
       `/api/timetables/${id}/export/${bicim}?bakis=${secenek.bakis}&duzen=${secenek.duzen}` +
       (saatGoster ? "&saat=true" : "") +
       (kapaliGoster ? "" : "&kapali=false") +
-      (secenek.kayit ? `&kayit=${encodeURIComponent(secenek.kayit)}` : "")
+      (secenek.kayit ? `&kayit=${encodeURIComponent(secenek.kayit)}` : "") +
+      (secenek.kagit ? `&kagit=${secenek.kagit}` : "")
     );
   }
 
@@ -473,7 +474,7 @@ export default function ProgramDetay() {
     }
     const parca = s.kayit
       ? s.kayit.toLocaleLowerCase("tr").replace(/[^a-z0-9çğıöşü]+/gi, "-").replace(/^-|-$/g, "")
-      : `${s.duzen}-${s.bakis}`;
+      : `${s.duzen}-${s.bakis}${s.kagit ? `-${s.kagit}` : ""}`;
     return dosyaIndir(ciktiAdresi("pdf", s), `ders-programi-${parca}.pdf`);
   }
 

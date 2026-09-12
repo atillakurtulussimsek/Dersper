@@ -21,6 +21,8 @@ export type PdfSecenek = {
   duzen: Duzen;
   kayit?: string;
   zip?: boolean;
+  /** Çarşaf kâğıdı; verilmezse sunucu A3 kullanır. */
+  kagit?: "a3" | "a4";
 };
 
 function PdfMenusu({
@@ -48,10 +50,12 @@ function PdfMenusu({
   const secili = duzen === "ayri" ? seciliAnahtar : undefined;
   const bolumler: { baslik: string; ogeler: { etiket: string; secenek: PdfSecenek }[] }[] = [
     {
-      baslik: "Çarşaf (tek sayfa, hepsi)",
+      baslik: "Çarşaf (hepsi tek tabloda)",
       ogeler: [
-        { etiket: "Şube çarşafı", secenek: { bakis: "sube", duzen: "carsaf" } },
-        { etiket: "Öğretmen çarşafı", secenek: { bakis: "ogretmen", duzen: "carsaf" } },
+        { etiket: "Şube çarşafı — A3 yatay (geniş)", secenek: { bakis: "sube", duzen: "carsaf", kagit: "a3" } },
+        { etiket: "Şube çarşafı — A4 yatay", secenek: { bakis: "sube", duzen: "carsaf", kagit: "a4" } },
+        { etiket: "Öğretmen çarşafı — A3 yatay (geniş)", secenek: { bakis: "ogretmen", duzen: "carsaf", kagit: "a3" } },
+        { etiket: "Öğretmen çarşafı — A4 yatay", secenek: { bakis: "ogretmen", duzen: "carsaf", kagit: "a4" } },
       ],
     },
     {
