@@ -5,6 +5,10 @@ Dersper'in geliştirme günlüğü. Her değişiklik tek cümleyle, en yeni sür
 öncesinde ikinci hane özellik, üçüncü hane düzeltme demektir. Uygulamanın
 sürümü arayüzde yan menünün altında yazar.
 
+## 0.32.1 — 2026-09-12
+
+- PDF menüsü çarşaf tablosunun başlıklarının altında kalıyordu; artık üstte açılır.
+
 ## 0.32.0 — 2026-09-12
 
 - Çarşaf görünümü ferahladı: varsayılan "Rahat" yoğunlukta hücreler büyüdü (46×48 px), yazılar okunur boyuta çıktı, ad sütunu genişledi; gerekirse tablo yatay kayar. "Sıkışık" seçeneği haftayı eskisi gibi tek ekrana sığdırır. Seçim tarayıcıda hatırlanır.

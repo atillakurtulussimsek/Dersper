@@ -185,7 +185,9 @@ export default function ProgramAracCubugu({
   pdfIndir: (s: PdfSecenek) => void;
 }) {
   return (
-    <div className="sticky top-0 z-20 -mx-5 -mt-5 mb-4 space-y-2.5 border-b border-cizgi bg-yuzey/95 px-5 py-3 backdrop-blur">
+    // z-40: çarşafın yapışkan başlıkları z-30'da; PDF menüsü gibi açılır
+    // parçalar araç çubuğunun katmanında olduğu için onun üstünde kalmalı.
+    <div className="sticky top-0 z-40 -mx-5 -mt-5 mb-4 space-y-2.5 border-b border-cizgi bg-yuzey/95 px-5 py-3 backdrop-blur">
       <div className="flex flex-wrap items-center gap-2">
         <Segment
           deger={bakis}
