@@ -4,7 +4,7 @@
  *  Düzen seçimi hem ekranı hem çıktıyı belirler: ne görüyorsanız onu
  *  yazdırırsınız. Kayıt şeritleri yalnızca ayrı sayfa düzeninde anlamlıdır,
  *  çarşafta zaten hepsi görünür — o durumda çağıran boş liste geçirir. */
-import { Download, FileSpreadsheet, Printer } from "lucide-react";
+import { Download, FileDown, FileSpreadsheet, Printer } from "lucide-react";
 import clsx from "clsx";
 import type { ReactNode } from "react";
 
@@ -55,6 +55,7 @@ export default function ProgramAracCubugu({
   indir,
   saatGoster,
   saatGosterDegistir,
+  tekKayitIndir,
 }: {
   bakis: Bakis;
   bakisDegistir: (b: Bakis) => void;
@@ -72,6 +73,8 @@ export default function ProgramAracCubugu({
   /** Çarşafta satır adının yanında yerleşen saat sayısı: "Ad (34)". */
   saatGoster?: boolean;
   saatGosterDegistir?: (v: boolean) => void;
+  /** Yalnız seçili kaydın (öğretmen/şube) programını PDF indirir. */
+  tekKayitIndir?: () => void;
 }) {
   return (
     <div className="sticky top-0 z-20 -mx-5 -mt-5 mb-4 space-y-2.5 border-b border-cizgi bg-yuzey/95 px-5 py-3 backdrop-blur">
@@ -116,6 +119,16 @@ export default function ProgramAracCubugu({
         )}
 
         <div className="ml-auto flex shrink-0 gap-1.5">
+          {duzen === "ayri" && seciliAnahtar && tekKayitIndir && (
+            <Buton
+              tur="ikincil"
+              onClick={tekKayitIndir}
+              title={`Yalnız ${seciliAnahtar} programını PDF indir`}
+            >
+              <FileDown className="h-4 w-4" />
+              <span className="hidden max-w-[10rem] truncate sm:inline">{seciliAnahtar}</span>
+            </Buton>
+          )}
           <Buton tur="ikincil" onClick={yazdir} title="Yazdır">
             <Printer className="h-4 w-4" />
             <span className="hidden sm:inline">Yazdır</span>

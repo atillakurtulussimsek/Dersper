@@ -413,13 +413,18 @@ export default function ProgramDetay() {
 
   const program = izgaraSorgu.data!.timetable;
 
-  function ciktiAdresi(bicim: "pdf" | "xlsx" | "html") {
-    return `/api/timetables/${id}/export/${bicim}?bakis=${bakis}&duzen=${duzen}${saatGoster ? "&saat=true" : ""}`;
+  function ciktiAdresi(bicim: "pdf" | "xlsx" | "html", kayit?: string) {
+    return (
+      `/api/timetables/${id}/export/${bicim}?bakis=${bakis}&duzen=${duzen}` +
+      (saatGoster ? "&saat=true" : "") +
+      (kayit ? `&kayit=${encodeURIComponent(kayit)}` : "")
+    );
   }
 
-  /** Çıktı uçları jeton ister; bu yüzden yeni sekme yerine fetch ile indirilir. */
-  async function indir(bicim: "pdf" | "xlsx") {
-    const yanit = await fetch(ciktiAdresi(bicim), {
+  /** Çıktı uçları jeton ister; bu yüzden yeni sekme yerine fetch ile indirilir.
+   *  `kayit` verilirse yalnız o öğretmenin/şubenin programı iner. */
+  async function indir(bicim: "pdf" | "xlsx", kayit?: string) {
+    const yanit = await fetch(ciktiAdresi(bicim, kayit), {
       headers: { Authorization: `Bearer ${jetonuAl() ?? ""}` },
     });
     if (!yanit.ok) {
@@ -431,7 +436,10 @@ export default function ProgramDetay() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `ders-programi-${duzen}-${bakis}.${bicim}`;
+    const parca = kayit
+      ? kayit.toLocaleLowerCase("tr").replace(/[^a-z0-9çğıöşü]+/gi, "-").replace(/^-|-$/g, "")
+      : `${duzen}-${bakis}`;
+    a.download = `ders-programi-${parca}.${bicim}`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -602,7 +610,8 @@ export default function ProgramDetay() {
               </span>
             ))}
             yazdir={yazdir}
-            indir={indir}
+            indir={(bicim) => indir(bicim)}
+            tekKayitIndir={seciliAnahtar ? () => indir("pdf", seciliAnahtar) : undefined}
           />
 
           {duzen === "carsaf" ? (

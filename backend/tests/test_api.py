@@ -1247,3 +1247,13 @@ def test_carsaf_ciktisinda_ad_yaninda_saat_sayisi(yonetici: TestClient):
     saatli = yonetici.get(f"/api/timetables/{pid}/export/html?bakis=ogretmen&duzen=carsaf&saat=true").text
     assert 'class="ad">Ayşe Yılmaz (2)</td>' in saatli
     assert "(2)</td>" not in yalin
+
+
+def test_tek_kayit_ciktisi(yonetici: TestClient):
+    pid, _ = _carsaf_okul(yonetici)
+    html = yonetici.get(
+        f"/api/timetables/{pid}/export/html?bakis=ogretmen&duzen=ayri&kayit=Ayşe Yılmaz"
+    ).text
+    assert html.count("<section>") == 1 and "Ayşe Yılmaz" in html
+    r = yonetici.get(f"/api/timetables/{pid}/export/html?bakis=ogretmen&duzen=ayri&kayit=Yok")
+    assert r.status_code == 404

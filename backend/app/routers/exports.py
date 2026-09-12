@@ -42,7 +42,8 @@ def _izgara_yapisi(db: Session, donem: Term) -> tuple[list[Day], list[int]]:
     return gunler, sorted({di for g in gunler for di in _ders_indexleri(g)})
 
 
-def _tablolar(db: Session, timetable_id: int, bakis: str) -> dict[str, dict]:
+def _tablolar(db: Session, timetable_id: int, bakis: str,
+              kayit: str | None = None) -> dict[str, dict]:
     """Anahtar (şube adı ya da öğretmen adı) -> {(gun, ders): hücre}
 
     Şube tabloları kurumun seçtiği şube sırasıyla dizilir (bkz. app.siralama);
@@ -55,6 +56,12 @@ def _tablolar(db: Session, timetable_id: int, bakis: str) -> dict[str, dict]:
         anahtarlar = (h.section_names or [h.section_name]) if bakis == "sube" else [h.teacher_name]
         for anahtar in anahtarlar:
             gruplar[anahtar][(h.day_index, h.period_index)] = h
+    # Tek kayıt istenmişse (bir öğretmenin kendi programı) yalnız o kalır.
+    if kayit is not None:
+        if kayit not in gruplar:
+            raise HTTPException(status.HTTP_404_NOT_FOUND,
+                                f"\"{kayit}\" için yerleşmiş ders yok.")
+        gruplar = {kayit: gruplar[kayit]}
     if bakis == "sube":
         t = db.get(Timetable, timetable_id)
         sira = siralama.ad_sirasi(siralama.sirali_subeler(db, t.term), t.term.section_order.value)
@@ -71,10 +78,11 @@ def _baslik(db: Session, timetable_id: int, donem: Term) -> tuple[Timetable, str
     return t, (kurum.name if kurum else "")
 
 
-def _html(db: Session, timetable_id: int, bakis: str, donem: Term) -> str:
+def _html(db: Session, timetable_id: int, bakis: str, donem: Term,
+          kayit: str | None = None) -> str:
     t, kurum_adi = _baslik(db, timetable_id, donem)
     gunler, ders_indexleri = _izgara_yapisi(db, donem)
-    gruplar = _tablolar(db, timetable_id, bakis)
+    gruplar = _tablolar(db, timetable_id, bakis, kayit)
 
     # Her kayıt TEK sayfaya sığar: A4 yatay sayfanın içi 277×190 mm'dir.
     # Başlıklar (~12 mm) ve gün satırı (8 mm) düşülür, kalan yükseklik ders
@@ -291,15 +299,24 @@ def _carsaf_html(db: Session, timetable_id: int, bakis: str, donem: Term,
     return "".join(p)
 
 
+def _dosya_adi(ad: str) -> str:
+    """Kayıt adından dosya adı parçası: harf, rakam, tire."""
+    import re
+    import unicodedata
+    duz = unicodedata.normalize("NFKD", ad.replace("ı", "i").replace("İ", "I"))
+    duz = "".join(c for c in duz if not unicodedata.combining(c))
+    return re.sub(r"[^A-Za-z0-9]+", "-", duz).strip("-").lower() or "kayit"
+
+
 def _kacis(s: str) -> str:
     return (s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
 
 
 def _icerik(db: Session, timetable_id: int, bakis: str, duzen: str, donem: Term,
-            saat: bool = False) -> str:
+            saat: bool = False, kayit: str | None = None) -> str:
     if duzen == "carsaf":
         return _carsaf_html(db, timetable_id, bakis, donem, saat)
-    return _html(db, timetable_id, bakis, donem)
+    return _html(db, timetable_id, bakis, donem, kayit)
 
 
 @router.get("/html", response_class=Response)
@@ -309,11 +326,13 @@ def html_cikti(
     duzen: str = Query("ayri", pattern="^(ayri|carsaf)$"),
     # Çarşafta satır adının yanına yerleşen ders saati sayısı: "Ad (34)".
     saat: bool = Query(False),
+    # Yalnız bu kayıt (öğretmen ya da şube adı): tek kişilik çıktı.
+    kayit: str | None = Query(None),
     db: Session = Depends(get_db),
     donem: Term = Depends(aktif_donem),
 ) -> Response:
     return Response(
-        _icerik(db, timetable_id, bakis, duzen, donem, saat),
+        _icerik(db, timetable_id, bakis, duzen, donem, saat, kayit),
         media_type="text/html; charset=utf-8",
     )
 
@@ -324,6 +343,7 @@ def pdf_cikti(
     bakis: str = Query("sube", pattern="^(sube|ogretmen)$"),
     duzen: str = Query("ayri", pattern="^(ayri|carsaf)$"),
     saat: bool = Query(False),
+    kayit: str | None = Query(None),
     db: Session = Depends(get_db),
     donem: Term = Depends(aktif_donem),
 ) -> Response:
@@ -336,8 +356,8 @@ def pdf_cikti(
             f"(macOS: brew install pango). Ayrıntı: {e}. "
             "Bu arada HTML çıktısını tarayıcıdan yazdırabilirsiniz.",
         )
-    pdf = HTML(string=_icerik(db, timetable_id, bakis, duzen, donem, saat)).write_pdf()
-    ad = f"ders-programi-{duzen}-{bakis}.pdf"
+    pdf = HTML(string=_icerik(db, timetable_id, bakis, duzen, donem, saat, kayit)).write_pdf()
+    ad = f"ders-programi-{_dosya_adi(kayit) if kayit else f'{duzen}-{bakis}'}.pdf"
     return Response(pdf, media_type="application/pdf",
                     headers={"Content-Disposition": f'attachment; filename="{ad}"'})
 
