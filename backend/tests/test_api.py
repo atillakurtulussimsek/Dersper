@@ -1257,3 +1257,22 @@ def test_tek_kayit_ciktisi(yonetici: TestClient):
     assert html.count("<section>") == 1 and "Ayşe Yılmaz" in html
     r = yonetici.get(f"/api/timetables/{pid}/export/html?bakis=ogretmen&duzen=ayri&kayit=Yok")
     assert r.status_code == 404
+
+
+def test_zip_ciktisi_her_kayda_bir_pdf(yonetici: TestClient, monkeypatch):
+    """WeasyPrint yerelde olmayabilir: sahte bir HTML sınıfıyla ZIP yapısı sınanır."""
+    import sys, types, zipfile, io
+    sahte = types.ModuleType("weasyprint")
+    class HTML:
+        def __init__(self, string): self.string = string
+        def write_pdf(self): return b"%PDF-" + self.string.encode()[:40]
+    sahte.HTML = HTML
+    monkeypatch.setitem(sys.modules, "weasyprint", sahte)
+
+    pid, _ = _carsaf_okul(yonetici)
+    r = yonetici.get(f"/api/timetables/{pid}/export/zip?bakis=ogretmen")
+    assert r.status_code == 200, r.text
+    assert r.headers["content-type"] == "application/zip"
+    with zipfile.ZipFile(io.BytesIO(r.content)) as z:
+        assert z.namelist() == ["ayse-yilmaz.pdf"]
+        assert z.read("ayse-yilmaz.pdf").startswith(b"%PDF-")

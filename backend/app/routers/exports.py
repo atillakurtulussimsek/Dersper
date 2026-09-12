@@ -362,6 +362,39 @@ def pdf_cikti(
                     headers={"Content-Disposition": f'attachment; filename="{ad}"'})
 
 
+@router.get("/zip", response_class=Response)
+def zip_cikti(
+    timetable_id: int,
+    bakis: str = Query("ogretmen", pattern="^(sube|ogretmen)$"),
+    db: Session = Depends(get_db),
+    donem: Term = Depends(aktif_donem),
+) -> Response:
+    """Her öğretmen (ya da şube) için ayrı bir PDF; hepsi tek ZIP dosyasında.
+    Öğretmenlere kendi programlarını tek tek dağıtmak için."""
+    import zipfile
+
+    try:
+        from weasyprint import HTML
+    except (ImportError, OSError) as e:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "PDF üretimi için gereken sistem kütüphaneleri kurulu değil "
+            f"(macOS: brew install pango). Ayrıntı: {e}.",
+        )
+    _baslik(db, timetable_id, donem)
+    gruplar = _tablolar(db, timetable_id, bakis)
+    if not gruplar:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Bu programda yerleşmiş ders yok.")
+    tampon = io.BytesIO()
+    with zipfile.ZipFile(tampon, "w", zipfile.ZIP_DEFLATED) as arsiv:
+        for anahtar in gruplar:
+            pdf = HTML(string=_html(db, timetable_id, bakis, donem, kayit=anahtar)).write_pdf()
+            arsiv.writestr(f"{_dosya_adi(anahtar)}.pdf", pdf)
+    ad = f"ders-programlari-{bakis}.zip"
+    return Response(tampon.getvalue(), media_type="application/zip",
+                    headers={"Content-Disposition": f'attachment; filename="{ad}"'})
+
+
 @router.get("/xlsx", response_class=Response)
 def excel_cikti(
     timetable_id: int,

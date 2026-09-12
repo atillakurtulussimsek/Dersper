@@ -4,14 +4,111 @@
  *  Düzen seçimi hem ekranı hem çıktıyı belirler: ne görüyorsanız onu
  *  yazdırırsınız. Kayıt şeritleri yalnızca ayrı sayfa düzeninde anlamlıdır,
  *  çarşafta zaten hepsi görünür — o durumda çağıran boş liste geçirir. */
-import { Download, FileDown, FileSpreadsheet, Printer } from "lucide-react";
+import { ChevronDown, Download, FileSpreadsheet, Printer } from "lucide-react";
 import clsx from "clsx";
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { Buton } from "./ui";
 import type { Bakis } from "./ProgramIzgarasi";
 
 export type Duzen = "ayri" | "carsaf";
+
+/** PDF menüsünden seçilen çıktı: hangi bakış, hangi düzen, tek kayıt mı,
+ *  her kayıt ayrı dosya (ZIP) mı. */
+export type PdfSecenek = {
+  bakis: Bakis;
+  duzen: Duzen;
+  kayit?: string;
+  zip?: boolean;
+};
+
+function PdfMenusu({
+  seciliAnahtar,
+  bakis,
+  duzen,
+  indir,
+}: {
+  seciliAnahtar?: string;
+  bakis: Bakis;
+  duzen: Duzen;
+  indir: (s: PdfSecenek) => void;
+}) {
+  const [acik, setAcik] = useState(false);
+  const kutu = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!acik) return;
+    const kapat = (e: MouseEvent) => {
+      if (!kutu.current?.contains(e.target as Node)) setAcik(false);
+    };
+    document.addEventListener("mousedown", kapat);
+    return () => document.removeEventListener("mousedown", kapat);
+  }, [acik]);
+
+  const secili = duzen === "ayri" ? seciliAnahtar : undefined;
+  const bolumler: { baslik: string; ogeler: { etiket: string; secenek: PdfSecenek }[] }[] = [
+    {
+      baslik: "Çarşaf (tek sayfa, hepsi)",
+      ogeler: [
+        { etiket: "Şube çarşafı", secenek: { bakis: "sube", duzen: "carsaf" } },
+        { etiket: "Öğretmen çarşafı", secenek: { bakis: "ogretmen", duzen: "carsaf" } },
+      ],
+    },
+    {
+      baslik: "Öğretmen programları",
+      ogeler: [
+        { etiket: "Tüm öğretmenler, tek PDF (her biri ayrı sayfa)",
+          secenek: { bakis: "ogretmen", duzen: "ayri" } },
+        { etiket: "Her öğretmen ayrı dosya (ZIP)",
+          secenek: { bakis: "ogretmen", duzen: "ayri", zip: true } },
+        ...(bakis === "ogretmen" && secili
+          ? [{ etiket: `Yalnız ${secili}`, secenek: { bakis: "ogretmen" as Bakis, duzen: "ayri" as Duzen, kayit: secili } }]
+          : []),
+      ],
+    },
+    {
+      baslik: "Şube programları",
+      ogeler: [
+        { etiket: "Tüm şubeler, tek PDF (her biri ayrı sayfa)",
+          secenek: { bakis: "sube", duzen: "ayri" } },
+        { etiket: "Her şube ayrı dosya (ZIP)",
+          secenek: { bakis: "sube", duzen: "ayri", zip: true } },
+        ...(bakis === "sube" && secili
+          ? [{ etiket: `Yalnız ${secili}`, secenek: { bakis: "sube" as Bakis, duzen: "ayri" as Duzen, kayit: secili } }]
+          : []),
+      ],
+    },
+  ];
+
+  return (
+    <div ref={kutu} className="relative">
+      <Buton tur="ikincil" onClick={() => setAcik((a) => !a)} title="PDF indir">
+        <Download className="h-4 w-4" />
+        <span className="hidden sm:inline">PDF</span>
+        <ChevronDown className="h-3.5 w-3.5" />
+      </Buton>
+      {acik && (
+        <div className="absolute right-0 z-30 mt-1 w-72 rounded-lg border border-cizgi bg-yuzey p-1 shadow-xl shadow-murekkep/10">
+          {bolumler.map((b) => (
+            <div key={b.baslik} className="py-1">
+              <p className="px-2 pb-1 text-2xs font-semibold uppercase tracking-[0.08em] text-murekkep-silik">
+                {b.baslik}
+              </p>
+              {b.ogeler.map((o) => (
+                <button
+                  key={o.etiket}
+                  onClick={() => { setAcik(false); indir(o.secenek); }}
+                  className="block w-full truncate rounded-md px-2 py-1.5 text-left text-sm text-murekkep hover:bg-yuzey-alt"
+                >
+                  {o.etiket}
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function Segment<T extends string>({
   deger,
@@ -55,7 +152,7 @@ export default function ProgramAracCubugu({
   indir,
   saatGoster,
   saatGosterDegistir,
-  tekKayitIndir,
+  pdfIndir,
 }: {
   bakis: Bakis;
   bakisDegistir: (b: Bakis) => void;
@@ -69,12 +166,12 @@ export default function ProgramAracCubugu({
   /** "23 saat dolu" gibi kısa sayımlar; şeritlerin sağına yaslanır. */
   ozet?: ReactNode;
   yazdir: () => void;
-  indir: (bicim: "pdf" | "xlsx") => void;
+  indir: (bicim: "xlsx") => void;
   /** Çarşafta satır adının yanında yerleşen saat sayısı: "Ad (34)". */
   saatGoster?: boolean;
   saatGosterDegistir?: (v: boolean) => void;
-  /** Yalnız seçili kaydın (öğretmen/şube) programını PDF indirir. */
-  tekKayitIndir?: () => void;
+  /** PDF menüsü: çarşaf, toplu, tek kişilik ya da ZIP. */
+  pdfIndir: (s: PdfSecenek) => void;
 }) {
   return (
     <div className="sticky top-0 z-20 -mx-5 -mt-5 mb-4 space-y-2.5 border-b border-cizgi bg-yuzey/95 px-5 py-3 backdrop-blur">
@@ -119,24 +216,11 @@ export default function ProgramAracCubugu({
         )}
 
         <div className="ml-auto flex shrink-0 gap-1.5">
-          {duzen === "ayri" && seciliAnahtar && tekKayitIndir && (
-            <Buton
-              tur="ikincil"
-              onClick={tekKayitIndir}
-              title={`Yalnız ${seciliAnahtar} programını PDF indir`}
-            >
-              <FileDown className="h-4 w-4" />
-              <span className="hidden max-w-[10rem] truncate sm:inline">{seciliAnahtar}</span>
-            </Buton>
-          )}
           <Buton tur="ikincil" onClick={yazdir} title="Yazdır">
             <Printer className="h-4 w-4" />
             <span className="hidden sm:inline">Yazdır</span>
           </Buton>
-          <Buton tur="ikincil" onClick={() => indir("pdf")} title="PDF indir">
-            <Download className="h-4 w-4" />
-            <span className="hidden sm:inline">PDF</span>
-          </Buton>
+          <PdfMenusu seciliAnahtar={seciliAnahtar} bakis={bakis} duzen={duzen} indir={pdfIndir} />
           <Buton tur="ikincil" onClick={() => indir("xlsx")} title="Excel indir">
             <FileSpreadsheet className="h-4 w-4" />
             <span className="hidden sm:inline">Excel</span>

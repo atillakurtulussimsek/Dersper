@@ -5,6 +5,10 @@ Dersper'in geliştirme günlüğü. Her değişiklik tek cümleyle, en yeni sür
 öncesinde ikinci hane özellik, üçüncü hane düzeltme demektir. Uygulamanın
 sürümü arayüzde yan menünün altında yazar.
 
+## 0.30.0 — 2026-09-12
+
+- PDF düğmesi menüye dönüştü: şube çarşafı, öğretmen çarşafı; tüm öğretmenler tek PDF (her biri ayrı sayfa), her öğretmen ayrı dosya (ZIP), yalnız seçili öğretmen; aynı seçenekler şubeler için. ZIP, öğretmenlere programlarını tek tek dağıtmak için her kayda bir PDF içerir.
+
 ## 0.29.1 — 2026-09-12
 
 - Ayrı sayfa görünümünde seçili öğretmenin (ya da şubenin) programı tek başına PDF olarak indirilebiliyor: araç çubuğunda adıyla bir düğme; dosya adı kişiye göre ("ders-programi-mustafa-dirim.pdf"). Çıktı uçları `kayit` parametresiyle tek kayıt verir.

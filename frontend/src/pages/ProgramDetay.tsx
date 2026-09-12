@@ -17,7 +17,7 @@ import { BaglamMenusu, HedefSecici, type MenuOgesi } from "../components/BaglamM
 import BekleyenDersler from "../components/BekleyenDersler";
 import CarsafIzgarasi from "../components/CarsafIzgarasi";
 import GecmisCalistirmalar from "../components/GecmisCalistirmalar";
-import ProgramAracCubugu, { type Duzen } from "../components/ProgramAracCubugu";
+import ProgramAracCubugu, { type Duzen, type PdfSecenek } from "../components/ProgramAracCubugu";
 import ProgramIzgarasi, { HucreIcerigi, type Bakis } from "../components/ProgramIzgarasi";
 import ProgramUyarilari from "../components/ProgramUyarilari";
 import SurumGecmisi from "../components/SurumGecmisi";
@@ -413,18 +413,21 @@ export default function ProgramDetay() {
 
   const program = izgaraSorgu.data!.timetable;
 
-  function ciktiAdresi(bicim: "pdf" | "xlsx" | "html", kayit?: string) {
+  function ciktiAdresi(
+    bicim: "pdf" | "xlsx" | "html" | "zip",
+    secenek: { bakis: Bakis; duzen: Duzen; kayit?: string } = { bakis, duzen },
+  ) {
+    if (bicim === "zip") return `/api/timetables/${id}/export/zip?bakis=${secenek.bakis}`;
     return (
-      `/api/timetables/${id}/export/${bicim}?bakis=${bakis}&duzen=${duzen}` +
+      `/api/timetables/${id}/export/${bicim}?bakis=${secenek.bakis}&duzen=${secenek.duzen}` +
       (saatGoster ? "&saat=true" : "") +
-      (kayit ? `&kayit=${encodeURIComponent(kayit)}` : "")
+      (secenek.kayit ? `&kayit=${encodeURIComponent(secenek.kayit)}` : "")
     );
   }
 
-  /** Çıktı uçları jeton ister; bu yüzden yeni sekme yerine fetch ile indirilir.
-   *  `kayit` verilirse yalnız o öğretmenin/şubenin programı iner. */
-  async function indir(bicim: "pdf" | "xlsx", kayit?: string) {
-    const yanit = await fetch(ciktiAdresi(bicim, kayit), {
+  /** Çıktı uçları jeton ister; bu yüzden yeni sekme yerine fetch ile indirilir. */
+  async function dosyaIndir(adres: string, dosyaAdi: string) {
+    const yanit = await fetch(adres, {
       headers: { Authorization: `Bearer ${jetonuAl() ?? ""}` },
     });
     if (!yanit.ok) {
@@ -436,12 +439,24 @@ export default function ProgramDetay() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    const parca = kayit
-      ? kayit.toLocaleLowerCase("tr").replace(/[^a-z0-9çğıöşü]+/gi, "-").replace(/^-|-$/g, "")
-      : `${duzen}-${bakis}`;
-    a.download = `ders-programi-${parca}.${bicim}`;
+    a.download = dosyaAdi;
     a.click();
     URL.revokeObjectURL(url);
+  }
+
+  function indir(bicim: "xlsx") {
+    return dosyaIndir(ciktiAdresi(bicim), `ders-programi-${duzen}-${bakis}.${bicim}`);
+  }
+
+  /** PDF menüsü: çarşaf, toplu tek PDF, tek kişilik ya da her kayıt ayrı dosya (ZIP). */
+  function pdfIndir(s: PdfSecenek) {
+    if (s.zip) {
+      return dosyaIndir(ciktiAdresi("zip", s), `ders-programlari-${s.bakis}.zip`);
+    }
+    const parca = s.kayit
+      ? s.kayit.toLocaleLowerCase("tr").replace(/[^a-z0-9çğıöşü]+/gi, "-").replace(/^-|-$/g, "")
+      : `${s.duzen}-${s.bakis}`;
+    return dosyaIndir(ciktiAdresi("pdf", s), `ders-programi-${parca}.pdf`);
   }
 
   async function yazdir() {
@@ -610,8 +625,8 @@ export default function ProgramDetay() {
               </span>
             ))}
             yazdir={yazdir}
-            indir={(bicim) => indir(bicim)}
-            tekKayitIndir={seciliAnahtar ? () => indir("pdf", seciliAnahtar) : undefined}
+            indir={indir}
+            pdfIndir={pdfIndir}
           />
 
           {duzen === "carsaf" ? (
