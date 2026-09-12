@@ -116,7 +116,7 @@ def _html(db: Session, timetable_id: int, bakis: str, donem: Term,
     for anahtar, hucre_map in gruplar.items():
         parcalar.append("<section>")
         parcalar.append(f"<h1>{_kacis(anahtar)}</h1>")
-        parcalar.append(f"<h2>{_kacis(kurum_adi)} · {_kacis(t.name)}</h2>")
+        parcalar.append(f"<h2>{_kacis(kurum_adi)}</h2>")
         parcalar.append("<table><thead><tr><th></th>")
         for g in gunler:
             parcalar.append(f"<th>{_kacis(g.name)}</th>")
@@ -248,9 +248,8 @@ def _carsaf_html(db: Session, timetable_id: int, bakis: str, donem: Term,
         ".ders{font-weight:600;display:block;line-height:1.15}",
         ".alt{color:#475569;display:block;line-height:1.15}",
         "</style>",
-        f"<h1>{_kacis(t.name)} — Çarşaf Liste "
-        f"({'Şube' if bakis == 'sube' else 'Öğretmen'})</h1>",
-        f"<h2>{_kacis(kurum_adi)}</h2>",
+        f"<h1>{_kacis(kurum_adi)}</h1>",
+        f"<h2>{'Şube' if bakis == 'sube' else 'Öğretmen'} çarşafı</h2>",
         "<table><thead><tr>",
         f'<th class="ad" rowspan="2">{"Şube" if bakis == "sube" else "Öğretmen"}</th>',
     ]

@@ -574,7 +574,7 @@ def test_carsaf_html_tum_subeleri_tek_tabloda_verir(yonetici: TestClient):
     r = yonetici.get(f"/api/timetables/{pid}/export/html?bakis=sube&duzen=carsaf")
     assert r.status_code == 200
     govde = r.text
-    assert "Çarşaf Liste (Şube)" in govde
+    assert "Şube çarşafı" in govde
     assert govde.count("<table") == 1          # ayrı sayfalar değil, tek tablo
     for sube in ("5-A", "5-B"):
         assert sube in govde
@@ -589,7 +589,7 @@ def test_carsaf_ogretmen_bakisi(yonetici: TestClient):
     govde = yonetici.get(
         f"/api/timetables/{pid}/export/html?bakis=ogretmen&duzen=carsaf"
     ).text
-    assert "Çarşaf Liste (Öğretmen)" in govde
+    assert "Öğretmen çarşafı" in govde
     assert "Ayşe" in govde
 
 
