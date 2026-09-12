@@ -1276,3 +1276,11 @@ def test_zip_ciktisi_her_kayda_bir_pdf(yonetici: TestClient, monkeypatch):
     with zipfile.ZipFile(io.BytesIO(r.content)) as z:
         assert z.namelist() == ["ayse-yilmaz.pdf"]
         assert z.read("ayse-yilmaz.pdf").startswith(b"%PDF-")
+
+
+def test_carsaf_ciktisinda_kapali_saatler_gizlenebilir(yonetici: TestClient):
+    pid, kapali_sayisi = _carsaf_okul(yonetici)
+    acik = yonetici.get(f"/api/timetables/{pid}/export/html?bakis=sube&duzen=carsaf").text
+    gizli = yonetici.get(f"/api/timetables/{pid}/export/html?bakis=sube&duzen=carsaf&kapali=false").text
+    assert acik.count('class="kpl') == kapali_sayisi
+    assert 'class="kpl' not in gizli

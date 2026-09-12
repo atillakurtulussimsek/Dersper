@@ -152,6 +152,8 @@ export default function ProgramAracCubugu({
   indir,
   saatGoster,
   saatGosterDegistir,
+  kapaliGoster,
+  kapaliGosterDegistir,
   pdfIndir,
 }: {
   bakis: Bakis;
@@ -170,6 +172,9 @@ export default function ProgramAracCubugu({
   /** Çarşafta satır adının yanında yerleşen saat sayısı: "Ad (34)". */
   saatGoster?: boolean;
   saatGosterDegistir?: (v: boolean) => void;
+  /** Çarşafta kapalı saatler (×) görünsün mü? Dağıtılan çıktıda kapatılır. */
+  kapaliGoster?: boolean;
+  kapaliGosterDegistir?: (v: boolean) => void;
   /** PDF menüsü: çarşaf, toplu, tek kişilik ya da ZIP. */
   pdfIndir: (s: PdfSecenek) => void;
 }) {
@@ -212,6 +217,20 @@ export default function ProgramAracCubugu({
               className="h-3.5 w-3.5 rounded border-cizgi-guclu"
             />
             Saat sayısı
+          </label>
+        )}
+        {duzen === "carsaf" && kapaliGosterDegistir && (
+          <label
+            className="flex cursor-pointer items-center gap-1.5 text-xs text-murekkep-yumusak"
+            title="Kapalı saatleri (×) göster. Öğretmenlere dağıtılacak çıktı için kapatın."
+          >
+            <input
+              type="checkbox"
+              checked={Boolean(kapaliGoster)}
+              onChange={(e) => kapaliGosterDegistir(e.target.checked)}
+              className="h-3.5 w-3.5 rounded border-cizgi-guclu"
+            />
+            Kapalı saatler
           </label>
         )}
 

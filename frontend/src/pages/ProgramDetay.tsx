@@ -84,6 +84,14 @@ export default function ProgramDetay() {
     setSaatGoster(v);
     try { localStorage.setItem("dersper_carsaf_saat", v ? "1" : "0"); } catch { /* yok say */ }
   }
+  // Çarşafta kapalı saatler (×): idare için açık, dağıtılan çıktı için kapatılır.
+  const [kapaliGoster, setKapaliGoster] = useState<boolean>(() => {
+    try { return localStorage.getItem("dersper_carsaf_kapali") !== "0"; } catch { return true; }
+  });
+  function kapaliGosterDegistir(v: boolean) {
+    setKapaliGoster(v);
+    try { localStorage.setItem("dersper_carsaf_kapali", v ? "1" : "0"); } catch { /* yok say */ }
+  }
   const [anahtar, setAnahtar] = useState<string | null>(null);
   const [hata, setHata] = useState<string | null>(null);
   const [suruklenen, setSuruklenen] = useState<Suruklenen | null>(null);
@@ -421,6 +429,7 @@ export default function ProgramDetay() {
     return (
       `/api/timetables/${id}/export/${bicim}?bakis=${secenek.bakis}&duzen=${secenek.duzen}` +
       (saatGoster ? "&saat=true" : "") +
+      (kapaliGoster ? "" : "&kapali=false") +
       (secenek.kayit ? `&kayit=${encodeURIComponent(secenek.kayit)}` : "")
     );
   }
@@ -603,6 +612,8 @@ export default function ProgramDetay() {
             duzenDegistir={setDuzen}
             saatGoster={saatGoster}
             saatGosterDegistir={saatGosterDegistir}
+            kapaliGoster={kapaliGoster}
+            kapaliGosterDegistir={kapaliGosterDegistir}
             anahtarlar={duzen === "ayri" ? anahtarlar : []}
             seciliAnahtar={seciliAnahtar}
             anahtarDegistir={setAnahtar}
@@ -638,7 +649,8 @@ export default function ProgramDetay() {
                 saatGoster={saatGoster}
                 subeSirasi={izgaraSorgu.data?.section_names ?? []}
                 kapali={
-                  bakis === "sube" ? kapali.data?.sections : kapali.data?.teachers
+                  !kapaliGoster ? undefined
+                    : bakis === "sube" ? kapali.data?.sections : kapali.data?.teachers
                 }
                 ac={(a) => {
                   setAnahtar(a);

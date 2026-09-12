@@ -5,6 +5,10 @@ Dersper'in geliştirme günlüğü. Her değişiklik tek cümleyle, en yeni sür
 öncesinde ikinci hane özellik, üçüncü hane düzeltme demektir. Uygulamanın
 sürümü arayüzde yan menünün altında yazar.
 
+## 0.31.0 — 2026-09-12
+
+- Çarşafta "Kapalı saatler" seçeneği: kapalı saat işaretleri (×) ekranda ve HTML/PDF çıktısında gösterilip gizlenebilir. İdare için açık tutulur; öğretmenlere dağıtılacak çıktı için kapatılır, o hücreler boş kalır. Seçim tarayıcıda hatırlanır.
+
 ## 0.30.1 — 2026-09-12
 
 - PDF ve yazdırma çıktılarından ders programının adı kaldırıldı; başlıkta yalnız kurum adı ve kayıt (öğretmen/şube) adı var, çarşafta "Şube çarşafı" / "Öğretmen çarşafı".

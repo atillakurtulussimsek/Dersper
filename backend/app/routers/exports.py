@@ -208,7 +208,7 @@ def _satir_adi(anahtar: str, hucre_map: dict, saat: bool) -> str:
 
 
 def _carsaf_html(db: Session, timetable_id: int, bakis: str, donem: Term,
-                 saat: bool = False) -> str:
+                 saat: bool = False, kapali: bool = True) -> str:
     """Tüm şubeleri (ya da öğretmenleri) tek sayfada gösteren toplu liste.
 
     Satırlar şube/öğretmen, sütunlar gün × ders saati. Hücrelerde yer dar
@@ -218,7 +218,9 @@ def _carsaf_html(db: Session, timetable_id: int, bakis: str, donem: Term,
     t, kurum_adi = _baslik(db, timetable_id, donem)
     gunler, _ = _izgara_yapisi(db, donem)
     gruplar = _tablolar(db, timetable_id, bakis)
-    kapali_map = _kapali_saatler(db, donem, bakis)
+    # Kapalı saatler idarenin işine yarar; öğretmenlere/velilere dağıtılan
+    # çarşafta gösterilmeyebilir (kapali=False): o hücreler boş kalır.
+    kapali_map = _kapali_saatler(db, donem, bakis) if kapali else {}
 
     # Her günün kendi ders saati dizini listesi — günler farklı uzunlukta olabilir.
     gun_saatleri = [(g, _ders_indexleri(g)) for g in gunler]
@@ -312,9 +314,9 @@ def _kacis(s: str) -> str:
 
 
 def _icerik(db: Session, timetable_id: int, bakis: str, duzen: str, donem: Term,
-            saat: bool = False, kayit: str | None = None) -> str:
+            saat: bool = False, kayit: str | None = None, kapali: bool = True) -> str:
     if duzen == "carsaf":
-        return _carsaf_html(db, timetable_id, bakis, donem, saat)
+        return _carsaf_html(db, timetable_id, bakis, donem, saat, kapali)
     return _html(db, timetable_id, bakis, donem, kayit)
 
 
@@ -327,11 +329,13 @@ def html_cikti(
     saat: bool = Query(False),
     # Yalnız bu kayıt (öğretmen ya da şube adı): tek kişilik çıktı.
     kayit: str | None = Query(None),
+    # Çarşafta kapalı saatler (×) gösterilsin mi? Dağıtılan çıktıda kapatılır.
+    kapali: bool = Query(True),
     db: Session = Depends(get_db),
     donem: Term = Depends(aktif_donem),
 ) -> Response:
     return Response(
-        _icerik(db, timetable_id, bakis, duzen, donem, saat, kayit),
+        _icerik(db, timetable_id, bakis, duzen, donem, saat, kayit, kapali),
         media_type="text/html; charset=utf-8",
     )
 
@@ -343,6 +347,7 @@ def pdf_cikti(
     duzen: str = Query("ayri", pattern="^(ayri|carsaf)$"),
     saat: bool = Query(False),
     kayit: str | None = Query(None),
+    kapali: bool = Query(True),
     db: Session = Depends(get_db),
     donem: Term = Depends(aktif_donem),
 ) -> Response:
@@ -355,7 +360,7 @@ def pdf_cikti(
             f"(macOS: brew install pango). Ayrıntı: {e}. "
             "Bu arada HTML çıktısını tarayıcıdan yazdırabilirsiniz.",
         )
-    pdf = HTML(string=_icerik(db, timetable_id, bakis, duzen, donem, saat, kayit)).write_pdf()
+    pdf = HTML(string=_icerik(db, timetable_id, bakis, duzen, donem, saat, kayit, kapali)).write_pdf()
     ad = f"ders-programi-{_dosya_adi(kayit) if kayit else f'{duzen}-{bakis}'}.pdf"
     return Response(pdf, media_type="application/pdf",
                     headers={"Content-Disposition": f'attachment; filename="{ad}"'})
