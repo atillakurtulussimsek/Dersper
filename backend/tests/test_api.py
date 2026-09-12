@@ -582,9 +582,14 @@ def test_carsaf_html_tum_subeleri_tek_tabloda_verir(yonetici: TestClient):
         assert sube in govde
     assert "Pazartesi" in govde and "Cuma" in govde
 
+    # Varsayılan tek sayfa: A4'te de tek tablo. Bölünmüş istenirse iki sayfa.
     a4 = yonetici.get(f"/api/timetables/{pid}/export/html?bakis=sube&duzen=carsaf&kagit=a4").text
-    assert a4.count("<table") == 2 and a4.count("5-A") == 2
-    assert "(1/2)" in a4 and "(2/2)" in a4
+    assert a4.count("<table") == 1
+    bolunmus = yonetici.get(
+        f"/api/timetables/{pid}/export/html?bakis=sube&duzen=carsaf&kagit=a4&tek_sayfa=false"
+    ).text
+    assert bolunmus.count("<table") == 2 and bolunmus.count("5-A") == 2
+    assert "(1/2)" in bolunmus and "(2/2)" in bolunmus
 
 
 def test_carsaf_ogretmen_bakisi(yonetici: TestClient):
@@ -1300,6 +1305,6 @@ def test_carsaf_kagit_secimi(yonetici: TestClient):
     import re
     p3 = float(re.search(r"table\{[^}]*font-size:([\d.]+)px", a3).group(1))
     p4 = float(re.search(r"table\{[^}]*font-size:([\d.]+)px", a4).group(1))
-    # İki kâğıtta da yazı okunur boyda; A3 daha az sayfaya sığar.
-    assert p3 >= 8 and p4 >= 8
-    assert a3.count("<section>") <= a4.count("<section>")
+    # Tek sayfa: A3'te yazı daha büyük; ikisi de tek sayfa.
+    assert p3 > p4
+    assert a3.count("<section>") == 1 and a4.count("<section>") == 1

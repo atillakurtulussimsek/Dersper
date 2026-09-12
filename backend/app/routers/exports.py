@@ -209,10 +209,13 @@ def _satir_adi(anahtar: str, hucre_map: dict, saat: bool) -> str:
 
 # Çarşaf kâğıdı: yatay sayfanın iç genişliği (mm, 8 mm kenar boşluğuyla).
 KAGIT_GENISLIK_MM = {"a4": 281.0, "a3": 404.0}
+# Yatay sayfanın iç yüksekliği (mm, 8 mm kenar boşluğuyla).
+KAGIT_YUKSEKLIK_MM = {"a4": 194.0, "a3": 281.0}
 
 
 def _carsaf_html(db: Session, timetable_id: int, bakis: str, donem: Term,
-                 saat: bool = False, kapali: bool = True, kagit: str = "a3") -> str:
+                 saat: bool = False, kapali: bool = True, kagit: str = "a3",
+                 tek_sayfa: bool = True) -> str:
     """Tüm şubeleri (ya da öğretmenleri) tek sayfada gösteren toplu liste.
 
     Satırlar şube/öğretmen, sütunlar gün × ders saati. Hücrelerde yer dar
@@ -234,7 +237,11 @@ def _carsaf_html(db: Session, timetable_id: int, bakis: str, donem: Term,
     # A3'e bile 5 mm'lik sütunlarla sığar; bu okunmaz. Bunun yerine günler
     # sayfalara bölünür: her sayfada en çok EN_COK_SUTUN sütun, ad sütunu her
     # sayfada yinelenir. Kısa hafta tek sayfada kalır.
-    en_cok_sutun = 40 if kagit == "a3" else 28
+    # `tek_sayfa`: bütün hafta ve bütün kayıtlar TEK sayfaya sığdırılır; yazı
+    # hem genişliğe hem yüksekliğe göre küçülür (idarenin duvar çarşafı).
+    # Aksi hâlde günler sayfalara bölünür: her sayfada en çok EN_COK_SUTUN
+    # sütun, ad sütunu her sayfada yinelenir (okunur, çok sayfalı).
+    en_cok_sutun = 10**6 if tek_sayfa else (40 if kagit == "a3" else 28)
     sayfalar: list[list[tuple]] = [[]]
     for g, idx in gun_saatleri:
         dolu = sum(len(i) for _, i in sayfalar[-1])
@@ -246,12 +253,28 @@ def _carsaf_html(db: Session, timetable_id: int, bakis: str, donem: Term,
     # Yazı boyu sütun genişliğinden türetilir. Üst satır (kısa kod, ~4
     # karakter) tek satırda sığmalı: yazı ≈ sütun/3.6. Alt satır (öğretmen/
     # şube) daha küçük ve iki satıra sarabilir; satır yüksekliği buna göre.
-    ad_mm = 30.0
+    ad_mm = 30.0 if not tek_sayfa else 26.0
     sutun_mm = (KAGIT_GENISLIK_MM.get(kagit, KAGIT_GENISLIK_MM["a3"]) - ad_mm) / max(1, sutun_sayisi)
     sutun_px = sutun_mm * 3.78
-    punto = max(6.0, min(10.0, sutun_px / 3.6))
-    alt_punto = max(5.5, punto * 0.8)
-    satir_px = punto * 1.2 + alt_punto * 2.3 + 6
+    punto = max(4.5, min(10.0, sutun_px / 3.6))
+    alt_satir = 2.3          # alt satır en çok iki satır (em)
+    if tek_sayfa:
+        # Yükseklik de sınırlar: başlıklar (~12 mm) ve iki başlık satırı (~8 mm)
+        # düşülünce kalan, kayıt sayısına bölünür. Sığmıyorsa önce alt satır
+        # tek satıra iner, sonra yazı küçülür.
+        satir_mm = (KAGIT_YUKSEKLIK_MM.get(kagit, 281.0) - 12.0 - 8.0) / max(1, len(gruplar))
+        satir_px_tavan = satir_mm * 3.78 - 1.5      # kenarlık payı
+        def gereken(pt: float, em: float) -> float:
+            return pt * 1.2 + max(4.0, pt * 0.8) * em + 4
+        if gereken(punto, alt_satir) > satir_px_tavan:
+            alt_satir = 1.15
+        if gereken(punto, alt_satir) > satir_px_tavan:
+            punto = max(4.0, (satir_px_tavan - 4) / (1.2 + 0.8 * alt_satir))
+        alt_punto = max(4.0, punto * 0.8)
+        satir_px = gereken(punto, alt_satir)
+    else:
+        alt_punto = max(5.5, punto * 0.8)
+        satir_px = punto * 1.2 + alt_punto * 2.3 + 6
 
     p: list[str] = [
         "<style>",
@@ -276,8 +299,9 @@ def _carsaf_html(db: Session, timetable_id: int, bakis: str, donem: Term,
         "th.gun{border-left:2px solid #64748b}",
         "td.gunbas,th.gunbas{border-left:2px solid #64748b}",
         ".ders{font-weight:600;line-height:1.2;white-space:nowrap;text-overflow:ellipsis}",
-        f".alt{{color:#475569;font-size:{alt_punto:.1f}px;line-height:1.15;max-height:2.3em;"
-        f"word-break:break-word}}",
+        f".alt{{color:#475569;font-size:{alt_punto:.1f}px;line-height:1.15;"
+        f"max-height:{alt_satir:.2f}em;word-break:break-word"
+        + (";white-space:nowrap;text-overflow:ellipsis" if alt_satir < 2 else "") + "}",
         "</style>",
     ]
     baslik = f"{'Şube' if bakis == 'sube' else 'Öğretmen'} çarşafı"
@@ -350,9 +374,9 @@ def _kacis(s: str) -> str:
 
 def _icerik(db: Session, timetable_id: int, bakis: str, duzen: str, donem: Term,
             saat: bool = False, kayit: str | None = None, kapali: bool = True,
-            kagit: str = "a3") -> str:
+            kagit: str = "a3", tek_sayfa: bool = True) -> str:
     if duzen == "carsaf":
-        return _carsaf_html(db, timetable_id, bakis, donem, saat, kapali, kagit)
+        return _carsaf_html(db, timetable_id, bakis, donem, saat, kapali, kagit, tek_sayfa)
     return _html(db, timetable_id, bakis, donem, kayit)
 
 
@@ -369,11 +393,14 @@ def html_cikti(
     kapali: bool = Query(True),
     # Çarşaf kâğıdı: a3 (geniş, okunur) ya da a4. Tarayıcıdan yazdırmada a4.
     kagit: str = Query("a4", pattern="^(a4|a3)$"),
+    # Çarşaf tek sayfaya sığdırılsın mı (yazı küçülür), yoksa günler sayfalara
+    # bölünsün mü (okunur)?
+    tek_sayfa: bool = Query(True),
     db: Session = Depends(get_db),
     donem: Term = Depends(aktif_donem),
 ) -> Response:
     return Response(
-        _icerik(db, timetable_id, bakis, duzen, donem, saat, kayit, kapali, kagit),
+        _icerik(db, timetable_id, bakis, duzen, donem, saat, kayit, kapali, kagit, tek_sayfa),
         media_type="text/html; charset=utf-8",
     )
 
@@ -387,6 +414,7 @@ def pdf_cikti(
     kayit: str | None = Query(None),
     kapali: bool = Query(True),
     kagit: str = Query("a3", pattern="^(a4|a3)$"),
+    tek_sayfa: bool = Query(True),
     db: Session = Depends(get_db),
     donem: Term = Depends(aktif_donem),
 ) -> Response:
@@ -400,7 +428,7 @@ def pdf_cikti(
             "Bu arada HTML çıktısını tarayıcıdan yazdırabilirsiniz.",
         )
     pdf = HTML(string=_icerik(db, timetable_id, bakis, duzen, donem, saat, kayit, kapali,
-                              kagit)).write_pdf()
+                              kagit, tek_sayfa)).write_pdf()
     ad = f"ders-programi-{_dosya_adi(kayit) if kayit else f'{duzen}-{bakis}'}.pdf"
     return Response(pdf, media_type="application/pdf",
                     headers={"Content-Disposition": f'attachment; filename="{ad}"'})

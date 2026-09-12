@@ -5,6 +5,10 @@ Dersper'in geliştirme günlüğü. Her değişiklik tek cümleyle, en yeni sür
 öncesinde ikinci hane özellik, üçüncü hane düzeltme demektir. Uygulamanın
 sürümü arayüzde yan menünün altında yazar.
 
+## 0.34.0 — 2026-09-12
+
+- Çarşaf PDF'i varsayılan olarak TEK sayfaya sığar: tüm günler ve tüm şubeler/öğretmenler bir sayfada; yazı hem genişliğe hem yüksekliğe göre ayarlanır, gerekirse alt satır tek satıra iner. PDF menüsünde her çarşaf için "Tek sayfa — A3", "Tek sayfa — A4" ve "Günler sayfalara bölünmüş — A3 (büyük yazı)" seçenekleri var. Tarayıcıdan yazdırma da tek sayfa.
+
 ## 0.33.0 — 2026-09-12
 
 - Çarşaf PDF'i okunur hâle geldi: günler sayfalara bölünür (A3'te sayfa başına en çok 40, A4'te 28 ders saati sütunu), ad sütunu her sayfada yinelenir, yazı boyu sütun genişliğinden türetilir (≈10 px), öğretmen/şube adı iki satıra sarar. PDF menüsünde çarşaf için A3 yatay (geniş) ve A4 yatay seçenekleri var. 6 gün × 12 saatlik okulda A3: 2 sayfa, kesik metin yok.

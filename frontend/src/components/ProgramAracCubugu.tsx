@@ -23,6 +23,8 @@ export type PdfSecenek = {
   zip?: boolean;
   /** Çarşaf kâğıdı; verilmezse sunucu A3 kullanır. */
   kagit?: "a3" | "a4";
+  /** Çarşaf: günler sayfalara bölünsün (okunur) mü? Varsayılan tek sayfa. */
+  bolunmus?: boolean;
 };
 
 function PdfMenusu({
@@ -50,12 +52,19 @@ function PdfMenusu({
   const secili = duzen === "ayri" ? seciliAnahtar : undefined;
   const bolumler: { baslik: string; ogeler: { etiket: string; secenek: PdfSecenek }[] }[] = [
     {
-      baslik: "Çarşaf (hepsi tek tabloda)",
+      baslik: "Şube çarşafı",
       ogeler: [
-        { etiket: "Şube çarşafı — A3 yatay (geniş)", secenek: { bakis: "sube", duzen: "carsaf", kagit: "a3" } },
-        { etiket: "Şube çarşafı — A4 yatay", secenek: { bakis: "sube", duzen: "carsaf", kagit: "a4" } },
-        { etiket: "Öğretmen çarşafı — A3 yatay (geniş)", secenek: { bakis: "ogretmen", duzen: "carsaf", kagit: "a3" } },
-        { etiket: "Öğretmen çarşafı — A4 yatay", secenek: { bakis: "ogretmen", duzen: "carsaf", kagit: "a4" } },
+        { etiket: "Tek sayfa — A3 yatay", secenek: { bakis: "sube", duzen: "carsaf", kagit: "a3" } },
+        { etiket: "Tek sayfa — A4 yatay", secenek: { bakis: "sube", duzen: "carsaf", kagit: "a4" } },
+        { etiket: "Günler sayfalara bölünmüş — A3 (büyük yazı)", secenek: { bakis: "sube", duzen: "carsaf", kagit: "a3", bolunmus: true } },
+      ],
+    },
+    {
+      baslik: "Öğretmen çarşafı",
+      ogeler: [
+        { etiket: "Tek sayfa — A3 yatay", secenek: { bakis: "ogretmen", duzen: "carsaf", kagit: "a3" } },
+        { etiket: "Tek sayfa — A4 yatay", secenek: { bakis: "ogretmen", duzen: "carsaf", kagit: "a4" } },
+        { etiket: "Günler sayfalara bölünmüş — A3 (büyük yazı)", secenek: { bakis: "ogretmen", duzen: "carsaf", kagit: "a3", bolunmus: true } },
       ],
     },
     {
