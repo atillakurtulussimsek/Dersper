@@ -5,6 +5,10 @@ Dersper'in geliştirme günlüğü. Her değişiklik tek cümleyle, en yeni sür
 öncesinde ikinci hane özellik, üçüncü hane düzeltme demektir. Uygulamanın
 sürümü arayüzde yan menünün altında yazar.
 
+## 0.34.2 — 2026-09-13
+
+- Çıktı imzası biraz daha okunur: 8,5 px, koyu gri.
+
 ## 0.34.1 — 2026-09-13
 
 - PDF ve yazdırma çıktılarının altına küçük, soluk bir imza: "Varkhe Digital Ders Planlama Programı". Tek sayfa yerleşimi korunur.

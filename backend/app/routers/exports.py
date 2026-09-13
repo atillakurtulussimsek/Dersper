@@ -372,8 +372,8 @@ def _dosya_adi(ad: str) -> str:
 
 # Çıktıların altındaki sessiz imza. Küçük, soluk, sağa yaslı.
 IMZA = "Varkhe Digital Ders Planlama Programı"
-IMZA_CSS = ("footer{margin-top:2mm;text-align:right;font-size:7px;color:#94a3b8;"
-            "letter-spacing:0.02em}")
+IMZA_CSS = ("footer{margin-top:2mm;text-align:right;font-size:8.5px;color:#475569;"
+            "font-weight:500;letter-spacing:0.02em}")
 IMZA_HTML = f"<footer>{IMZA}</footer>"
 
 
