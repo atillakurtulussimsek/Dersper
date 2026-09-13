@@ -94,12 +94,27 @@ def izgara_hucreleri(db: Session, timetable_id: int) -> list[GridCell]:
 @router.get("", response_model=list[TimetableOut])
 def programlar(
     db: Session = Depends(get_db), donem: Term = Depends(aktif_donem)
-) -> list[Timetable]:
-    return list(db.scalars(
+) -> list[TimetableOut]:
+    programlar_ = list(db.scalars(
         select(Timetable)
         .where(Timetable.term_id == donem.id, Timetable.deleted_at.is_(None))
         .order_by(Timetable.created_at.desc())
     ))
+    # Her programın SON çalıştırmasının durumu: liste "üretiliyor" ve
+    # "başarısız" rozetlerini buradan gösterir; ayrıntı programın içinde.
+    son_durum: dict[int, SolveStatus] = {}
+    for run in db.scalars(
+        select(SolveRun)
+        .where(SolveRun.timetable_id.in_([t.id for t in programlar_]))
+        .order_by(SolveRun.timetable_id, SolveRun.id.desc())
+    ) if programlar_ else []:
+        son_durum.setdefault(run.timetable_id, run.status)
+    cikti = []
+    for t in programlar_:
+        v = TimetableOut.model_validate(t)
+        v.last_run_status = son_durum.get(t.id)
+        cikti.append(v)
+    return cikti
 
 
 @router.post("", response_model=TimetableOut, status_code=status.HTTP_201_CREATED)

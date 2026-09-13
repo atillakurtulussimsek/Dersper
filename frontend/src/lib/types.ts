@@ -152,6 +152,8 @@ export interface Program {
   gap_policy: BoslukPolitikasi;
   /** Sonsuz mod: başarısız olsa da farklı stratejilerle durdurulana kadar dene. */
   endless_mode: boolean;
+  /** Son üretimin durumu; hiç üretilmediyse null. */
+  last_run_status?: "bekliyor" | "calisiyor" | "basarili" | "cozumsuz" | "durduruldu" | "hata" | null;
   created_at: string;
 }
 

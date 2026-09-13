@@ -1315,3 +1315,11 @@ def test_ciktilarin_altinda_imza_var(yonetici: TestClient):
     for duzen in ("ayri", "carsaf"):
         html = yonetici.get(f"/api/timetables/{pid}/export/html?bakis=sube&duzen={duzen}").text
         assert "<footer>Varkhe Digital Ders Planlama Programı</footer>" in html
+
+
+def test_program_listesinde_son_uretim_durumu(yonetici: TestClient):
+    _tanimlar(yonetici)
+    pid = yonetici.post("/api/timetables", json={"name": "Durum"}).json()["id"]
+    assert yonetici.get("/api/timetables").json()[0]["last_run_status"] is None
+    uret_ve_bekle(yonetici, pid)
+    assert yonetici.get("/api/timetables").json()[0]["last_run_status"] == "basarili"

@@ -5,6 +5,10 @@ Dersper'in geliştirme günlüğü. Her değişiklik tek cümleyle, en yeni sür
 öncesinde ikinci hane özellik, üçüncü hane düzeltme demektir. Uygulamanın
 sürümü arayüzde yan menünün altında yazar.
 
+## 0.35.0 — 2026-09-13
+
+- Ders Programları listesinde son üretimin durumu görünüyor: üretim sürerken "Üretiliyor" (liste birkaç saniyede bir yenilenir), üretim çözümsüz ya da hatayla bittiyse "Üretim başarısız". Ayrıntı programın içinde.
+
 ## 0.34.2 — 2026-09-13
 
 - Çıktı imzası biraz daha okunur: 8,5 px, koyu gri.

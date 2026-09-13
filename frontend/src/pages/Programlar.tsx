@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Trash2 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { Loader2, Plus, Trash2 } from "lucide-react";
+import { get } from "../lib/api";
 
 import {
   Alan, BosDurum, Buton, Girdi, Kart, Kutu, Rozet, SayfaBasligi, Tablo,
@@ -16,9 +18,34 @@ const DURUM: Record<ProgramDurumu, { etiket: string; tur: "notr" | "iyi" | "uyar
   yayinda: { etiket: "Yayında", tur: "uyari" },
 };
 
+const URETILIYOR = new Set(["bekliyor", "calisiyor"]);
+const BASARISIZ = new Set(["cozumsuz", "hata"]);
+
+/** Son üretimin rozeti: sürüyor ya da başarısız. Başarılı üretim program
+ *  durumunda ("Üretildi") zaten görünür; ayrıntı programın içinde. */
+function UretimRozeti({ p }: { p: Program }) {
+  const d = p.last_run_status;
+  if (!d) return null;
+  if (URETILIYOR.has(d))
+    return (
+      <Rozet tur="uyari">
+        <Loader2 className="mr-1 inline h-3 w-3 animate-spin" />
+        Üretiliyor
+      </Rozet>
+    );
+  if (BASARISIZ.has(d)) return <Rozet tur="kotu">Üretim başarısız</Rozet>;
+  return null;
+}
+
 export default function Programlar() {
   const navigate = useNavigate();
-  const liste = useListe<Program>("programlar", "/timetables");
+  // Üretim sürerken liste birkaç saniyede bir yenilenir; rozet canlı kalır.
+  const liste = useQuery({
+    queryKey: ["programlar"],
+    queryFn: () => get<Program[]>("/timetables"),
+    refetchInterval: (sorgu) =>
+      (sorgu.state.data ?? []).some((p) => URETILIYOR.has(p.last_run_status ?? "")) ? 3000 : false,
+  });
   const subeler = useListe<Sube>("subeler", "/sections");
   const kaynak = useKaynak<
     { name: string; section_ids: number[] | null; gap_policy: BoslukPolitikasi },
@@ -108,7 +135,10 @@ export default function Programlar() {
                   {boslukEtiketi(p.gap_policy)}
                 </td>
                 <td className="px-3 py-2.5">
-                  <Rozet tur={DURUM[p.status].tur}>{DURUM[p.status].etiket}</Rozet>
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    <Rozet tur={DURUM[p.status].tur}>{DURUM[p.status].etiket}</Rozet>
+                    <UretimRozeti p={p} />
+                  </span>
                 </td>
                 <td className="px-3 py-2.5 text-murekkep-silik">
                   {new Date(p.created_at).toLocaleString("tr-TR")}

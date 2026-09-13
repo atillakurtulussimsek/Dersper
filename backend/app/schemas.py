@@ -504,6 +504,8 @@ class TimetableOut(ORMModel):
     gap_policy: GapPolicy
     created_at: datetime
     endless_mode: bool = False
+    # Son üretimin durumu (listede "üretiliyor" / "başarısız" rozeti için).
+    last_run_status: SolveStatus | None = None
 
 
 class AssignmentOut(ORMModel):
