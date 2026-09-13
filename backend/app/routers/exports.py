@@ -90,7 +90,7 @@ def _html(db: Session, timetable_id: int, bakis: str, donem: Term,
     # büyümez, sayfa taşmaz. Satır sayısı arttıkça yazı küçülür.
     satir_sayisi = max(1, len(ders_indexleri))
     # 188 − başlıklar 14 − gün satırı 8 − kenarlık payı 3 = 163 mm ders satırlarına.
-    satir_mm = min(13.0, 163.0 / satir_sayisi)
+    satir_mm = min(13.0, 159.0 / satir_sayisi)      # 4 mm imzaya
     punto = max(7.0, min(11.0, satir_mm * 0.75))
     parcalar = [
         "<style>",
@@ -102,6 +102,7 @@ def _html(db: Session, timetable_id: int, bakis: str, donem: Term,
         "h2{font-size:12px;margin:0 0 6px;color:#475569;font-weight:500;line-height:1.2}",
         "section{height:188mm;overflow:hidden;box-sizing:border-box;page-break-after:always}"
         "section:last-child{page-break-after:auto}",
+        IMZA_CSS,
         "table{border-collapse:collapse;width:100%;table-layout:fixed}",
         "tr{page-break-inside:avoid}",
         "th,td{border:1px solid #cbd5e1;padding:0 4px;text-align:center;"
@@ -140,7 +141,7 @@ def _html(db: Session, timetable_id: int, bakis: str, donem: Term,
                         f'<div class="alt">{_kacis(alt)}</div></td>'
                     )
             parcalar.append("</tr>")
-        parcalar.append("</tbody></table></section>")
+        parcalar.append("</tbody></table>" + IMZA_HTML + "</section>")
     if not gruplar:
         parcalar.append("<p>Bu programda yerleşmiş ders yok.</p>")
     return "".join(parcalar)
@@ -262,7 +263,7 @@ def _carsaf_html(db: Session, timetable_id: int, bakis: str, donem: Term,
         # Yükseklik de sınırlar: başlıklar (~12 mm) ve iki başlık satırı (~8 mm)
         # düşülünce kalan, kayıt sayısına bölünür. Sığmıyorsa önce alt satır
         # tek satıra iner, sonra yazı küçülür.
-        satir_mm = (KAGIT_YUKSEKLIK_MM.get(kagit, 281.0) - 12.0 - 8.0) / max(1, len(gruplar))
+        satir_mm = (KAGIT_YUKSEKLIK_MM.get(kagit, 281.0) - 12.0 - 8.0 - 5.0) / max(1, len(gruplar))
         satir_px_tavan = satir_mm * 3.78 - 1.5      # kenarlık payı
         def gereken(pt: float, em: float) -> float:
             return pt * 1.2 + max(4.0, pt * 0.8) * em + 4
@@ -285,6 +286,7 @@ def _carsaf_html(db: Session, timetable_id: int, bakis: str, donem: Term,
         "h1{font-size:13px;margin:0 0 1px}",
         "h2{font-size:10px;margin:0 0 6px;color:#475569;font-weight:500}",
         "section{page-break-after:always}section:last-child{page-break-after:auto}",
+        IMZA_CSS,
         f"table{{border-collapse:collapse;width:100%;table-layout:fixed;font-size:{punto:.1f}px}}",
         "td span{display:block;overflow:hidden}",
         "thead{display:table-header-group}tr{page-break-inside:avoid}",
@@ -353,7 +355,7 @@ def _carsaf_html(db: Session, timetable_id: int, bakis: str, donem: Term,
                             f'<span class="alt">{_kacis(alt)}</span></td>'
                         )
             p.append("</tr>")
-        p.append("</tbody></table></section>")
+        p.append("</tbody></table>" + IMZA_HTML + "</section>")
     if not gruplar:
         p.append("<p>Bu programda yerleşmiş ders yok.</p>")
     return "".join(p)
@@ -366,6 +368,13 @@ def _dosya_adi(ad: str) -> str:
     duz = unicodedata.normalize("NFKD", ad.replace("ı", "i").replace("İ", "I"))
     duz = "".join(c for c in duz if not unicodedata.combining(c))
     return re.sub(r"[^A-Za-z0-9]+", "-", duz).strip("-").lower() or "kayit"
+
+
+# Çıktıların altındaki sessiz imza. Küçük, soluk, sağa yaslı.
+IMZA = "Varkhe Digital Ders Planlama Programı"
+IMZA_CSS = ("footer{margin-top:2mm;text-align:right;font-size:7px;color:#94a3b8;"
+            "letter-spacing:0.02em}")
+IMZA_HTML = f"<footer>{IMZA}</footer>"
 
 
 def _kacis(s: str) -> str:

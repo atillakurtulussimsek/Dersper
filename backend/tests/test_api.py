@@ -1308,3 +1308,10 @@ def test_carsaf_kagit_secimi(yonetici: TestClient):
     # Tek sayfa: A3'te yazı daha büyük; ikisi de tek sayfa.
     assert p3 > p4
     assert a3.count("<section>") == 1 and a4.count("<section>") == 1
+
+
+def test_ciktilarin_altinda_imza_var(yonetici: TestClient):
+    pid, _ = _carsaf_okul(yonetici)
+    for duzen in ("ayri", "carsaf"):
+        html = yonetici.get(f"/api/timetables/{pid}/export/html?bakis=sube&duzen={duzen}").text
+        assert "<footer>Varkhe Digital Ders Planlama Programı</footer>" in html
