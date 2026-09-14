@@ -144,7 +144,7 @@ export default function Ayarlar() {
             />
           </Alan>
           <Alan
-            etiket="Okul müdürü"
+            etiket="Kurum müdürü"
             ipucu="Öğretmenlere verilen resmi tebligat çıktısında “Tebliğ Eden” imzasının altına yazılır."
           >
             <Girdi

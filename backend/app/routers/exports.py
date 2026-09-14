@@ -126,8 +126,12 @@ def _tablo_css(satir_mm: float, punto: float) -> str:
     )
 
 
+# A4 sayfanın iç alanı (10 mm kenar boşluğuyla): yön -> (genişlik, yükseklik) mm.
+A4_IC_MM = {"dikey": (190.0, 277.0), "yatay": (277.0, 190.0)}
+
+
 def _html(db: Session, timetable_id: int, bakis: str, donem: Term,
-          kayit: str | None = None) -> str:
+          kayit: str | None = None, yon: str = "dikey") -> str:
     t, kurum_adi = _baslik(db, timetable_id, donem)
     gunler, ders_indexleri = _izgara_yapisi(db, donem)
     gruplar = _tablolar(db, timetable_id, bakis, kayit)
@@ -138,18 +142,19 @@ def _html(db: Session, timetable_id: int, bakis: str, donem: Term,
     # kalan yükseklik ders satırlarına eşit bölünür; hücre metni tek satır ve
     # kesilir (…), satırlar büyümez, sayfa taşmaz.
     satir_sayisi = max(1, len(ders_indexleri))
-    satir_mm = min(16.0, 248.0 / satir_sayisi)
+    _, yukseklik = A4_IC_MM.get(yon, A4_IC_MM["dikey"])
+    satir_mm = min(16.0, (yukseklik - 29.0) / satir_sayisi)
     punto = max(7.0, min(11.0, satir_mm * 0.75))
     parcalar = [
         "<style>",
-        "@page{size:A4 portrait;margin:10mm}",
+        f"@page{{size:A4 {'landscape' if yon == 'yatay' else 'portrait'};margin:10mm}}",
         "html{color-scheme:light}",
         f"body{{font-family:'Helvetica Neue',Arial,sans-serif;font-size:{punto:g}px;"
         "color:#0f172a;background:#fff;margin:0}",
         "h1{font-size:16px;margin:0 0 2px;line-height:1.2}"
         "h2{font-size:12px;margin:0 0 6px;color:#475569;font-weight:500;line-height:1.2}",
-        "section{height:277mm;overflow:hidden;box-sizing:border-box;page-break-after:always}"
-        "section:last-child{page-break-after:auto}",
+        f"section{{height:{yukseklik:.0f}mm;overflow:hidden;box-sizing:border-box;"
+        "page-break-after:always}section:last-child{page-break-after:auto}",
         IMZA_CSS,
         _tablo_css(satir_mm, punto),
         "</style>",
@@ -166,7 +171,7 @@ def _html(db: Session, timetable_id: int, bakis: str, donem: Term,
 
 
 def _tebligat_html(db: Session, timetable_id: int, donem: Term,
-                   kayit: str | None = None) -> str:
+                   kayit: str | None = None, yon: str = "dikey") -> str:
     """Öğretmenlere resmi tebligat: MEB "Tebliğ-Tebellüğ Belgesi" düzeninde,
     her öğretmene bir A4 yatay sayfa. Üstte kimlik ve yazı bilgileri, ortada
     haftalık program, altta tebliğ cümlesi ile Tebliğ Eden (okul müdürü) ve
@@ -187,19 +192,20 @@ def _tebligat_html(db: Session, timetable_id: int, donem: Term,
     # tebliğ cümlesi 10 + imzalar 22 + imza satırı 4 + gün satırı 8 + pay 5 =
     # 95 → tabloya 182 mm.
     satir_sayisi = max(1, len(ders_indexleri))
-    satir_mm = min(13.0, 182.0 / satir_sayisi)
-    punto = max(7.0, min(10.0, satir_mm * 0.9))
+    _, yukseklik = A4_IC_MM.get(yon, A4_IC_MM["dikey"])
+    satir_mm = min(13.0, (yukseklik - 95.0) / satir_sayisi)
+    punto = max(6.5, min(10.0, satir_mm * 0.9))
     bugun = date.today().strftime("%d.%m.%Y")
     bos = "…… / …… / ……"
 
     parcalar = [
         "<style>",
-        "@page{size:A4 portrait;margin:10mm}",
+        f"@page{{size:A4 {'landscape' if yon == 'yatay' else 'portrait'};margin:10mm}}",
         "html{color-scheme:light}",
         f"body{{font-family:'Helvetica Neue',Arial,sans-serif;font-size:{punto:g}px;"
         "color:#0f172a;background:#fff;margin:0}",
-        "section{height:277mm;overflow:hidden;box-sizing:border-box;page-break-after:always;"
-        "position:relative}section:last-child{page-break-after:auto}",
+        f"section{{height:{yukseklik:.0f}mm;overflow:hidden;box-sizing:border-box;"
+        "page-break-after:always;position:relative}section:last-child{page-break-after:auto}",
         ".ust{text-align:center;margin-bottom:3mm}",
         ".ust .kurum{font-size:13px;font-weight:700;letter-spacing:0.02em}",
         ".ust .belge{font-size:12px;font-weight:700;margin-top:1mm}",
@@ -251,13 +257,16 @@ def _tebligat_html(db: Session, timetable_id: int, donem: Term,
             'rica ederim.</p>'
         )
         parcalar.append(
+            # Solda tebellüğ eden öğretmen (ad, branş, tarih), sağda tebliğ
+            # eden kurum müdürü: resmi yazıda imza sağda durur.
             '<table class="imza"><tr>'
-            '<td><div class="rol">Tebliğ Eden</div><div class="cizgi"></div>'
-            f'<div class="ad">{_kacis(mudur) if mudur else "…………………………………"}</div>'
-            '<div class="unvan">Okul Müdürü</div></td>'
             '<td><div class="rol">Tebellüğ Eden</div><div class="cizgi"></div>'
             f'<div class="ad">{_kacis(ad)}</div>'
-            f'<div class="unvan">{_kacis(gorev)} · Tarih: {bos}</div></td>'
+            f'<div class="unvan">{_kacis(gorev)}</div>'
+            f'<div class="unvan">Tarih: {bos}</div></td>'
+            '<td><div class="rol">Tebliğ Eden</div><div class="cizgi"></div>'
+            f'<div class="ad">{_kacis(mudur) if mudur else "…………………………………"}</div>'
+            '<div class="unvan">Kurum Müdürü</div></td>'
             '</tr></table>'
         )
         parcalar.append(IMZA_HTML + "</section>")
@@ -502,12 +511,12 @@ def _kacis(s: str) -> str:
 
 def _icerik(db: Session, timetable_id: int, bakis: str, duzen: str, donem: Term,
             saat: bool = False, kayit: str | None = None, kapali: bool = True,
-            kagit: str = "a3", tek_sayfa: bool = True) -> str:
+            kagit: str = "a3", tek_sayfa: bool = True, yon: str = "dikey") -> str:
     if duzen == "carsaf":
         return _carsaf_html(db, timetable_id, bakis, donem, saat, kapali, kagit, tek_sayfa)
     if duzen == "tebligat":
-        return _tebligat_html(db, timetable_id, donem, kayit)
-    return _html(db, timetable_id, bakis, donem, kayit)
+        return _tebligat_html(db, timetable_id, donem, kayit, yon)
+    return _html(db, timetable_id, bakis, donem, kayit, yon)
 
 
 @router.get("/html", response_class=Response)
@@ -526,11 +535,13 @@ def html_cikti(
     # Çarşaf tek sayfaya sığdırılsın mı (yazı küçülür), yoksa günler sayfalara
     # bölünsün mü (okunur)?
     tek_sayfa: bool = Query(True),
+    # Kişisel sayfalar (ayrı, tebligat): dikey ya da yatay.
+    yon: str = Query("dikey", pattern="^(dikey|yatay)$"),
     db: Session = Depends(get_db),
     donem: Term = Depends(aktif_donem),
 ) -> Response:
     return Response(
-        _icerik(db, timetable_id, bakis, duzen, donem, saat, kayit, kapali, kagit, tek_sayfa),
+        _icerik(db, timetable_id, bakis, duzen, donem, saat, kayit, kapali, kagit, tek_sayfa, yon),
         media_type="text/html; charset=utf-8",
     )
 
@@ -545,6 +556,8 @@ def pdf_cikti(
     kapali: bool = Query(True),
     kagit: str = Query("a3", pattern="^(a4|a3)$"),
     tek_sayfa: bool = Query(True),
+    # Kişisel sayfalar (ayrı, tebligat): dikey ya da yatay.
+    yon: str = Query("dikey", pattern="^(dikey|yatay)$"),
     db: Session = Depends(get_db),
     donem: Term = Depends(aktif_donem),
 ) -> Response:
@@ -558,7 +571,7 @@ def pdf_cikti(
             "Bu arada HTML çıktısını tarayıcıdan yazdırabilirsiniz.",
         )
     pdf = HTML(string=_icerik(db, timetable_id, bakis, duzen, donem, saat, kayit, kapali,
-                              kagit, tek_sayfa)).write_pdf()
+                              kagit, tek_sayfa, yon)).write_pdf()
     ad = f"ders-programi-{_dosya_adi(kayit) if kayit else f'{duzen}-{bakis}'}.pdf"
     return Response(pdf, media_type="application/pdf",
                     headers={"Content-Disposition": f'attachment; filename="{ad}"'})
@@ -570,6 +583,7 @@ def zip_cikti(
     bakis: str = Query("ogretmen", pattern="^(sube|ogretmen)$"),
     # ayri: sade program sayfası; tebligat: resmi tebliğ-tebellüğ belgesi.
     duzen: str = Query("ayri", pattern="^(ayri|tebligat)$"),
+    yon: str = Query("dikey", pattern="^(dikey|yatay)$"),
     db: Session = Depends(get_db),
     donem: Term = Depends(aktif_donem),
 ) -> Response:
@@ -592,9 +606,9 @@ def zip_cikti(
     tampon = io.BytesIO()
     with zipfile.ZipFile(tampon, "w", zipfile.ZIP_DEFLATED) as arsiv:
         for anahtar in gruplar:
-            html = (_tebligat_html(db, timetable_id, donem, kayit=anahtar)
+            html = (_tebligat_html(db, timetable_id, donem, kayit=anahtar, yon=yon)
                     if duzen == "tebligat"
-                    else _html(db, timetable_id, bakis, donem, kayit=anahtar))
+                    else _html(db, timetable_id, bakis, donem, kayit=anahtar, yon=yon))
             arsiv.writestr(f"{_dosya_adi(anahtar)}.pdf", HTML(string=html).write_pdf())
     ad = f"{'tebligat' if duzen == 'tebligat' else 'ders-programlari'}-{bakis}.zip"
     return Response(tampon.getvalue(), media_type="application/zip",

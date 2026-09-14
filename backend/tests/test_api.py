@@ -1334,10 +1334,17 @@ def test_tebligat_ciktisi_resmi_alanlari_icerir(yonetici: TestClient):
     html = yonetici.get(f"/api/timetables/{pid}/export/html?bakis=ogretmen&duzen=tebligat").text
     for parca in ("TEBLİĞ – TEBELLÜĞ BELGESİ", "Adı Soyadı", "Görevi", "Görev Yeri",
                   "Tebliğ Edildiği Yer", "Tebliğ Tarihi", "Yazının Özü", "Tebliğ Eden",
-                  "Tebellüğ Eden", "Okul Müdürü", "Ahmet Yılmaz", "Ayşe Yılmaz",
+                  "Tebellüğ Eden", "Kurum Müdürü", "Ahmet Yılmaz", "Ayşe Yılmaz",
                   "tebliğ edilmiştir"):
         assert parca in html, parca
     assert html.count("<section>") == 1
+    # Öğretmen solda, müdür sağda; dikey varsayılan, yatay istenebilir.
+    assert html.index("Tebellüğ Eden</div>") < html.index("Tebliğ Eden</div>")
+    assert "size:A4 portrait" in html
+    yatay = yonetici.get(
+        f"/api/timetables/{pid}/export/html?bakis=ogretmen&duzen=tebligat&yon=yatay"
+    ).text
+    assert "size:A4 landscape" in yatay
 
 
 def test_tebligat_zip(yonetici: TestClient, monkeypatch):

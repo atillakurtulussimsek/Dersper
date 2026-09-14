@@ -25,6 +25,8 @@ export type PdfSecenek = {
   kagit?: "a3" | "a4";
   /** Çarşaf: günler sayfalara bölünsün (okunur) mü? Varsayılan tek sayfa. */
   bolunmus?: boolean;
+  /** Kişisel sayfalar (ayrı, tebligat): dikey ya da yatay. */
+  yon?: "dikey" | "yatay";
 };
 
 function PdfMenusu({
@@ -39,6 +41,15 @@ function PdfMenusu({
   indir: (s: PdfSecenek) => void;
 }) {
   const [acik, setAcik] = useState(false);
+  // Kişisel sayfaların yönü; tercih tarayıcıda kalır.
+  const [yon, setYon] = useState<"dikey" | "yatay">(() => {
+    try { return localStorage.getItem("dersper_pdf_yon") === "yatay" ? "yatay" : "dikey"; }
+    catch { return "dikey"; }
+  });
+  function yonDegistir(y: "dikey" | "yatay") {
+    setYon(y);
+    try { localStorage.setItem("dersper_pdf_yon", y); } catch { /* yok say */ }
+  }
   const kutu = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!acik) return;
@@ -112,6 +123,19 @@ function PdfMenusu({
       </Buton>
       {acik && (
         <div className="absolute right-0 z-30 mt-1 w-72 rounded-lg border border-cizgi bg-yuzey p-1 shadow-xl shadow-murekkep/10">
+          <div className="flex items-center justify-between gap-2 border-b border-cizgi px-2 py-1.5">
+            <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-murekkep-silik">
+              Kişisel sayfa yönü
+            </span>
+            <Segment
+              deger={yon}
+              degistir={yonDegistir}
+              secenekler={[
+                { id: "dikey", etiket: "Dikey" },
+                { id: "yatay", etiket: "Yatay" },
+              ]}
+            />
+          </div>
           {bolumler.map((b) => (
             <div key={b.baslik} className="py-1">
               <p className="px-2 pb-1 text-2xs font-semibold uppercase tracking-[0.08em] text-murekkep-silik">
@@ -120,7 +144,7 @@ function PdfMenusu({
               {b.ogeler.map((o) => (
                 <button
                   key={o.etiket}
-                  onClick={() => { setAcik(false); indir(o.secenek); }}
+                  onClick={() => { setAcik(false); indir({ ...o.secenek, yon }); }}
                   className="block w-full truncate rounded-md px-2 py-1.5 text-left text-sm text-murekkep hover:bg-yuzey-alt"
                 >
                   {o.etiket}

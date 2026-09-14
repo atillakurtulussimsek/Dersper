@@ -5,6 +5,11 @@ Dersper'in geliştirme günlüğü. Her değişiklik tek cümleyle, en yeni sür
 öncesinde ikinci hane özellik, üçüncü hane düzeltme demektir. Uygulamanın
 sürümü arayüzde yan menünün altında yazar.
 
+## 0.37.0 — 2026-09-14
+
+- Tebligat imza düzeni: solda Tebellüğ Eden öğretmen (ad, branş, tarih satırı), sağda Tebliğ Eden "Kurum Müdürü". Ayarlar'daki alan da "Kurum müdürü" oldu.
+- PDF menüsünde "Kişisel sayfa yönü: Dikey / Yatay" seçimi; tebligat ve ayrı sayfa çıktıları seçilen yönde üretilir (tek sayfa korunur). Seçim tarayıcıda hatırlanır.
+
 ## 0.36.1 — 2026-09-14
 
 - Tebligat ve ayrı sayfa çıktıları artık A4 dikey; çarşaf yatay kalır. Tebligatta dönem adı yazılmıyor. Uzun ders adları (16 karakterden fazla) kısa koduyla yazılır, hücreler kesilmez.

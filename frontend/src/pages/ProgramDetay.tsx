@@ -432,17 +432,19 @@ export default function ProgramDetay() {
 
   function ciktiAdresi(
     bicim: "pdf" | "xlsx" | "html" | "zip",
-    secenek: { bakis: Bakis; duzen: Duzen | "tebligat"; kayit?: string; kagit?: "a3" | "a4"; bolunmus?: boolean } = { bakis, duzen },
+    secenek: { bakis: Bakis; duzen: Duzen | "tebligat"; kayit?: string; kagit?: "a3" | "a4"; bolunmus?: boolean; yon?: "dikey" | "yatay" } = { bakis, duzen },
   ) {
+    const yon = secenek.yon ? `&yon=${secenek.yon}` : "";
     if (bicim === "zip")
-      return `/api/timetables/${id}/export/zip?bakis=${secenek.bakis}&duzen=${secenek.duzen === "tebligat" ? "tebligat" : "ayri"}`;
+      return `/api/timetables/${id}/export/zip?bakis=${secenek.bakis}&duzen=${secenek.duzen === "tebligat" ? "tebligat" : "ayri"}${yon}`;
     return (
       `/api/timetables/${id}/export/${bicim}?bakis=${secenek.bakis}&duzen=${secenek.duzen}` +
       (saatGoster ? "&saat=true" : "") +
       (kapaliGoster ? "" : "&kapali=false") +
       (secenek.kayit ? `&kayit=${encodeURIComponent(secenek.kayit)}` : "") +
       (secenek.kagit ? `&kagit=${secenek.kagit}` : "") +
-      (secenek.bolunmus ? "&tek_sayfa=false" : "")
+      (secenek.bolunmus ? "&tek_sayfa=false" : "") +
+      yon
     );
   }
 
