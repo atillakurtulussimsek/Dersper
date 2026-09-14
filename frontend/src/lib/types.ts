@@ -62,6 +62,8 @@ export interface Kurum {
   name: string;
   type: KurumTipi;
   address: string | null;
+  /** Okul müdürü: resmi tebligat çıktısında "Tebliğ Eden" imzası. */
+  principal_name: string | null;
 }
 
 export interface DersSaati {

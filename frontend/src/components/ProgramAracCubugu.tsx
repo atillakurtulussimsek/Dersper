@@ -18,7 +18,7 @@ export type Duzen = "ayri" | "carsaf";
  *  her kayıt ayrı dosya (ZIP) mı. */
 export type PdfSecenek = {
   bakis: Bakis;
-  duzen: Duzen;
+  duzen: Duzen | "tebligat";
   kayit?: string;
   zip?: boolean;
   /** Çarşaf kâğıdı; verilmezse sunucu A3 kullanır. */
@@ -76,6 +76,16 @@ function PdfMenusu({
           secenek: { bakis: "ogretmen", duzen: "ayri", zip: true } },
         ...(bakis === "ogretmen" && secili
           ? [{ etiket: `Yalnız ${secili}`, secenek: { bakis: "ogretmen" as Bakis, duzen: "ayri" as Duzen, kayit: secili } }]
+          : []),
+      ],
+    },
+    {
+      baslik: "Resmi tebligat (tebliğ-tebellüğ belgesi)",
+      ogeler: [
+        { etiket: "Tüm öğretmenler, tek PDF", secenek: { bakis: "ogretmen", duzen: "tebligat" } },
+        { etiket: "Her öğretmen ayrı dosya (ZIP)", secenek: { bakis: "ogretmen", duzen: "tebligat", zip: true } },
+        ...(bakis === "ogretmen" && secili
+          ? [{ etiket: `Yalnız ${secili}`, secenek: { bakis: "ogretmen" as Bakis, duzen: "tebligat" as const, kayit: secili } }]
           : []),
       ],
     },

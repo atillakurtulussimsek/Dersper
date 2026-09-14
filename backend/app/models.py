@@ -98,6 +98,8 @@ class Institution(Base):
         Enum(InstitutionType), default=InstitutionType.K12
     )
     address: Mapped[str | None] = mapped_column(String(500))
+    # Okul müdürünün adı: resmi tebligat çıktısında "Tebliğ Eden" imzasının altına.
+    principal_name: Mapped[str | None] = mapped_column(String(200))
     # Üzerinde çalışılan dönem. Tüm uçlar bu döneme göre süzer.
     # institutions ↔ terms arasında döngüsel yabancı anahtar var; use_alter
     # ile bu kısıt tablolar kurulduktan sonra eklenir.

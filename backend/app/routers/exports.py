@@ -10,6 +10,8 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.db import get_db
 from app.deps import aktif_donem, current_user
+from datetime import date
+
 from app.models import (
     Availability, Day, Institution, Section, SectionAvailability, Teacher,
     TeacherAvailability, Term, Timetable,
@@ -78,6 +80,51 @@ def _baslik(db: Session, timetable_id: int, donem: Term) -> tuple[Timetable, str
     return t, (kurum.name if kurum else "")
 
 
+def _kayit_tablosu(gunler: list, ders_indexleri: list[int], hucre_map: dict,
+                   bakis: str) -> str:
+    """Tek kaydın (öğretmen/şube) haftalık tablosu; ayrı sayfa ve tebligat
+    çıktıları aynı tabloyu kullanır."""
+    parcalar = ["<table><thead><tr><th></th>"]
+    for g in gunler:
+        parcalar.append(f"<th>{_kacis(g.name)}</th>")
+    parcalar.append("</tr></thead><tbody>")
+    for sira, di in enumerate(ders_indexleri, start=1):
+        parcalar.append(f"<tr><th>{sira}. ders</th>")
+        for g in gunler:
+            h = hucre_map.get((g.index, di))
+            if h is None:
+                parcalar.append("<td></td>")
+            else:
+                alt = h.teacher_name if bakis == "sube" else h.section_name
+                # Hücre tek satırdır; uzun ders adı (İnkılap Tarihi…) kesilmesin
+                # diye kısa kodu varsa o yazılır.
+                ders = (h.subject_short
+                        if len(h.subject_name) > 22 and h.subject_short
+                        else h.subject_name)
+                parcalar.append(
+                    f'<td style="background:{h.subject_color}22">'
+                    f'<div class="ders">{_kacis(ders)}</div>'
+                    f'<div class="alt">{_kacis(alt)}</div></td>'
+                )
+        parcalar.append("</tr>")
+    parcalar.append("</tbody></table>")
+    return "".join(parcalar)
+
+
+def _tablo_css(satir_mm: float, punto: float) -> str:
+    return (
+        "table{border-collapse:collapse;width:100%;table-layout:fixed}"
+        "tr{page-break-inside:avoid}"
+        "th,td{border:1px solid #cbd5e1;padding:0 4px;text-align:center;"
+        "vertical-align:middle;overflow:hidden}"
+        "th{background:#f1f5f9;font-weight:600;height:8mm;white-space:nowrap}"
+        f"td{{height:{satir_mm:.2f}mm}}"
+        "th:first-child{width:22mm}"
+        "td div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.25}"
+        f"td .ders{{font-weight:600}}td .alt{{font-size:{max(6.0, punto - 2):g}px;color:#64748b}}"
+    )
+
+
 def _html(db: Session, timetable_id: int, bakis: str, donem: Term,
           kayit: str | None = None) -> str:
     t, kurum_adi = _baslik(db, timetable_id, donem)
@@ -103,45 +150,116 @@ def _html(db: Session, timetable_id: int, bakis: str, donem: Term,
         "section{height:188mm;overflow:hidden;box-sizing:border-box;page-break-after:always}"
         "section:last-child{page-break-after:auto}",
         IMZA_CSS,
-        "table{border-collapse:collapse;width:100%;table-layout:fixed}",
-        "tr{page-break-inside:avoid}",
-        "th,td{border:1px solid #cbd5e1;padding:0 4px;text-align:center;"
-        "vertical-align:middle;overflow:hidden}",
-        f"th{{background:#f1f5f9;font-weight:600;height:8mm;white-space:nowrap}}",
-        f"td{{height:{satir_mm:.2f}mm}}",
-        "th:first-child{width:22mm}",
-        "td div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.25}",
-        f"td .ders{{font-weight:600}}td .alt{{font-size:{max(6.0, punto - 2):g}px;color:#64748b}}",
+        _tablo_css(satir_mm, punto),
         "</style>",
     ]
     for anahtar, hucre_map in gruplar.items():
         parcalar.append("<section>")
         parcalar.append(f"<h1>{_kacis(anahtar)}</h1>")
         parcalar.append(f"<h2>{_kacis(kurum_adi)}</h2>")
-        parcalar.append("<table><thead><tr><th></th>")
-        for g in gunler:
-            parcalar.append(f"<th>{_kacis(g.name)}</th>")
-        parcalar.append("</tr></thead><tbody>")
-        for sira, di in enumerate(ders_indexleri, start=1):
-            parcalar.append(f"<tr><th>{sira}. ders</th>")
-            for g in gunler:
-                h = hucre_map.get((g.index, di))
-                if h is None:
-                    parcalar.append("<td></td>")
-                else:
-                    alt = h.teacher_name if bakis == "sube" else h.section_name
-                    # Hücre tek satırdır; uzun ders adı (İnkılap Tarihi…) kesilmesin
-                    # diye kısa kodu varsa o yazılır.
-                    ders = (h.subject_short
-                            if len(h.subject_name) > 22 and h.subject_short
-                            else h.subject_name)
-                    parcalar.append(
-                        f'<td style="background:{h.subject_color}22">'
-                        f'<div class="ders">{_kacis(ders)}</div>'
-                        f'<div class="alt">{_kacis(alt)}</div></td>'
-                    )
-            parcalar.append("</tr>")
-        parcalar.append("</tbody></table>" + IMZA_HTML + "</section>")
+        parcalar.append(_kayit_tablosu(gunler, ders_indexleri, hucre_map, bakis))
+        parcalar.append(IMZA_HTML + "</section>")
+    if not gruplar:
+        parcalar.append("<p>Bu programda yerleşmiş ders yok.</p>")
+    return "".join(parcalar)
+
+
+def _tebligat_html(db: Session, timetable_id: int, donem: Term,
+                   kayit: str | None = None) -> str:
+    """Öğretmenlere resmi tebligat: MEB "Tebliğ-Tebellüğ Belgesi" düzeninde,
+    her öğretmene bir A4 yatay sayfa. Üstte kimlik ve yazı bilgileri, ortada
+    haftalık program, altta tebliğ cümlesi ile Tebliğ Eden (okul müdürü) ve
+    Tebellüğ Eden (öğretmen) imza alanları. Tarih ve sayı alanları elle
+    doldurulmak üzere boş bırakılır."""
+    t, kurum_adi = _baslik(db, timetable_id, donem)
+    kurum = db.get(Institution, donem.institution_id)
+    mudur = (kurum.principal_name or "").strip() if kurum else ""
+    gunler, ders_indexleri = _izgara_yapisi(db, donem)
+    gruplar = _tablolar(db, timetable_id, "ogretmen", kayit)
+    ogretmenler = {
+        o.full_name: o for o in db.scalars(
+            select(Teacher).where(Teacher.term_id == donem.id, Teacher.deleted_at.is_(None))
+        )
+    }
+
+    # Yükseklik bütçesi (188 mm): başlık 16 + bilgi 26 + tebliğ cümlesi 8 +
+    # imzalar 22 + imza satırı 4 + gün satırı 8 + pay 4 = 88 → tabloya 100 mm.
+    satir_sayisi = max(1, len(ders_indexleri))
+    satir_mm = min(9.0, 100.0 / satir_sayisi)
+    punto = max(6.5, min(10.0, satir_mm * 0.9))
+    bugun = date.today().strftime("%d.%m.%Y")
+    bos = "…… / …… / ……"
+
+    parcalar = [
+        "<style>",
+        "@page{size:A4 landscape;margin:10mm}",
+        "html{color-scheme:light}",
+        f"body{{font-family:'Helvetica Neue',Arial,sans-serif;font-size:{punto:g}px;"
+        "color:#0f172a;background:#fff;margin:0}",
+        "section{height:188mm;overflow:hidden;box-sizing:border-box;page-break-after:always;"
+        "position:relative}section:last-child{page-break-after:auto}",
+        ".ust{text-align:center;margin-bottom:3mm}",
+        ".ust .kurum{font-size:13px;font-weight:700;letter-spacing:0.02em}",
+        ".ust .belge{font-size:12px;font-weight:700;margin-top:1mm}",
+        ".ust .donem{font-size:10px;color:#475569;margin-top:0.5mm}",
+        "table.bilgi{border-collapse:collapse;width:100%;table-layout:fixed;margin-bottom:3mm;"
+        "font-size:9px}",
+        "table.bilgi td{border:1px solid #cbd5e1;padding:1.2mm 2mm;text-align:left;"
+        "vertical-align:middle;height:auto}",
+        "table.bilgi td.e{width:38mm;background:#f1f5f9;font-weight:600;white-space:nowrap}",
+        "p.teblig{margin:3mm 0 0;font-size:9.5px;line-height:1.4}",
+        "table.imza{border-collapse:collapse;width:100%;table-layout:fixed;margin-top:4mm;"
+        "font-size:9.5px}",
+        "table.imza td{border:0;text-align:center;vertical-align:top;padding:0;height:auto}",
+        "table.imza .rol{font-weight:700}",
+        "table.imza .cizgi{margin:9mm auto 1mm;width:60mm;border-top:1px solid #0f172a}",
+        "table.imza .ad{font-weight:600}",
+        "table.imza .unvan{color:#475569}",
+        IMZA_CSS,
+        "footer{position:absolute;right:0;bottom:0}",
+        _tablo_css(satir_mm, punto),
+        "</style>",
+    ]
+    for ad, hucre_map in gruplar.items():
+        o = ogretmenler.get(ad)
+        brans = (o.branch or "").strip() if o else ""
+        gorev = f"{brans} Öğretmeni" if brans else "Öğretmen"
+        parcalar.append("<section>")
+        parcalar.append(
+            '<div class="ust">'
+            f'<div class="kurum">{_kacis(kurum_adi.upper())}</div>'
+            '<div class="belge">HAFTALIK DERS PROGRAMI TEBLİĞ – TEBELLÜĞ BELGESİ</div>'
+            f'<div class="donem">{_kacis(donem.name)}</div></div>'
+        )
+        parcalar.append(
+            '<table class="bilgi"><tr>'
+            f'<td class="e">Adı Soyadı</td><td>{_kacis(ad)}</td>'
+            f'<td class="e">Görevi</td><td>{_kacis(gorev)}</td></tr><tr>'
+            f'<td class="e">Görev Yeri</td><td>{_kacis(kurum_adi)}</td>'
+            f'<td class="e">Tebliğ Edildiği Yer</td><td>{_kacis(kurum_adi)}</td></tr><tr>'
+            f'<td class="e">Yazının Tarih ve Sayısı</td><td>{bos} &nbsp;–&nbsp; Sayı: ……………</td>'
+            f'<td class="e">Tebliğ Tarihi</td><td>{bos}</td></tr><tr>'
+            f'<td class="e">Yazının Özü</td><td colspan="3">{_kacis(donem.name)} haftalık ders '
+            f'programının tebliği (düzenleme tarihi {bugun})</td></tr></table>'
+        )
+        parcalar.append(_kayit_tablosu(gunler, ders_indexleri, hucre_map, "ogretmen"))
+        parcalar.append(
+            '<p class="teblig">Yukarıda adı soyadı, görevi ve görev yeri yazılı bulunan '
+            'öğretmene, yukarıdaki haftalık ders programı tebliğ edilmiştir. Programın '
+            'belirtilen tarihten itibaren uygulanması hususunda bilgilerinizi ve gereğini '
+            'rica ederim.</p>'
+        )
+        parcalar.append(
+            '<table class="imza"><tr>'
+            '<td><div class="rol">Tebliğ Eden</div><div class="cizgi"></div>'
+            f'<div class="ad">{_kacis(mudur) if mudur else "…………………………………"}</div>'
+            '<div class="unvan">Okul Müdürü</div></td>'
+            '<td><div class="rol">Tebellüğ Eden</div><div class="cizgi"></div>'
+            f'<div class="ad">{_kacis(ad)}</div>'
+            f'<div class="unvan">{_kacis(gorev)} · Tarih: {bos}</div></td>'
+            '</tr></table>'
+        )
+        parcalar.append(IMZA_HTML + "</section>")
     if not gruplar:
         parcalar.append("<p>Bu programda yerleşmiş ders yok.</p>")
     return "".join(parcalar)
@@ -386,6 +504,8 @@ def _icerik(db: Session, timetable_id: int, bakis: str, duzen: str, donem: Term,
             kagit: str = "a3", tek_sayfa: bool = True) -> str:
     if duzen == "carsaf":
         return _carsaf_html(db, timetable_id, bakis, donem, saat, kapali, kagit, tek_sayfa)
+    if duzen == "tebligat":
+        return _tebligat_html(db, timetable_id, donem, kayit)
     return _html(db, timetable_id, bakis, donem, kayit)
 
 
@@ -393,7 +513,7 @@ def _icerik(db: Session, timetable_id: int, bakis: str, duzen: str, donem: Term,
 def html_cikti(
     timetable_id: int,
     bakis: str = Query("sube", pattern="^(sube|ogretmen)$"),
-    duzen: str = Query("ayri", pattern="^(ayri|carsaf)$"),
+    duzen: str = Query("ayri", pattern="^(ayri|carsaf|tebligat)$"),
     # Çarşafta satır adının yanına yerleşen ders saati sayısı: "Ad (34)".
     saat: bool = Query(False),
     # Yalnız bu kayıt (öğretmen ya da şube adı): tek kişilik çıktı.
@@ -418,7 +538,7 @@ def html_cikti(
 def pdf_cikti(
     timetable_id: int,
     bakis: str = Query("sube", pattern="^(sube|ogretmen)$"),
-    duzen: str = Query("ayri", pattern="^(ayri|carsaf)$"),
+    duzen: str = Query("ayri", pattern="^(ayri|carsaf|tebligat)$"),
     saat: bool = Query(False),
     kayit: str | None = Query(None),
     kapali: bool = Query(True),
@@ -447,6 +567,8 @@ def pdf_cikti(
 def zip_cikti(
     timetable_id: int,
     bakis: str = Query("ogretmen", pattern="^(sube|ogretmen)$"),
+    # ayri: sade program sayfası; tebligat: resmi tebliğ-tebellüğ belgesi.
+    duzen: str = Query("ayri", pattern="^(ayri|tebligat)$"),
     db: Session = Depends(get_db),
     donem: Term = Depends(aktif_donem),
 ) -> Response:
@@ -469,9 +591,11 @@ def zip_cikti(
     tampon = io.BytesIO()
     with zipfile.ZipFile(tampon, "w", zipfile.ZIP_DEFLATED) as arsiv:
         for anahtar in gruplar:
-            pdf = HTML(string=_html(db, timetable_id, bakis, donem, kayit=anahtar)).write_pdf()
-            arsiv.writestr(f"{_dosya_adi(anahtar)}.pdf", pdf)
-    ad = f"ders-programlari-{bakis}.zip"
+            html = (_tebligat_html(db, timetable_id, donem, kayit=anahtar)
+                    if duzen == "tebligat"
+                    else _html(db, timetable_id, bakis, donem, kayit=anahtar))
+            arsiv.writestr(f"{_dosya_adi(anahtar)}.pdf", HTML(string=html).write_pdf())
+    ad = f"{'tebligat' if duzen == 'tebligat' else 'ders-programlari'}-{bakis}.zip"
     return Response(tampon.getvalue(), media_type="application/zip",
                     headers={"Content-Disposition": f'attachment; filename="{ad}"'})
 
@@ -480,7 +604,7 @@ def zip_cikti(
 def excel_cikti(
     timetable_id: int,
     bakis: str = Query("sube", pattern="^(sube|ogretmen)$"),
-    duzen: str = Query("ayri", pattern="^(ayri|carsaf)$"),
+    duzen: str = Query("ayri", pattern="^(ayri|carsaf|tebligat)$"),
     saat: bool = Query(False),
     db: Session = Depends(get_db),
     donem: Term = Depends(aktif_donem),

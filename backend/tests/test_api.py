@@ -1323,3 +1323,33 @@ def test_program_listesinde_son_uretim_durumu(yonetici: TestClient):
     assert yonetici.get("/api/timetables").json()[0]["last_run_status"] is None
     uret_ve_bekle(yonetici, pid)
     assert yonetici.get("/api/timetables").json()[0]["last_run_status"] == "basarili"
+
+
+def test_tebligat_ciktisi_resmi_alanlari_icerir(yonetici: TestClient):
+    r = yonetici.put("/api/institution", json={
+        "name": "Test Ortaokulu", "type": "k12", "address": None, "principal_name": "Ahmet Yılmaz",
+    })
+    assert r.status_code == 200 and r.json()["principal_name"] == "Ahmet Yılmaz"
+    pid, _ = _carsaf_okul(yonetici)
+    html = yonetici.get(f"/api/timetables/{pid}/export/html?bakis=ogretmen&duzen=tebligat").text
+    for parca in ("TEBLİĞ – TEBELLÜĞ BELGESİ", "Adı Soyadı", "Görevi", "Görev Yeri",
+                  "Tebliğ Edildiği Yer", "Tebliğ Tarihi", "Yazının Özü", "Tebliğ Eden",
+                  "Tebellüğ Eden", "Okul Müdürü", "Ahmet Yılmaz", "Ayşe Yılmaz",
+                  "tebliğ edilmiştir"):
+        assert parca in html, parca
+    assert html.count("<section>") == 1
+
+
+def test_tebligat_zip(yonetici: TestClient, monkeypatch):
+    import sys, types, zipfile, io
+    sahte = types.ModuleType("weasyprint")
+    class HTML:
+        def __init__(self, string): self.string = string
+        def write_pdf(self): return b"%PDF-" + ("TEBELL" if "TEBELL" in self.string else "").encode()
+    sahte.HTML = HTML
+    monkeypatch.setitem(sys.modules, "weasyprint", sahte)
+    pid, _ = _carsaf_okul(yonetici)
+    r = yonetici.get(f"/api/timetables/{pid}/export/zip?bakis=ogretmen&duzen=tebligat")
+    assert r.status_code == 200
+    with zipfile.ZipFile(io.BytesIO(r.content)) as z:
+        assert z.read("ayse-yilmaz.pdf") == b"%PDF-TEBELL"

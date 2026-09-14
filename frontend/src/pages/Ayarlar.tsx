@@ -24,7 +24,9 @@ export default function Ayarlar() {
     queryFn: () => get<YapayZekaAyarlari>("/ai/settings"),
   });
 
-  const [kurumForm, setKurumForm] = useState({ name: "", type: "k12" as KurumTipi, address: "" });
+  const [kurumForm, setKurumForm] = useState({
+    name: "", type: "k12" as KurumTipi, address: "", principal_name: "",
+  });
   const [yzForm, setYzForm] = useState({
     enabled: false,
     base_url: "",
@@ -41,6 +43,7 @@ export default function Ayarlar() {
         name: kurum.data.name,
         type: kurum.data.type,
         address: kurum.data.address ?? "",
+        principal_name: kurum.data.principal_name ?? "",
       });
   }, [kurum.data]);
 
@@ -56,7 +59,11 @@ export default function Ayarlar() {
 
   const kurumKaydet = useMutation({
     mutationFn: () =>
-      put<Kurum>("/institution", { ...kurumForm, address: kurumForm.address || null }),
+      put<Kurum>("/institution", {
+        ...kurumForm,
+        address: kurumForm.address || null,
+        principal_name: kurumForm.principal_name || null,
+      }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["kurum"] }),
   });
 
@@ -134,6 +141,16 @@ export default function Ayarlar() {
             <Girdi
               value={kurumForm.address}
               onChange={(e) => setKurumForm({ ...kurumForm, address: e.target.value })}
+            />
+          </Alan>
+          <Alan
+            etiket="Okul müdürü"
+            ipucu="Öğretmenlere verilen resmi tebligat çıktısında “Tebliğ Eden” imzasının altına yazılır."
+          >
+            <Girdi
+              value={kurumForm.principal_name}
+              onChange={(e) => setKurumForm({ ...kurumForm, principal_name: e.target.value })}
+              placeholder="Adı Soyadı"
             />
           </Alan>
           {kurumKaydet.error && <Uyari tur="hata">{(kurumKaydet.error as Error).message}</Uyari>}

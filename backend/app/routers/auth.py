@@ -103,6 +103,7 @@ def kurum_guncelle(
     inst: Institution = Depends(aktif_kurum),
 ) -> Institution:
     inst.name, inst.type, inst.address = payload.name, payload.type, payload.address
+    inst.principal_name = (payload.principal_name or "").strip() or None
     db.commit()
     db.refresh(inst)
     return inst

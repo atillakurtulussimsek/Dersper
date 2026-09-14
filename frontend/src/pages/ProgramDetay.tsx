@@ -432,9 +432,10 @@ export default function ProgramDetay() {
 
   function ciktiAdresi(
     bicim: "pdf" | "xlsx" | "html" | "zip",
-    secenek: { bakis: Bakis; duzen: Duzen; kayit?: string; kagit?: "a3" | "a4"; bolunmus?: boolean } = { bakis, duzen },
+    secenek: { bakis: Bakis; duzen: Duzen | "tebligat"; kayit?: string; kagit?: "a3" | "a4"; bolunmus?: boolean } = { bakis, duzen },
   ) {
-    if (bicim === "zip") return `/api/timetables/${id}/export/zip?bakis=${secenek.bakis}`;
+    if (bicim === "zip")
+      return `/api/timetables/${id}/export/zip?bakis=${secenek.bakis}&duzen=${secenek.duzen === "tebligat" ? "tebligat" : "ayri"}`;
     return (
       `/api/timetables/${id}/export/${bicim}?bakis=${secenek.bakis}&duzen=${secenek.duzen}` +
       (saatGoster ? "&saat=true" : "") +
@@ -471,7 +472,8 @@ export default function ProgramDetay() {
   /** PDF menüsü: çarşaf, toplu tek PDF, tek kişilik ya da her kayıt ayrı dosya (ZIP). */
   function pdfIndir(s: PdfSecenek) {
     if (s.zip) {
-      return dosyaIndir(ciktiAdresi("zip", s), `ders-programlari-${s.bakis}.zip`);
+      return dosyaIndir(ciktiAdresi("zip", s),
+        `${s.duzen === "tebligat" ? "tebligat" : "ders-programlari"}-${s.bakis}.zip`);
     }
     const parca = s.kayit
       ? s.kayit.toLocaleLowerCase("tr").replace(/[^a-z0-9çğıöşü]+/gi, "-").replace(/^-|-$/g, "")

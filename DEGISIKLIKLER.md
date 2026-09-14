@@ -5,6 +5,11 @@ Dersper'in geliştirme günlüğü. Her değişiklik tek cümleyle, en yeni sür
 öncesinde ikinci hane özellik, üçüncü hane düzeltme demektir. Uygulamanın
 sürümü arayüzde yan menünün altında yazar.
 
+## 0.36.0 — 2026-09-14
+
+- Öğretmenlere resmi tebligat: PDF menüsünde "Resmi tebligat (tebliğ-tebellüğ belgesi)" — tüm öğretmenler tek PDF, her öğretmen ayrı dosya (ZIP) ya da yalnız seçili öğretmen. MEB tebliğ-tebellüğ belgesi düzeninde: kurum adı ve dönem, Adı Soyadı / Görevi / Görev Yeri / Yazının Tarih ve Sayısı / Yazının Özü / Tebliğ Edildiği Yer / Tebliğ Tarihi (tarih ve sayı elle doldurulur), haftalık program, tebliğ cümlesi, "Tebliğ Eden — Okul Müdürü" ve "Tebellüğ Eden — Öğretmen" imza alanları. Her öğretmen tek A4 yatay sayfa.
+- Ayarlar > Kurum'a "Okul müdürü" alanı: tebligatta Tebliğ Eden imzasının altına yazılır.
+
 ## 0.35.0 — 2026-09-13
 
 - Ders Programları listesinde son üretimin durumu görünüyor: üretim sürerken "Üretiliyor" (liste birkaç saniyede bir yenilenir), üretim çözümsüz ya da hatayla bittiyse "Üretim başarısız". Ayrıntı programın içinde.

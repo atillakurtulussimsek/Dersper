@@ -143,12 +143,15 @@ class InstitutionOut(ORMModel):
     name: str
     type: InstitutionType
     address: str | None
+    # Okul müdürü: tebligat çıktısında "Tebliğ Eden" imzası.
+    principal_name: str | None = None
 
 
 class InstitutionUpdate(BaseModel):
     name: str = Field(min_length=2, max_length=200)
     type: InstitutionType
     address: str | None = None
+    principal_name: str | None = Field(default=None, max_length=200)
 
 
 # --- Zaman ızgarası ---
