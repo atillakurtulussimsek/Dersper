@@ -96,10 +96,11 @@ def _kayit_tablosu(gunler: list, ders_indexleri: list[int], hucre_map: dict,
                 parcalar.append("<td></td>")
             else:
                 alt = h.teacher_name if bakis == "sube" else h.section_name
-                # Hücre tek satırdır; uzun ders adı (İnkılap Tarihi…) kesilmesin
-                # diye kısa kodu varsa o yazılır.
+                # Hücre tek satırdır; dikey sayfada sütun ~28 mm, kalın yazıyla
+                # ~16 karakter alır. Uzun ders adı kesilmesin diye kısa kodu
+                # varsa o yazılır ("Türk Dili ve Edebiyatı" → EDB).
                 ders = (h.subject_short
-                        if len(h.subject_name) > 22 and h.subject_short
+                        if len(h.subject_name) > 16 and h.subject_short
                         else h.subject_name)
                 parcalar.append(
                     f'<td style="background:{h.subject_color}22">'
@@ -131,23 +132,23 @@ def _html(db: Session, timetable_id: int, bakis: str, donem: Term,
     gunler, ders_indexleri = _izgara_yapisi(db, donem)
     gruplar = _tablolar(db, timetable_id, bakis, kayit)
 
-    # Her kayıt TEK sayfaya sığar: A4 yatay sayfanın içi 277×190 mm'dir.
-    # Başlıklar (~12 mm) ve gün satırı (8 mm) düşülür, kalan yükseklik ders
-    # satırlarına eşit bölünür; hücre metni tek satır ve kesilir (…), satırlar
-    # büyümez, sayfa taşmaz. Satır sayısı arttıkça yazı küçülür.
+    # Her kayıt TEK sayfaya sığar: A4 DİKEY sayfanın içi 190×277 mm'dir. Altı
+    # gün 190 mm'ye rahat sığar (28 mm sütun); dikey sayfa dosyalamaya uygun.
+    # Başlıklar (~14 mm), gün satırı (8 mm), imza (4 mm) ve pay (3 mm) düşülür,
+    # kalan yükseklik ders satırlarına eşit bölünür; hücre metni tek satır ve
+    # kesilir (…), satırlar büyümez, sayfa taşmaz.
     satir_sayisi = max(1, len(ders_indexleri))
-    # 188 − başlıklar 14 − gün satırı 8 − kenarlık payı 3 = 163 mm ders satırlarına.
-    satir_mm = min(13.0, 159.0 / satir_sayisi)      # 4 mm imzaya
+    satir_mm = min(16.0, 248.0 / satir_sayisi)
     punto = max(7.0, min(11.0, satir_mm * 0.75))
     parcalar = [
         "<style>",
-        "@page{size:A4 landscape;margin:10mm}",
+        "@page{size:A4 portrait;margin:10mm}",
         "html{color-scheme:light}",
         f"body{{font-family:'Helvetica Neue',Arial,sans-serif;font-size:{punto:g}px;"
         "color:#0f172a;background:#fff;margin:0}",
         "h1{font-size:16px;margin:0 0 2px;line-height:1.2}"
         "h2{font-size:12px;margin:0 0 6px;color:#475569;font-weight:500;line-height:1.2}",
-        "section{height:188mm;overflow:hidden;box-sizing:border-box;page-break-after:always}"
+        "section{height:277mm;overflow:hidden;box-sizing:border-box;page-break-after:always}"
         "section:last-child{page-break-after:auto}",
         IMZA_CSS,
         _tablo_css(satir_mm, punto),
@@ -182,21 +183,22 @@ def _tebligat_html(db: Session, timetable_id: int, donem: Term,
         )
     }
 
-    # Yükseklik bütçesi (188 mm): başlık 16 + bilgi 26 + tebliğ cümlesi 8 +
-    # imzalar 22 + imza satırı 4 + gün satırı 8 + pay 4 = 88 → tabloya 100 mm.
+    # A4 DİKEY (iç alan 190×277 mm). Yükseklik bütçesi: başlık 16 + bilgi 30 +
+    # tebliğ cümlesi 10 + imzalar 22 + imza satırı 4 + gün satırı 8 + pay 5 =
+    # 95 → tabloya 182 mm.
     satir_sayisi = max(1, len(ders_indexleri))
-    satir_mm = min(9.0, 100.0 / satir_sayisi)
-    punto = max(6.5, min(10.0, satir_mm * 0.9))
+    satir_mm = min(13.0, 182.0 / satir_sayisi)
+    punto = max(7.0, min(10.0, satir_mm * 0.9))
     bugun = date.today().strftime("%d.%m.%Y")
     bos = "…… / …… / ……"
 
     parcalar = [
         "<style>",
-        "@page{size:A4 landscape;margin:10mm}",
+        "@page{size:A4 portrait;margin:10mm}",
         "html{color-scheme:light}",
         f"body{{font-family:'Helvetica Neue',Arial,sans-serif;font-size:{punto:g}px;"
         "color:#0f172a;background:#fff;margin:0}",
-        "section{height:188mm;overflow:hidden;box-sizing:border-box;page-break-after:always;"
+        "section{height:277mm;overflow:hidden;box-sizing:border-box;page-break-after:always;"
         "position:relative}section:last-child{page-break-after:auto}",
         ".ust{text-align:center;margin-bottom:3mm}",
         ".ust .kurum{font-size:13px;font-weight:700;letter-spacing:0.02em}",
@@ -206,13 +208,13 @@ def _tebligat_html(db: Session, timetable_id: int, donem: Term,
         "font-size:9px}",
         "table.bilgi td{border:1px solid #cbd5e1;padding:1.2mm 2mm;text-align:left;"
         "vertical-align:middle;height:auto}",
-        "table.bilgi td.e{width:38mm;background:#f1f5f9;font-weight:600;white-space:nowrap}",
+        "table.bilgi td.e{width:34mm;background:#f1f5f9;font-weight:600;white-space:nowrap}",
         "p.teblig{margin:3mm 0 0;font-size:9.5px;line-height:1.4}",
         "table.imza{border-collapse:collapse;width:100%;table-layout:fixed;margin-top:4mm;"
         "font-size:9.5px}",
         "table.imza td{border:0;text-align:center;vertical-align:top;padding:0;height:auto}",
         "table.imza .rol{font-weight:700}",
-        "table.imza .cizgi{margin:9mm auto 1mm;width:60mm;border-top:1px solid #0f172a}",
+        "table.imza .cizgi{margin:9mm auto 1mm;width:55mm;border-top:1px solid #0f172a}",
         "table.imza .ad{font-weight:600}",
         "table.imza .unvan{color:#475569}",
         IMZA_CSS,
@@ -228,8 +230,7 @@ def _tebligat_html(db: Session, timetable_id: int, donem: Term,
         parcalar.append(
             '<div class="ust">'
             f'<div class="kurum">{_kacis(kurum_adi.upper())}</div>'
-            '<div class="belge">HAFTALIK DERS PROGRAMI TEBLİĞ – TEBELLÜĞ BELGESİ</div>'
-            f'<div class="donem">{_kacis(donem.name)}</div></div>'
+            '<div class="belge">HAFTALIK DERS PROGRAMI TEBLİĞ – TEBELLÜĞ BELGESİ</div></div>'
         )
         parcalar.append(
             '<table class="bilgi"><tr>'
@@ -239,8 +240,8 @@ def _tebligat_html(db: Session, timetable_id: int, donem: Term,
             f'<td class="e">Tebliğ Edildiği Yer</td><td>{_kacis(kurum_adi)}</td></tr><tr>'
             f'<td class="e">Yazının Tarih ve Sayısı</td><td>{bos} &nbsp;–&nbsp; Sayı: ……………</td>'
             f'<td class="e">Tebliğ Tarihi</td><td>{bos}</td></tr><tr>'
-            f'<td class="e">Yazının Özü</td><td colspan="3">{_kacis(donem.name)} haftalık ders '
-            f'programının tebliği (düzenleme tarihi {bugun})</td></tr></table>'
+            f'<td class="e">Yazının Özü</td><td colspan="3">Haftalık ders programının tebliği '
+            f'(düzenleme tarihi {bugun})</td></tr></table>'
         )
         parcalar.append(_kayit_tablosu(gunler, ders_indexleri, hucre_map, "ogretmen"))
         parcalar.append(
