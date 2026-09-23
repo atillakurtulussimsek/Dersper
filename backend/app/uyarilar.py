@@ -12,6 +12,10 @@ elle sürükle-bırak yapıldığında da doğru kalırlar.
     başka türlü tamamlanamadığında oluşur.
   * `bina_gecisi` — öğretmen bir günde birden fazla binada. Yalnızca dönem
     ayarı açıkken hesaplanır; kural esnetilebilir olduğu için oluşabilir.
+  * `cakisma` — öğretmen müsait olmadığı saatte, şube kapalı saatinde ya da
+    öğretmen/şube aynı anda iki yerde. Çözücü bunu asla yapmaz; yalnızca
+    elle "zorla yerleştir" ile oluşur. Kural metni `app.duzenle` ile aynı
+    kaynaktan (müsaitlik tabloları, çakışma ölçütü) okunur.
 
 Kullanıcı bir uyarıyı "görmezden gel" diyerek o program için kalıcı olarak
 gizleyebilir.
@@ -23,6 +27,8 @@ from collections import defaultdict
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
+from app import cakisma
+from app.duzenle import _atama_subeleri, _kapali_saatler, saatleri_oku
 from app.models import (
     Assignment, CurriculumEntry, Day, Period, Section, Timetable,
 )
@@ -164,6 +170,118 @@ def _bina_uyarilari(
     return uyarilar
 
 
+def _cakisma_uyarilari(
+    db: Session, program: Timetable, atamalar: list, gizlenen: set[str]
+) -> list[dict]:
+    """Zorla yerleştirilmiş derslerin çakışmaları.
+
+    Çözücü de elle düzenleme de bu kuralları uygular; yalnızca kullanıcı
+    "yine de koy" dediğinde bozulurlar. Bozulan kural unutulmasın diye burada
+    görünür: taşınınca kendiliğinden kaybolur, istenirse gizlenir.
+    """
+    donem = program.term
+    saatler = saatleri_oku(db, donem)
+    ogretmen_kapali, sube_kapali = _kapali_saatler(db, donem)
+    kimlikler = list(saatler)
+    es_zamanlilar = cakisma.ortusenler(
+        kimlikler,
+        [cakisma.Aralik(saatler[k].gun_index, saatler[k].baslangic, saatler[k].bitis)
+         for k in kimlikler],
+        donem.conflict_basis.value,
+    )
+    doluluk: dict[int, list] = defaultdict(list)
+    for a in atamalar:
+        if a.period_id in saatler:
+            doluluk[a.period_id].append(a)
+
+    def saat_adi(pid: int) -> str:
+        s = saatler[pid]
+        return f"{s.gun_adi} {s.ad}"
+
+    def uyari(anahtar: str, baslik: str, detay: str, a, sube: str,
+              konan: int, sinir: int) -> dict:
+        return {
+            "key": anahtar, "tur": "cakisma", "baslik": baslik, "detay": detay,
+            "sube": sube, "ders": a.entry.subject.name,
+            "ogretmen": a.entry.teacher.full_name,
+            "gun": saatler[a.period_id].gun_adi,
+            "konan": konan, "sinir": sinir, "ignored": anahtar in gizlenen,
+        }
+
+    uyarilar: list[dict] = []
+    gorulen: set[tuple] = set()
+    sirali = sorted(
+        (a for a in atamalar if a.period_id in saatler),
+        key=lambda a: (saatler[a.period_id].gun_index,
+                       saatler[a.period_id].period_index, a.id),
+    )
+    for a in sirali:
+        e = a.entry
+        pid = a.period_id
+        subeler = _atama_subeleri(a)
+        sube_adi = " + ".join(sb.name for sb in subeler)
+        nerede = saat_adi(pid)
+
+        if pid in ogretmen_kapali.get(e.teacher_id, set()):
+            uyarilar.append(uyari(
+                f"cakisma:musait:{e.id}:{pid}",
+                f"{e.teacher.full_name}: {nerede} müsait değil",
+                f"{sube_adi} · {e.subject.name} dersi öğretmenin müsait olmadığı "
+                f"saate konmuş (zorla yerleştirilmiş olabilir). Dersi taşıyın ya da "
+                f"öğretmenin müsaitliğini güncelleyin.",
+                a, sube_adi, 1, 0,
+            ))
+        for sb in subeler:
+            if pid in sube_kapali.get(sb.id, set()):
+                uyarilar.append(uyari(
+                    f"cakisma:kapali:{e.id}:{sb.id}:{pid}",
+                    f"{sb.name}: {nerede} kapalı",
+                    f"{e.subject.name} dersi şubenin kapalı saatine konmuş (zorla "
+                    f"yerleştirilmiş olabilir). Dersi taşıyın ya da şubenin "
+                    f"saatlerini güncelleyin.",
+                    a, sube_adi, 1, 0,
+                ))
+
+        for es in sorted(es_zamanlilar.get(pid, {pid})):
+            ayni_satir = es == pid
+            for b in doluluk.get(es, []):
+                if b.id == a.id or (ayni_satir and b.id < a.id):
+                    continue
+                if not ayni_satir and (es, b.id) < (pid, a.id):
+                    continue        # çift öbür yönden zaten görüldü
+                ikinci = "o saatte" if ayni_satir else f"{saat_adi(es)} saatinde"
+                b_sube = " + ".join(sb.name for sb in _atama_subeleri(b))
+                if b.entry.teacher_id == e.teacher_id:
+                    imza = ("ogretmen", e.teacher_id, frozenset({(a.id, pid), (b.id, es)}))
+                    if imza not in gorulen:
+                        gorulen.add(imza)
+                        uyarilar.append(uyari(
+                            f"cakisma:ogretmen:{e.teacher_id}:{min(pid, es)}:{max(pid, es)}"
+                            f":{min(e.id, b.entry.id)}:{max(e.id, b.entry.id)}",
+                            f"{e.teacher.full_name}: {nerede} iki şubede",
+                            f"{sube_adi} · {e.subject.name} ile {b_sube} · "
+                            f"{b.entry.subject.name} {ikinci} aynı öğretmende (zorla "
+                            f"yerleştirilmiş olabilir). Birini taşıyın.",
+                            a, sube_adi, 2, 1,
+                        ))
+                ortak = {sb.id for sb in subeler} & {sb.id for sb in _atama_subeleri(b)}
+                if ortak and not ayni_satir:
+                    ad = next(sb.name for sb in subeler if sb.id in ortak)
+                    imza = ("sube", ad, frozenset({(a.id, pid), (b.id, es)}))
+                    if imza not in gorulen:
+                        gorulen.add(imza)
+                        uyarilar.append(uyari(
+                            f"cakisma:sube:{next(iter(ortak))}:{min(pid, es)}:{max(pid, es)}"
+                            f":{min(e.id, b.entry.id)}:{max(e.id, b.entry.id)}",
+                            f"{ad}: {nerede} ile {saat_adi(es)} üst üste",
+                            f"{e.subject.name} ile {b.entry.subject.name} dersleri saat "
+                            f"olarak çakışıyor (zorla yerleştirilmiş olabilir). Birini "
+                            f"taşıyın.",
+                            a, sube_adi, 2, 1,
+                        ))
+    return uyarilar
+
+
 def uyarilari_hesapla(db: Session, program: Timetable) -> list[dict]:
     saatler = _saat_bilgisi(db)
     atamalar = list(db.scalars(
@@ -199,7 +317,9 @@ def uyarilari_hesapla(db: Session, program: Timetable) -> list[dict]:
         gun_adlari[gun] = gun_adi
 
     gizlenen = set(program.ignored_warnings or [])
-    uyarilar: list[dict] = _gun_siniri_uyarilari(program, atamalar, saatler, gizlenen)
+    # Çakışma en ağır uyarıdır; listenin başında durur.
+    uyarilar: list[dict] = _cakisma_uyarilari(db, program, atamalar, gizlenen)
+    uyarilar += _gun_siniri_uyarilari(program, atamalar, saatler, gizlenen)
     # Bina kuralı kapalıysa geçiş bir sorun değildir; uyarı da üretilmez.
     if program.term.block_building_switch:
         uyarilar += _bina_uyarilari(program, atamalar, saatler, gizlenen)

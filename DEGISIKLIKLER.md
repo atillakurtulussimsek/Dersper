@@ -5,6 +5,11 @@ Dersper'in geliştirme günlüğü. Her değişiklik tek cümleyle, en yeni sür
 öncesinde ikinci hane özellik, üçüncü hane düzeltme demektir. Uygulamanın
 sürümü arayüzde yan menünün altında yazar.
 
+## 0.38.0 — 2026-09-23
+
+- Elle düzenlemede çakışma artık kesin engel değil: öğretmenin müsait olmadığı saat, şubenin kapalı saati ya da öğretmenin o saatte başka şubede olması "Çakışma var" penceresiyle sorulur; "Zorla yerleştir" denirse ders yine de konur. Sürükleme ve "Taşı…" listesinde bu saatler sarı görünür; aynı şubenin dolu saati, bölünen blok ve kilitli ders yine soluk ve zorlanamaz.
+- Zorlanan çakışmalar Uyarılar'da "çakışma" türüyle listelenir (öğretmen iki şubede, öğretmen müsait değil, şube kapalı); ders taşınınca kendiliğinden kalkar, istenirse gizlenir. Sürüm geçmişinde zorlanan işlem "(zorla)" ile işaretlenir.
+
 ## 0.37.0 — 2026-09-14
 
 - Tebligat imza düzeni: solda Tebellüğ Eden öğretmen (ad, branş, tarih satırı), sağda Tebliğ Eden "Kurum Müdürü". Ayarlar'daki alan da "Kurum müdürü" oldu.

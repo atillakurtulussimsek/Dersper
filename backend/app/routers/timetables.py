@@ -303,10 +303,12 @@ def dersi_tasi(
     """Elle sürükle-bırak.
 
     Blok bütün taşınır; hedefte eşit uzunlukta tek blok varsa yer değiştirirler.
-    Kurallar `app.duzenle` içinde, çözücüyle aynı yerde tanımlı.
+    Kurallar `app.duzenle` içinde, çözücüyle aynı yerde tanımlı. Çakışma varsa
+    409 döner; gövdede `zorlanabilir` true ise aynı istek `zorla: true` ile
+    yinelenerek yine de yerleştirilir.
     """
     t = _programi_getir(db, timetable_id, donem)
-    Duzenleyici(db, t, donem).tasi(assignment_id, payload.period_id)
+    Duzenleyici(db, t, donem).tasi(assignment_id, payload.period_id, payload.zorla)
     return _izgara(db, t)
 
 
@@ -334,7 +336,7 @@ def yerlestir(
     """Bekleyen bir bloğu ızgaraya koyar."""
     t = _programi_getir(db, timetable_id, donem)
     Duzenleyici(db, t, donem).yerlestir(
-        payload.curriculum_entry_id, payload.period_id, payload.uzunluk
+        payload.curriculum_entry_id, payload.period_id, payload.uzunluk, payload.zorla
     )
     return _izgara(db, t)
 

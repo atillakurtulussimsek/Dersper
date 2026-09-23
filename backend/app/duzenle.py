@@ -10,9 +10,14 @@ kaynağıdır: taşıma, yer değiştirme, ızgaradan alma, geri koyma ve geri a
    ayrı çekmek çözücünün asla üretmeyeceği bir programı elle oluşturmak olurdu.
    Bir hücreyi tutmak, o hücrenin içinde bulunduğu kesintisiz bloğu tutar.
 
-2. **Elle yapılan da kurallara uyar.** Çözücünün uyduğu müsaitlik ve çakışma
-   kuralları burada da geçerli. Uymayan bir bırakma reddedilir ve NEDENİ
-   Türkçe söylenir. (Esnetilebilir olanlar — günlük sınır, öğretmenin gün
+2. **Elle yapılan da kurallara uyar — ama son söz kullanıcının.** Çözücünün
+   uyduğu müsaitlik ve çakışma kuralları burada da geçerli. Uymayan bir
+   bırakma reddedilir ve NEDENİ Türkçe söylenir. Kullanıcı isterse `zorla`
+   ile yine de yerleştirir: öğretmenin kapalı saati, şubenin kapalı saati ve
+   öğretmenin aynı anda başka şubede olması zorlanabilir; zorlanan çakışma
+   uyarılar listesinde görünür. Zorlanamayan tek şey yapısal olandır: aynı
+   şubenin aynı ders saatine iki ders (ızgarada tek hücre var), bölünen blok,
+   kilitli ders. (Esnetilebilir olanlar — günlük sınır, öğretmenin gün
    sınırı — burada engel değildir; onlar uyarı olarak görünür.)
 
 3. **Reddetmeden önce göster.** `hedefleri_degerlendir` her ders saati için
@@ -49,6 +54,27 @@ class Saat:
     # Gün başından beri dakika; yalnızca "saat" çakışma ölçütünde okunur.
     baslangic: int | None = None
     bitis: int | None = None
+
+
+@dataclass(frozen=True)
+class Engel:
+    """Bir yerleştirmenin reddedilme nedeni.
+
+    `zorlanabilir` True ise kullanıcı "yine de koy" diyebilir; False ise
+    engel yapısaldır ve ızgara o yerleşimi gösteremez bile.
+    """
+    neden: str
+    zorlanabilir: bool
+
+
+def _reddet(neden: str, zorlanabilir: bool = False) -> HTTPException:
+    """409 yanıtı. Zorlanabilir engel gövdede bayrağıyla döner ki arayüz
+    "zorla yerleştir" sorusunu sorabilsin; yapısal engel düz metin kalır."""
+    neden = neden[0].upper() + neden[1:]
+    detail: str | dict = (
+        {"mesaj": neden, "zorlanabilir": True} if zorlanabilir else neden
+    )
+    return HTTPException(status.HTTP_409_CONFLICT, detail)
 
 
 def saatleri_oku(db: Session, donem: Term) -> dict[int, Saat]:
@@ -249,40 +275,54 @@ class Duzenleyici:
 
     def engel(
         self, entry: CurriculumEntry, saat: Saat, yoksay: set[int],
-        ek_subeler: list = (),
-    ) -> str | None:
+        ek_subeler: list = (), zorla: bool = False,
+    ) -> Engel | None:
         """Bu ders bu saate konabilir mi? Konamazsa Türkçe gerekçe döner.
 
         `yoksay`, taşınmakta olan yerleşimlerin kimlikleridir: bir bloğu kendi
         üstüne kaydırırken kendisiyle çakışmasın diye. `ek_subeler`, ortak
         okutulan bloğun öbür şubesidir; o da boş olmalı.
+
+        `zorla` ile yalnızca yapısal engeller kalır: kullanıcı müsaitliği ve
+        öğretmen çakışmasını bile bile geçiyor. Aynı şubenin aynı ders
+        saatinde ikinci dersi ise zorlanamaz — ızgarada o hücre tektir.
         """
         if not saat.ders_mi:
-            return "Bu saate ders konmaz (teneffüs ya da kapalı gün)."
-        if saat.id in self.ogretmen_kapali.get(entry.teacher_id, set()):
-            return f"{entry.teacher.full_name} bu saatte müsait değil."
+            return Engel("Bu saate ders konmaz (teneffüs ya da kapalı gün).", False)
+        if not zorla and saat.id in self.ogretmen_kapali.get(entry.teacher_id, set()):
+            return Engel(f"{entry.teacher.full_name} bu saatte müsait değil.", True)
         subeler = _subeler(entry) + list(ek_subeler)
         kimlikler = {sb.id for sb in subeler}
-        for sb in subeler:
-            if saat.id in self.sube_kapali.get(sb.id, set()):
-                return f"{sb.name} şubesi bu saate kapalı."
+        if not zorla:
+            for sb in subeler:
+                if saat.id in self.sube_kapali.get(sb.id, set()):
+                    return Engel(f"{sb.name} şubesi bu saate kapalı.", True)
         for pid in sorted(self.es_zamanlilar.get(saat.id, {saat.id})):
             # Başka bir satırla çakışıyorsa gerekçe onu da söylemeli; yoksa
             # kullanıcı boş görünen bir hücrenin neden reddedildiğini anlamaz.
-            nerede = "o saatte" if pid == saat.id else f"{self._nerede(pid)} saatinde"
+            ayni_satir = pid == saat.id
+            nerede = "o saatte" if ayni_satir else f"{self._nerede(pid)} saatinde"
             for diger in self.doluluk.get(pid, []):
                 if diger.id in yoksay:
                     continue
                 # Birleşik ders şubelerinin hepsini tutar; kesişen tek şube
-                # bile çakışmadır.
+                # bile çakışmadır. Aynı satırdaysa yapısal (hücre tek),
+                # başka satırdaysa saat ölçütünden gelir ve zorlanabilir.
                 ortak = kimlikler & _atama_sube_kimlikleri(diger)
                 if ortak:
+                    if zorla and not ayni_satir:
+                        continue
                     ad = next(sb.name for sb in subeler if sb.id in ortak)
-                    return (f"{ad} şubesinin {nerede} "
-                            f"{diger.entry.subject.name} dersi var.")
-                if diger.entry.teacher_id == entry.teacher_id:
-                    return (f"{entry.teacher.full_name} {nerede} "
-                            f"{_sube_etiketi(diger.entry)} şubesinde.")
+                    return Engel(
+                        f"{ad} şubesinin {nerede} {diger.entry.subject.name} dersi var.",
+                        zorlanabilir=not ayni_satir,
+                    )
+                if not zorla and diger.entry.teacher_id == entry.teacher_id:
+                    return Engel(
+                        f"{entry.teacher.full_name} {nerede} "
+                        f"{_sube_etiketi(diger.entry)} şubesinde.",
+                        True,
+                    )
         return None
 
     def _nerede(self, period_id: int) -> str:
@@ -313,15 +353,16 @@ class Duzenleyici:
                              f"(gün bitiyor ya da araya teneffüs giriyor).",
                 })
                 continue
-            neden = next(
-                (self.engel(entry, s, yoksay, ek_subeler) for s in dizi
-                 if self.engel(entry, s, yoksay, ek_subeler) is not None),
+            engel = next(
+                (e for s in dizi
+                 if (e := self.engel(entry, s, yoksay, ek_subeler)) is not None),
                 None,
             )
             sonuc.append({
                 "period_id": saat.id,
-                "uygun": neden is None,
-                "neden": neden,
+                "uygun": engel is None,
+                "neden": engel.neden if engel else None,
+                "zorlanabilir": engel.zorlanabilir if engel else False,
             })
         return sonuc
 
@@ -348,8 +389,14 @@ class Duzenleyici:
 
     # --- İşlemler ---
 
-    def tasi(self, assignment_id: int, hedef_period_id: int) -> None:
-        """Bloğu taşır. Hedefte eşit uzunlukta tek blok varsa yer değiştirirler."""
+    def tasi(self, assignment_id: int, hedef_period_id: int, zorla: bool = False) -> None:
+        """Bloğu taşır. Hedefte eşit uzunlukta tek blok varsa yer değiştirirler.
+
+        `zorla`: müsaitlik ve öğretmen çakışması aşılır. Öğretmenin hedefte
+        başka şubesi varsa onunla yer değiştirmek yerine üst üste konur —
+        kullanıcı "yine de buraya" dedi. Aynı şubenin hedefteki dersi ise yine
+        yer değiştirir; o hücre tek.
+        """
         atama = self._atama(assignment_id)
         blok = self.bloklar[atama.id]
         if any(a.is_locked for a in blok):
@@ -378,51 +425,72 @@ class Duzenleyici:
         # Yer açması gerekenler yalnızca ÇAKIŞANLAR: bir ders saati okulun
         # tamamına ait, o saatte başka şubelerin dersleri de vardır ve onların
         # taşınmasına gerek yok. Engel olan, aynı şube ya da aynı öğretmendir.
+        # Zorlamada öğretmen çakışması yer açtırmaz: ders üst üste konur.
+        def sube_cakisir(a: Assignment) -> bool:
+            return bool(kimlikler_on & _atama_sube_kimlikleri(a))
+
         hedefteki: list[Assignment] = [
             a
             for s in dizi
             for a in self.doluluk.get(s.id, [])
             if a.id not in kendi
-            and (kimlikler_on & _atama_sube_kimlikleri(a)
-                 or a.entry.teacher_id == entry_on.teacher_id)
+            and (sube_cakisir(a)
+                 or (not zorla and a.entry.teacher_id == entry_on.teacher_id))
         ]
         yer_degistiren: list[Assignment] = []
         if hedefteki:
             karsi_bloklar = {id(self.bloklar[a.id]): self.bloklar[a.id] for a in hedefteki}
+            # Yapısal engelin zorlanabilir olması, zorlamada ortadan kalkmasına
+            # bağlı: yalnız öğretmen çakışmasından gelen blok zorlamada yer
+            # değiştirmez, dolayısıyla engel de kalmaz.
+            sube_bloklari = {id(self.bloklar[a.id]) for a in hedefteki if sube_cakisir(a)}
+
+            def ogretmen_notu(a: Assignment) -> str:
+                """Zorlanabilir ret, asıl nedeni (öğretmen çakışması) söyler;
+                kullanıcı "zorla" derken neyi geçtiğini bilsin."""
+                return (f"{entry_on.teacher.full_name} o saatte "
+                        f"{_sube_etiketi(a.entry)} şubesinde; ")
+
             if len(karsi_bloklar) > 1:
-                raise HTTPException(
-                    status.HTTP_409_CONFLICT,
-                    "Hedefte birden fazla ders çakışıyor; yer değiştirme "
+                zorlanabilir = not zorla and len(sube_bloklari) <= 1
+                ilk = next(a for a in hedefteki if not sube_cakisir(a))
+                raise _reddet(
+                    (ogretmen_notu(ilk) if zorlanabilir else "")
+                    + "hedefte birden fazla ders çakışıyor, yer değiştirme "
                     "yapılamıyor. Önce oradaki derslerden birini ızgaradan alın.",
+                    zorlanabilir,
                 )
             yer_degistiren = next(iter(karsi_bloklar.values()))
+            sube_ile = any(sube_cakisir(a) for a in yer_degistiren)
+            zorlanabilir = not zorla and not sube_ile
+            on_ek = ogretmen_notu(yer_degistiren[0]) if zorlanabilir else ""
             if any(a.is_locked for a in yer_degistiren):
-                raise HTTPException(status.HTTP_409_CONFLICT,
-                                    "Hedefteki ders kilitli; yeri değiştirilemez.")
+                raise _reddet(on_ek + "hedefteki ders kilitli, yeri değiştirilemez.",
+                              zorlanabilir)
             if len(yer_degistiren) != len(blok):
-                raise HTTPException(
-                    status.HTTP_409_CONFLICT,
-                    f"Yer değiştirme yalnızca eşit uzunlukta bloklar arasında "
-                    f"yapılabilir: taşınan {len(blok)} saat, hedefteki "
-                    f"{len(yer_degistiren)} saat. Önce birini ızgaradan alın.",
+                raise _reddet(
+                    on_ek + f"yer değiştirme yalnızca eşit uzunlukta bloklar "
+                    f"arasında yapılabilir (taşınan {len(blok)} saat, hedefteki "
+                    f"{len(yer_degistiren)} saat). Önce birini ızgaradan alın.",
+                    zorlanabilir,
                 )
 
         yoksay = kendi | {a.id for a in yer_degistiren}
         for saat in dizi:
-            neden = self.engel(entry_on, saat, yoksay, ek_on)
-            if neden:
-                raise HTTPException(status.HTTP_409_CONFLICT, neden)
+            engel = self.engel(entry_on, saat, yoksay, ek_on, zorla)
+            if engel:
+                raise _reddet(engel.neden, engel.zorlanabilir)
 
         if yer_degistiren:
             karsi_entry = yer_degistiren[0].entry
             ek_karsi = self.ek_subeler(yer_degistiren[0])
             for saat in kaynak_saatler:
-                neden = self.engel(karsi_entry, saat, yoksay, ek_karsi)
-                if neden:
-                    raise HTTPException(
-                        status.HTTP_409_CONFLICT,
+                engel = self.engel(karsi_entry, saat, yoksay, ek_karsi, zorla)
+                if engel:
+                    raise _reddet(
                         f"Yer değiştirilemiyor — {karsi_entry.subject.name} dersi "
-                        f"karşı tarafa konamıyor: {neden}",
+                        f"karşı tarafa konamıyor: {engel.neden}",
+                        engel.zorlanabilir,
                     )
 
         surumler.baslangici_guvence_al(self.db, self.program)
@@ -442,6 +510,8 @@ class Duzenleyici:
         else:
             etiket = (f"{self._ders_adi(entry_on)}: "
                       f"{self._saat_adi(kaynak_saatler[0])} → {self._saat_adi(dizi[0])}")
+        if zorla:
+            etiket += " (zorla)"
         self._surum_yaz(etiket)
         self.db.commit()
 
@@ -461,8 +531,13 @@ class Duzenleyici:
         self._surum_yaz(etiket)
         self.db.commit()
 
-    def yerlestir(self, entry_id: int, hedef_period_id: int, uzunluk: int) -> None:
-        """Bekleyen saatlerden `uzunluk` kadarını ızgaraya koyar."""
+    def yerlestir(
+        self, entry_id: int, hedef_period_id: int, uzunluk: int, zorla: bool = False,
+    ) -> None:
+        """Bekleyen saatlerden `uzunluk` kadarını ızgaraya koyar.
+
+        `zorla` müsaitliği ve öğretmen çakışmasını aşar; şubenin o saatteki
+        dersi yine engeldir (raftan gelen blok yer değiştirmez)."""
         entry = self._mufredat_satiri(entry_id)
         bekleyen = self.bekleyenler().get(entry_id, [])
         if uzunluk not in bekleyen:
@@ -480,9 +555,9 @@ class Duzenleyici:
                 f"araya teneffüs giriyor.",
             )
         for saat in dizi:
-            neden = self.engel(entry, saat, set())
-            if neden:
-                raise HTTPException(status.HTTP_409_CONFLICT, neden)
+            engel = self.engel(entry, saat, set(), zorla=zorla)
+            if engel:
+                raise _reddet(engel.neden, engel.zorlanabilir)
 
         surumler.baslangici_guvence_al(self.db, self.program)
         for saat in dizi:
@@ -494,6 +569,7 @@ class Duzenleyici:
         self.db.flush()
         self._surum_yaz(
             f"{self._ders_adi(entry)} yerleştirildi — {self._saat_adi(dizi[0])}"
+            + (" (zorla)" if zorla else "")
         )
         self.db.commit()
 

@@ -384,3 +384,121 @@ def test_baska_subenin_dersi_yer_degistirmeyi_engellemez(yonetici: TestClient):
     assert _konum(yonetici, pid, "a_trk") == mat_once
     # Karışmayan şube yerinde kalır.
     assert _konum(yonetici, pid, "b_mat") == b_once
+
+
+# --- Zorla yerleştirme ---
+
+def test_zorlanabilir_engel_bayragiyla_doner(yonetici: TestClient):
+    okul = _okul(yonetici)
+    pid = _program(yonetici, okul, [("a_mat", 0)])
+    yonetici.put(f"/api/teachers/{okul['ogretmenler']['ayse']}/availability", json={
+        "cells": [{"period_id": okul["saatler"][3]["id"], "state": "uygun_degil"},
+                  {"period_id": okul["saatler"][4]["id"], "state": "uygun_degil"}]
+    })
+    hucre = _hucreler(yonetici, pid)[0]
+    r = yonetici.patch(f"/api/timetables/{pid}/assignments/{hucre['assignment_id']}",
+                       json={"period_id": okul["saatler"][3]["id"]})
+    assert r.status_code == 409
+    assert r.json()["detail"] == {
+        "mesaj": "Ayşe Yılmaz bu saatte müsait değil.", "zorlanabilir": True,
+    }
+    assert _konum(yonetici, pid, "a_mat") == [okul["saatler"][i]["id"] for i in (0, 1)]
+
+
+def test_zorla_musait_olmayan_saate_konur_ve_uyari_verir(yonetici: TestClient):
+    okul = _okul(yonetici)
+    pid = _program(yonetici, okul, [("a_mat", 0)])
+    yonetici.put(f"/api/teachers/{okul['ogretmenler']['ayse']}/availability", json={
+        "cells": [{"period_id": okul["saatler"][3]["id"], "state": "uygun_degil"}]
+    })
+    hucre = _hucreler(yonetici, pid)[0]
+    r = yonetici.patch(f"/api/timetables/{pid}/assignments/{hucre['assignment_id']}",
+                       json={"period_id": okul["saatler"][3]["id"], "zorla": True})
+    assert r.status_code == 200, r.text
+    assert _konum(yonetici, pid, "a_mat") == [okul["saatler"][i]["id"] for i in (3, 4)]
+
+    uyarilar = yonetici.get(f"/api/timetables/{pid}/warnings").json()
+    cakismalar = [u for u in uyarilar if u["tur"] == "cakisma"]
+    assert len(cakismalar) == 1
+    assert cakismalar[0]["ogretmen"] == "Ayşe Yılmaz"
+    assert "müsait değil" in cakismalar[0]["baslik"]
+    assert cakismalar[0]["ignored"] is False
+
+    surumler = yonetici.get(f"/api/timetables/{pid}/versions").json()
+    assert "(zorla)" in surumler[0]["label"]
+
+
+def test_zorla_ogretmeni_iki_subeye_koyar(yonetici: TestClient):
+    """Öğretmen çakışmasında normal yol yer değiştirmeyi dener; blok boyları
+    eşit olmadığı için reddeder ama zorlanabilir der. Zorlanınca ders yer
+    değiştirmeden üst üste konur ve uyarı çıkar."""
+    okul = _okul(yonetici)
+    pid = _program(yonetici, okul, [("a_mat", 0), ("b_mat", 3)])   # ikisi de Ayşe
+    b = next(h for h in _hucreler(yonetici, pid) if h["section_name"] == "9-B")
+    r = yonetici.patch(f"/api/timetables/{pid}/assignments/{b['assignment_id']}",
+                       json={"period_id": okul["saatler"][0]["id"]})
+    assert r.status_code == 409
+    assert r.json()["detail"]["zorlanabilir"] is True
+    assert r.json()["detail"]["mesaj"].startswith("Ayşe Yılmaz o saatte 9-A şubesinde; ")
+    assert "eşit uzunlukta" in r.json()["detail"]["mesaj"]
+
+    r = yonetici.patch(f"/api/timetables/{pid}/assignments/{b['assignment_id']}",
+                       json={"period_id": okul["saatler"][0]["id"], "zorla": True})
+    assert r.status_code == 200, r.text
+    assert _konum(yonetici, pid, "b_mat") == [okul["saatler"][0]["id"]]
+    assert _konum(yonetici, pid, "a_mat") == [okul["saatler"][i]["id"] for i in (0, 1)]
+
+    uyarilar = yonetici.get(f"/api/timetables/{pid}/warnings").json()
+    cakismalar = [u for u in uyarilar if u["tur"] == "cakisma"]
+    assert len(cakismalar) == 1
+    assert "iki şubede" in cakismalar[0]["baslik"]
+    assert cakismalar[0]["konan"] == 2
+
+
+def test_ayni_subenin_dolu_saati_zorlanamaz(yonetici: TestClient):
+    """Aynı şubenin aynı ders saatine iki ders ızgarada gösterilemez; raftan
+    gelen blok orada yer değiştirmez, zorla bile olsa reddedilir."""
+    okul = _okul(yonetici)
+    pid = _program(yonetici, okul, [("a_mat", 0)])
+    r = yonetici.post(f"/api/timetables/{pid}/place", json={
+        "curriculum_entry_id": okul["atamalar"]["a_trk"],
+        "period_id": okul["saatler"][0]["id"], "uzunluk": 2, "zorla": True,
+    })
+    assert r.status_code == 409
+    assert isinstance(r.json()["detail"], str)
+    assert "Matematik dersi var" in r.text
+
+
+def test_zorla_bekleyen_blok_kapali_saate_konur(yonetici: TestClient):
+    okul = _okul(yonetici)
+    pid = _program(yonetici, okul, [])
+    yonetici.put(f"/api/sections/{okul['subeler']['a']}/availability", json={
+        "cells": [{"period_id": okul["saatler"][2]["id"], "state": "uygun_degil"}]
+    })
+    govde = {"curriculum_entry_id": okul["atamalar"]["a_trk"],
+             "period_id": okul["saatler"][2]["id"], "uzunluk": 2}
+    r = yonetici.post(f"/api/timetables/{pid}/place", json=govde)
+    assert r.status_code == 409
+    assert r.json()["detail"]["zorlanabilir"] is True
+    r = yonetici.post(f"/api/timetables/{pid}/place", json={**govde, "zorla": True})
+    assert r.status_code == 200, r.text
+    uyarilar = yonetici.get(f"/api/timetables/{pid}/warnings").json()
+    cakismalar = [u for u in uyarilar if u["tur"] == "cakisma"]
+    assert len(cakismalar) == 1
+    assert cakismalar[0]["baslik"].startswith("9-A: ")
+    assert cakismalar[0]["baslik"].endswith(" kapalı")
+
+
+def test_hedefler_zorlanabilir_olani_isaretler(yonetici: TestClient):
+    okul = _okul(yonetici)
+    pid = _program(yonetici, okul, [("a_mat", 0)])
+    yonetici.put(f"/api/teachers/{okul['ogretmenler']['ayse']}/availability", json={
+        "cells": [{"period_id": okul["saatler"][3]["id"], "state": "uygun_degil"}]
+    })
+    hucre = _hucreler(yonetici, pid)[0]
+    hedefler = {h["period_id"]: h for h in yonetici.get(
+        f"/api/timetables/{pid}/targets?assignment_id={hucre['assignment_id']}").json()}
+    kapali = hedefler[okul["saatler"][3]["id"]]
+    assert kapali["uygun"] is False and kapali["zorlanabilir"] is True
+    son = hedefler[okul["saatler"][5]["id"]]        # 2 saatlik blok güne sığmaz
+    assert son["uygun"] is False and son["zorlanabilir"] is False

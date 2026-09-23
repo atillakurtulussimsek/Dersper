@@ -520,6 +520,8 @@ class AssignmentOut(ORMModel):
 
 class AssignmentMove(BaseModel):
     period_id: int
+    # Çakışmayı bile bile geçmek: bkz. app.duzenle.
+    zorla: bool = False
 
 
 class PlaceIn(BaseModel):
@@ -527,6 +529,7 @@ class PlaceIn(BaseModel):
     curriculum_entry_id: int
     period_id: int
     uzunluk: int = Field(ge=1, le=20)
+    zorla: bool = False
 
 
 class TargetOut(BaseModel):
@@ -534,6 +537,8 @@ class TargetOut(BaseModel):
     period_id: int
     uygun: bool
     neden: str | None
+    # Uygun değilse: kullanıcı "yine de koy" diyebilir mi?
+    zorlanabilir: bool = False
 
 
 class PendingOut(BaseModel):

@@ -130,7 +130,8 @@ export function HedefSecici({
         {uzunluk > 1
           ? `${uzunluk} saatlik blok: seçtiğiniz saat bloğun başlangıcı olur.`
           : "Dersin konacağı saati seçin."}{" "}
-        Soluk saatler kurala takılıyor; üzerine gelince nedeni yazar.
+        Sarı saatler çakışıyor ama zorla yerleştirilebilir; soluk saatlere
+        konamaz. Üzerine gelince nedeni yazar.
       </p>
       {yukleniyor ? (
         <p className="py-6 text-center text-sm text-murekkep-silik">
@@ -149,11 +150,12 @@ export function HedefSecici({
                   .map((p) => {
                     const h = hedefler.get(p.id);
                     const uygun = h?.uygun ?? false;
+                    const zorlanabilir = !uygun && (h?.zorlanabilir ?? false);
                     return (
                       <button
                         key={p.id}
                         type="button"
-                        disabled={!uygun}
+                        disabled={!uygun && !zorlanabilir}
                         title={!uygun ? (h?.neden ?? "Bu saate konamaz") : undefined}
                         onClick={() => {
                           sec(p.id);
@@ -163,7 +165,9 @@ export function HedefSecici({
                           "sayisal flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-sm",
                           uygun
                             ? "bg-basari-zemin text-murekkep hover:ring-1 hover:ring-inset hover:ring-basari"
-                            : "cursor-not-allowed text-murekkep-silik opacity-50",
+                            : zorlanabilir
+                              ? "bg-uyari-zemin text-murekkep hover:ring-1 hover:ring-inset hover:ring-uyari"
+                              : "cursor-not-allowed text-murekkep-silik opacity-50",
                         )}
                       >
                         <span>{p.name}</span>

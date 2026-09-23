@@ -198,7 +198,9 @@ def test_saat_olcutu_elle_tasimayi_da_engeller(yonetici: TestClient):
         "period_id": saatler[1]["id"], "uzunluk": 1,
     })
     assert ikinci.status_code == 409, ikinci.text
-    gerekce = ikinci.json()["detail"]
+    detay = ikinci.json()["detail"]
+    assert detay["zorlanabilir"] is True       # öğretmen çakışması zorlanabilir
+    gerekce = detay["mesaj"]
     assert "Tek Öğretmen" in gerekce
     assert "1. ders" in gerekce, gerekce
 

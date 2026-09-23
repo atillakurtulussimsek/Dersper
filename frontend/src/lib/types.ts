@@ -218,7 +218,7 @@ export interface BirlestirmeKurali {
 
 export interface ProgramUyarisi {
   key: string;
-  tur: "gunluk_asim" | "bitisik" | "gun_siniri" | "bina_gecisi";
+  tur: "gunluk_asim" | "bitisik" | "gun_siniri" | "bina_gecisi" | "cakisma";
   baslik: string;
   detay: string;
   sube: string;
@@ -286,6 +286,8 @@ export interface Hedef {
   period_id: number;
   uygun: boolean;
   neden: string | null;
+  /** Uygun değilse: bırakınca "zorla yerleştir" sorulabilir mi? */
+  zorlanabilir?: boolean;
 }
 
 /** Sürüklenmekte olan şey: ızgaradaki bir blok ya da raftaki bekleyen blok. */

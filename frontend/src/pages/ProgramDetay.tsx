@@ -23,8 +23,8 @@ import ProgramUyarilari from "../components/ProgramUyarilari";
 import SurumGecmisi from "../components/SurumGecmisi";
 import TaniRaporu from "../components/TaniRaporu";
 import UretimIzleme from "../components/UretimIzleme";
-import { Buton, Ipucu, Kart, Rozet, Uyari, Yukleniyor } from "../components/ui";
-import { get, jetonuAl, patch, post } from "../lib/api";
+import { Buton, Ipucu, Kart, Kutu, Rozet, Uyari, Yukleniyor } from "../components/ui";
+import { ApiHatasi, get, jetonuAl, patch, post } from "../lib/api";
 import { BOSLUK_SECENEKLERI } from "../lib/bosluk";
 import { bloklariCikar } from "../lib/hucreler";
 import { dersZemini } from "../lib/renkler";
@@ -156,11 +156,28 @@ export default function ProgramDetay() {
     qc.removeQueries({ queryKey: ["hedefler", id] });
   }
 
+  // Çakışan bırakma: sunucu "zorlanabilir" derse sormadan reddetmek yerine
+  // kullanıcıya bırakılır; onaylarsa aynı istek `zorla` ile yinelenir.
+  const [zorlamaSorusu, setZorlamaSorusu] = useState<{
+    mesaj: string;
+    onayla: () => void;
+  } | null>(null);
+
+  function duzenlemeHatasi(e: Error, zorla: () => void) {
+    if (e instanceof ApiHatasi && e.zorlanabilir) {
+      setZorlamaSorusu({ mesaj: e.message, onayla: zorla });
+      return;
+    }
+    setHata(e.message);
+  }
+
   const tasi = useMutation({
-    mutationFn: ({ atama, saat }: { atama: number; saat: number }) =>
-      patch<Izgara>(`/timetables/${id}/assignments/${atama}`, { period_id: saat }),
+    mutationFn: ({ atama, saat, zorla }: { atama: number; saat: number; zorla?: boolean }) =>
+      patch<Izgara>(`/timetables/${id}/assignments/${atama}`, {
+        period_id: saat, zorla: zorla ?? false,
+      }),
     onSuccess: duzenlemeSonucu,
-    onError: (e: Error) => setHata(e.message),
+    onError: (e: Error, v) => duzenlemeHatasi(e, () => tasi.mutate({ ...v, zorla: true })),
   });
 
   const izgaradanAl = useMutation({
@@ -171,12 +188,14 @@ export default function ProgramDetay() {
   });
 
   const yerlestir = useMutation({
-    mutationFn: (v: { entryId: number; saat: number; uzunluk: number }) =>
+    mutationFn: (v: { entryId: number; saat: number; uzunluk: number; zorla?: boolean }) =>
       post<Izgara>(`/timetables/${id}/place`, {
         curriculum_entry_id: v.entryId, period_id: v.saat, uzunluk: v.uzunluk,
+        zorla: v.zorla ?? false,
       }),
     onSuccess: duzenlemeSonucu,
-    onError: (e: Error) => setHata(e.message),
+    onError: (e: Error, v) =>
+      duzenlemeHatasi(e, () => yerlestir.mutate({ ...v, zorla: true })),
   });
 
   const geriAl = useMutation({
@@ -804,6 +823,33 @@ export default function ProgramDetay() {
         uzunluk={secim?.tur === "hucre" ? secim.hucreler.length : (secim?.uzunluk ?? 1)}
         sec={hedefSecildi}
       />
+
+      <Kutu
+        acik={zorlamaSorusu !== null}
+        kapat={() => setZorlamaSorusu(null)}
+        baslik="Çakışma var"
+      >
+        <p className="text-sm text-murekkep">{zorlamaSorusu?.mesaj}</p>
+        <p className="mt-2 text-xs text-murekkep-silik">
+          Yine de yerleştirilirse çakışma uyarılar listesinde görünür ve ders
+          taşınınca kendiliğinden kalkar.
+        </p>
+        <div className="mt-4 flex justify-end gap-2">
+          <Buton tur="ikincil" onClick={() => setZorlamaSorusu(null)}>
+            Vazgeç
+          </Buton>
+          <Buton
+            tur="tehlike"
+            onClick={() => {
+              const soru = zorlamaSorusu;
+              setZorlamaSorusu(null);
+              soru?.onayla();
+            }}
+          >
+            Zorla yerleştir
+          </Buton>
+        </div>
+      </Kutu>
 
       {/* Sürüklenen şey imlecin peşinde: hangi dersin taşındığı hep görünür. */}
       <DragOverlay dropAnimation={null}>

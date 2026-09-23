@@ -18,8 +18,15 @@ export class ApiHatasi extends Error {
   constructor(
     public readonly status: number,
     message: string,
+    /** Sunucunun `detail` gövdesi, olduğu gibi. */
+    public readonly detay: unknown = null,
   ) {
     super(message);
+  }
+
+  /** Sunucu "aynı istek `zorla` ile yinelenebilir" dedi mi? (bkz. app.duzenle) */
+  get zorlanabilir(): boolean {
+    return (this.detay as { zorlanabilir?: unknown } | null)?.zorlanabilir === true;
   }
 }
 
@@ -27,6 +34,9 @@ function hataMesaji(status: number, govde: unknown): string {
   if (typeof govde === "string" && govde) return govde;
   const detay = (govde as { detail?: unknown })?.detail;
   if (typeof detay === "string") return detay;
+  // Zorlanabilir çakışma: {mesaj, zorlanabilir}.
+  const mesaj = (detay as { mesaj?: unknown } | null)?.mesaj;
+  if (typeof mesaj === "string") return mesaj;
   if (Array.isArray(detay)) {
     // Pydantic doğrulama hataları
     return detay
@@ -95,6 +105,7 @@ export async function api<T>(
         ? hataMesaji(yanit.status, govde)
         : `Sunucu ${yanit.status} döndürdü ve yanıt JSON değil. ` +
           `/api istekleri backend'e ulaşmıyor olabilir (ters vekil ayarı).`,
+      jsonMu ? (govde as { detail?: unknown })?.detail ?? null : null,
     );
   }
   if (!jsonMu) {

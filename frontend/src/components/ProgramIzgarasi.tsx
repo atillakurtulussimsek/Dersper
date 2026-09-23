@@ -131,18 +131,26 @@ function Hedefli({
   // Sürükleme sürerken: uygun hedefler belirgin, uygunsuzlar soluk.
   const isaretle = suruklemeVar && degerlendirme !== undefined;
   const uygun = degerlendirme?.uygun ?? true;
+  // Çakışan ama zorlanabilen hedef sarı: bırakınca "yine de koy" sorulur.
+  const zorlanabilir = !uygun && (degerlendirme?.zorlanabilir ?? false);
 
   return (
     <td
       ref={setNodeRef}
-      title={isaretle && !uygun ? (degerlendirme?.neden ?? undefined) : undefined}
+      title={
+        isaretle && !uygun
+          ? `${degerlendirme?.neden ?? ""}${zorlanabilir ? " Bırakırsanız zorla yerleştirme sorulur." : ""}`
+          : undefined
+      }
       className={clsx(
         "h-14 border border-cizgi p-0.5 align-middle transition-colors",
         bos && "bg-yuzey-alt/60",
         isaretle && uygun && "bg-basari-zemin",
-        isaretle && !uygun && "opacity-40",
+        isaretle && zorlanabilir && "bg-uyari-zemin",
+        isaretle && !uygun && !zorlanabilir && "opacity-40",
         isOver && uygun && "bg-murekkep/10 ring-2 ring-inset ring-cizgi-guclu",
-        isOver && !uygun && "ring-2 ring-inset ring-hata",
+        isOver && zorlanabilir && "ring-2 ring-inset ring-uyari",
+        isOver && !uygun && !zorlanabilir && "ring-2 ring-inset ring-hata",
       )}
     >
       {children}
