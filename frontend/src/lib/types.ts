@@ -292,7 +292,13 @@ export interface Hedef {
 
 /** Sürüklenmekte olan şey: ızgaradaki bir blok ya da raftaki bekleyen blok. */
 export type Suruklenen =
-  | { tur: "hucre"; assignmentId: number; hucreler: Hucre[] }
+  | {
+      tur: "hucre";
+      assignmentId: number;
+      hucreler: Hucre[];
+      /** Bloğun yalnız bu saati taşınıyor (blok bölünüyor). */
+      tekSaat?: boolean;
+    }
   | { tur: "bekleyen"; entryId: number; uzunluk: number; etiket: string; renk: string };
 
 /** Bekleyenler rafındaki tek bir blok. */

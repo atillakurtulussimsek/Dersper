@@ -79,7 +79,9 @@ function Surukle({
   });
 
   const kim = altSatir(hucre, bakis);
-  const blokNotu = blokBoyu > 1 ? ` · ${blokBoyu} saatlik blok birlikte taşınır` : "";
+  const blokNotu = blokBoyu > 1
+    ? ` · ${blokBoyu} saatlik blok birlikte taşınır (Alt ile yalnız bu saat)`
+    : "";
 
   return (
     <div

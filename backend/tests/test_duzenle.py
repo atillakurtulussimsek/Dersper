@@ -502,3 +502,34 @@ def test_hedefler_zorlanabilir_olani_isaretler(yonetici: TestClient):
     assert kapali["uygun"] is False and kapali["zorlanabilir"] is True
     son = hedefler[okul["saatler"][5]["id"]]        # 2 saatlik blok güne sığmaz
     assert son["uygun"] is False and son["zorlanabilir"] is False
+
+
+# --- Blok bölme ---
+
+def test_tek_saat_tasinarak_blok_bolunur(yonetici: TestClient):
+    okul = _okul(yonetici)
+    pid = _program(yonetici, okul, [("a_mat", 0)])       # 0-1. saatler
+    ikinci = next(h for h in _hucreler(yonetici, pid)
+                  if h["period_id"] == okul["saatler"][1]["id"])
+    r = yonetici.patch(f"/api/timetables/{pid}/assignments/{ikinci['assignment_id']}",
+                       json={"period_id": okul["saatler"][3]["id"], "tek_saat": True})
+    assert r.status_code == 200, r.text
+    assert _konum(yonetici, pid, "a_mat") == [okul["saatler"][i]["id"] for i in (0, 3)]
+    # Desen "2" isterken 1+1 yerleşti: matematik için bekleyen yok, saat sayısı tam.
+    bekleyen = yonetici.get(f"/api/timetables/{pid}/pending").json()
+    assert not [b for b in bekleyen if b["curriculum_entry_id"] == okul["atamalar"]["a_mat"]]
+    surumler = yonetici.get(f"/api/timetables/{pid}/versions").json()
+    assert "(blok bölündü)" in surumler[0]["label"]
+
+
+def test_tek_saat_hedefleri_tek_saatlik_degerlendirilir(yonetici: TestClient):
+    okul = _okul(yonetici)
+    pid = _program(yonetici, okul, [("a_mat", 0)])
+    hucre = _hucreler(yonetici, pid)[0]
+    son = okul["saatler"][5]["id"]                       # günün son saati
+    butun = {h["period_id"]: h for h in yonetici.get(
+        f"/api/timetables/{pid}/targets?assignment_id={hucre['assignment_id']}").json()}
+    tek = {h["period_id"]: h for h in yonetici.get(
+        f"/api/timetables/{pid}/targets?assignment_id={hucre['assignment_id']}&tek_saat=true").json()}
+    assert butun[son]["uygun"] is False                  # 2 saatlik blok sığmaz
+    assert tek[son]["uygun"] is True                     # tek saat sığar

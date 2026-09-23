@@ -11,7 +11,7 @@ import {
 } from "@dnd-kit/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "react-router-dom";
-import { Copy, Globe, Inbox, Infinity, Lock, LockOpen, MoveRight, Play, Redo2, Undo2 } from "lucide-react";
+import { Copy, Globe, Inbox, Infinity, Lock, LockOpen, MoveRight, Play, Redo2, Scissors, Undo2 } from "lucide-react";
 
 import { BaglamMenusu, HedefSecici, type MenuOgesi } from "../components/BaglamMenusu";
 import BekleyenDersler from "../components/BekleyenDersler";
@@ -172,9 +172,11 @@ export default function ProgramDetay() {
   }
 
   const tasi = useMutation({
-    mutationFn: ({ atama, saat, zorla }: { atama: number; saat: number; zorla?: boolean }) =>
+    mutationFn: ({ atama, saat, zorla, tekSaat }: {
+      atama: number; saat: number; zorla?: boolean; tekSaat?: boolean;
+    }) =>
       patch<Izgara>(`/timetables/${id}/assignments/${atama}`, {
-        period_id: saat, zorla: zorla ?? false,
+        period_id: saat, zorla: zorla ?? false, tek_saat: tekSaat ?? false,
       }),
     onSuccess: duzenlemeSonucu,
     onError: (e: Error, v) => duzenlemeHatasi(e, () => tasi.mutate({ ...v, zorla: true })),
@@ -315,7 +317,7 @@ export default function ProgramDetay() {
     hedefOgesi === null
       ? null
       : hedefOgesi.tur === "hucre"
-        ? `assignment_id=${hedefOgesi.assignmentId}`
+        ? `assignment_id=${hedefOgesi.assignmentId}${hedefOgesi.tekSaat ? "&tek_saat=true" : ""}`
         : `curriculum_entry_id=${hedefOgesi.entryId}&uzunluk=${hedefOgesi.uzunluk}`;
 
   const hedefSorgu = useQuery({
@@ -363,6 +365,17 @@ export default function ProgramDetay() {
       }];
     }
     const kilitli = oge.hucreler[0]?.is_locked ?? false;
+    // Blok bölme: yalnız tıklanan hücre taşınır, kalan saatler yerinde kalır.
+    const tikladigi = oge.hucreler.find((h) => h.assignment_id === oge.assignmentId);
+    const bolme: MenuOgesi[] =
+      oge.hucreler.length > 1 && tikladigi
+        ? [{
+            etiket: "Yalnız bu saati taşı… (bloğu böl)",
+            simge: <Scissors className="h-4 w-4" />,
+            devre: kilitli || duzenlemeSuruyor,
+            sec: () => setSecim({ ...oge, hucreler: [tikladigi], tekSaat: true }),
+          }]
+        : [];
     return [
       {
         etiket: "Taşı…",
@@ -370,6 +383,7 @@ export default function ProgramDetay() {
         devre: kilitli || duzenlemeSuruyor,
         sec: () => setSecim(oge),
       },
+      ...bolme,
       {
         etiket: kilitli ? "Kilidi aç" : "Kilitle",
         simge: kilitli ? <LockOpen className="h-4 w-4" /> : <Lock className="h-4 w-4" />,
@@ -390,8 +404,11 @@ export default function ProgramDetay() {
     const oge = secim;
     setSecim(null);
     if (!oge) return;
-    if (oge.tur === "hucre") tasi.mutate({ atama: oge.assignmentId, saat: periodId });
-    else yerlestir.mutate({ entryId: oge.entryId, saat: periodId, uzunluk: oge.uzunluk });
+    if (oge.tur === "hucre") {
+      tasi.mutate({ atama: oge.assignmentId, saat: periodId, tekSaat: oge.tekSaat });
+    } else {
+      yerlestir.mutate({ entryId: oge.entryId, saat: periodId, uzunluk: oge.uzunluk });
+    }
   }
 
   function suruklemeBasladi(e: DragStartEvent) {
@@ -399,7 +416,13 @@ export default function ProgramDetay() {
     if (kimlik.startsWith("h:")) {
       const atama = Number(kimlik.slice(2));
       const blok = bloklar.get(atama) ?? [];
-      setSuruklenen({ tur: "hucre", assignmentId: atama, hucreler: blok });
+      // Alt/Option basılıyken yalnız tutulan saat gider: blok bölünür.
+      const alt = (e.activatorEvent as MouseEvent | undefined)?.altKey === true;
+      const tek = alt && blok.length > 1 ? blok.filter((h) => h.assignment_id === atama) : null;
+      setSuruklenen({
+        tur: "hucre", assignmentId: atama,
+        hucreler: tek ?? blok, tekSaat: tek !== null,
+      });
       return;
     }
     const [, entryId, uzunluk] = kimlik.split(":");
@@ -429,7 +452,7 @@ export default function ProgramDetay() {
     if (!hedef.startsWith("s:")) return;
     const saat = Number(hedef.slice(2));
     if (kaynak.tur === "hucre") {
-      tasi.mutate({ atama: kaynak.assignmentId, saat });
+      tasi.mutate({ atama: kaynak.assignmentId, saat, tekSaat: kaynak.tekSaat });
     } else {
       yerlestir.mutate({ entryId: kaynak.entryId, saat, uzunluk: kaynak.uzunluk });
     }
@@ -716,8 +739,9 @@ export default function ProgramDetay() {
                 />
               )}
               <Ipucu>
-                Hücreyi sürükleyerek taşıyın — blok bütün taşınır. Dolu bir hücreye
-                bırakmak iki dersi yer değiştirir. Aşağıdaki rafa bırakmak dersi
+                Hücreyi sürükleyerek taşıyın — blok bütün taşınır; Alt (Option)
+                basılıyken sürüklerseniz yalnız o saat gider, blok bölünür. Dolu
+                bir hücreye bırakmak iki dersi yer değiştirir. Aşağıdaki rafa bırakmak dersi
                 programdan çıkarır. Çift tıklamak kilitler; kilitli dersler yeniden
                 üretimde yerinde kalır. Sürüklemek zorsa (küçük ekran) hücreye sağ
                 tıklayın ya da dokunun: menüden taşır, kilitler, rafa alırsınız.

@@ -308,7 +308,9 @@ def dersi_tasi(
     yinelenerek yine de yerleştirilir.
     """
     t = _programi_getir(db, timetable_id, donem)
-    Duzenleyici(db, t, donem).tasi(assignment_id, payload.period_id, payload.zorla)
+    Duzenleyici(db, t, donem).tasi(
+        assignment_id, payload.period_id, payload.zorla, payload.tek_saat
+    )
     return _izgara(db, t)
 
 
@@ -356,19 +358,20 @@ def hedefler(
     assignment_id: int | None = None,
     curriculum_entry_id: int | None = None,
     uzunluk: int = 1,
+    tek_saat: bool = False,
     db: Session = Depends(get_db),
     donem: Term = Depends(aktif_donem),
 ) -> list[dict]:
     """Sürüklenen ders nereye konabilir? Arayüz sürükleme başlarken sorar.
 
-    Ya taşınan bir yerleşim (`assignment_id`) ya da raftan gelen bir blok
-    (`curriculum_entry_id` + `uzunluk`) sorulur.
+    Ya taşınan bir yerleşim (`assignment_id`, `tek_saat` ile yalnız o saat)
+    ya da raftan gelen bir blok (`curriculum_entry_id` + `uzunluk`) sorulur.
     """
     t = _programi_getir(db, timetable_id, donem)
     d = Duzenleyici(db, t, donem)
     if assignment_id is not None:
         atama = d._atama(assignment_id)
-        blok = d.bloklar[atama.id]
+        blok = [atama] if tek_saat else d.bloklar[atama.id]
         return d.hedefleri_degerlendir(
             atama.entry, len(blok), {a.id for a in blok}, d.ek_subeler(atama)
         )

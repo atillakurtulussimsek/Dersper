@@ -9,6 +9,9 @@ kaynağıdır: taşıma, yer değiştirme, ızgaradan alma, geri koyma ve geri a
 1. **İşlem birimi bloktur, saat değil.** "2+2" deseni istenmişken bir saati
    ayrı çekmek çözücünün asla üretmeyeceği bir programı elle oluşturmak olurdu.
    Bir hücreyi tutmak, o hücrenin içinde bulunduğu kesintisiz bloğu tutar.
+   Kullanıcı bloğu bilerek bölmek isterse `tek_saat` ile yalnız o saati taşır;
+   blok tanımı bitişiklikten türediği için geride kalan saatler kendiliğinden
+   daha kısa bir blok olur, bekleyenler de deseni saat saat düşerek hesaplar.
 
 2. **Elle yapılan da kurallara uyar — ama son söz kullanıcının.** Çözücünün
    uyduğu müsaitlik ve çakışma kuralları burada da geçerli. Uymayan bir
@@ -389,16 +392,21 @@ class Duzenleyici:
 
     # --- İşlemler ---
 
-    def tasi(self, assignment_id: int, hedef_period_id: int, zorla: bool = False) -> None:
+    def tasi(
+        self, assignment_id: int, hedef_period_id: int, zorla: bool = False,
+        tek_saat: bool = False,
+    ) -> None:
         """Bloğu taşır. Hedefte eşit uzunlukta tek blok varsa yer değiştirirler.
 
         `zorla`: müsaitlik ve öğretmen çakışması aşılır. Öğretmenin hedefte
         başka şubesi varsa onunla yer değiştirmek yerine üst üste konur —
         kullanıcı "yine de buraya" dedi. Aynı şubenin hedefteki dersi ise yine
         yer değiştirir; o hücre tek.
+
+        `tek_saat`: bloğun yalnız bu saati taşınır (blok bölünür).
         """
         atama = self._atama(assignment_id)
-        blok = self.bloklar[atama.id]
+        blok = [atama] if tek_saat else self.bloklar[atama.id]
         if any(a.is_locked for a in blok):
             raise HTTPException(
                 status.HTTP_409_CONFLICT,
@@ -510,6 +518,8 @@ class Duzenleyici:
         else:
             etiket = (f"{self._ders_adi(entry_on)}: "
                       f"{self._saat_adi(kaynak_saatler[0])} → {self._saat_adi(dizi[0])}")
+        if tek_saat and len(self.bloklar[atama.id]) > 1:
+            etiket += " (blok bölündü)"
         if zorla:
             etiket += " (zorla)"
         self._surum_yaz(etiket)

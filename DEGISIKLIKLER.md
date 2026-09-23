@@ -5,6 +5,10 @@ Dersper'in geliştirme günlüğü. Her değişiklik tek cümleyle, en yeni sür
 öncesinde ikinci hane özellik, üçüncü hane düzeltme demektir. Uygulamanın
 sürümü arayüzde yan menünün altında yazar.
 
+## 0.39.0 — 2026-09-23
+
+- Blok dersler elle bölünebilir: hücreye sağ tıkta "Yalnız bu saati taşı… (bloğu böl)" ya da Alt (Option) basılıyken sürükleme yalnız o saati taşır, kalan saatler yerinde kalır. Hedefler tek saat için değerlendirilir; sürüm geçmişinde "(blok bölündü)" yazar.
+
 ## 0.38.0 — 2026-09-23
 
 - Elle düzenlemede çakışma artık kesin engel değil: öğretmenin müsait olmadığı saat, şubenin kapalı saati ya da öğretmenin o saatte başka şubede olması "Çakışma var" penceresiyle sorulur; "Zorla yerleştir" denirse ders yine de konur. Sürükleme ve "Taşı…" listesinde bu saatler sarı görünür; aynı şubenin dolu saati, bölünen blok ve kilitli ders yine soluk ve zorlanamaz.

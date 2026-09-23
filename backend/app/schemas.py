@@ -522,6 +522,8 @@ class AssignmentMove(BaseModel):
     period_id: int
     # Çakışmayı bile bile geçmek: bkz. app.duzenle.
     zorla: bool = False
+    # Bloğun yalnız bu saatini taşı (bloğu böl).
+    tek_saat: bool = False
 
 
 class PlaceIn(BaseModel):
