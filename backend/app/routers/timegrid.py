@@ -90,18 +90,26 @@ def _dolu_engeli(
     dersler = [(p, a) for p in saatler for a in dolu.get(p.id, [])]
     if not dersler:
         return
-    satirlar = [
-        f"{a.timetable.name} programı, {p.name}: {a.entry.teacher.full_name} — "
-        f"{a.entry.section.name} {a.entry.subject.name}"
-        for p, a in dersler[:12]
-    ]
-    kalan = len(dersler) - len(satirlar)
+    # Program program kümelenir: dönemde birkaç program varken kullanıcı
+    # hangisinin tuttuğunu görsün; her programdan birkaç örnek ders yeter.
+    programlar: dict[int, tuple[str, list[str]]] = {}
+    for p, a in dersler:
+        ad, ornekler = programlar.setdefault(a.timetable_id, (a.timetable.name, []))
+        ornekler.append(f"{a.entry.teacher.full_name} — {a.entry.section.name} "
+                        f"{a.entry.subject.name} ({p.name})")
+    parcalar = []
+    for ad, ornekler in programlar.values():
+        gosterilen = ornekler[:3]
+        kalan = len(ornekler) - len(gosterilen)
+        parcalar.append(
+            f"«{ad}» programında {len(ornekler)} ders: " + "; ".join(gosterilen)
+            + (f"; … ve {kalan} ders daha" if kalan > 0 else "")
+        )
     raise HTTPException(
         status.HTTP_409_CONFLICT,
-        f"{gun_adi} {ne}: bu saatlerde yerleşmiş {len(dersler)} ders var. Önce o "
-        f"dersleri başka saate taşıyın ya da programı silin. "
-        + "; ".join(satirlar)
-        + (f"; … ve {kalan} ders daha." if kalan > 0 else "."),
+        f"{gun_adi} {ne}: bu saatlerde {len(programlar)} programda yerleşmiş "
+        f"{len(dersler)} ders var. Önce o dersleri başka saate taşıyın ya da "
+        f"programı silin. " + " · ".join(parcalar) + ".",
     )
 
 

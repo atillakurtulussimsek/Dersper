@@ -27,6 +27,7 @@ import {
 } from "../components/ui";
 import { get, post, put } from "../lib/api";
 import { saatSorunlari } from "../lib/cakisma";
+import { degisiklikDuyur } from "../lib/senkron";
 import { adlariTazele } from "../lib/izgara";
 import type { CakismaOlcutu, Donem, Gun } from "../lib/types";
 
@@ -67,6 +68,7 @@ export default function ZamanIzgarasi() {
     mutationFn: () => post<Gun[]>(`/timegrid/import/${kaynakId}`),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["timegrid"] });
+      degisiklikDuyur(["timegrid", "kapali-saatler"]);
       setAktarimAcik(false);
     },
   });
@@ -115,7 +117,10 @@ export default function ZamanIzgarasi() {
           })),
         })),
       ),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["timegrid"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["timegrid"] });
+      degisiklikDuyur(["timegrid", "kapali-saatler"]);
+    },
   });
 
   function gunuDegistir(index: number, yama: Partial<TaslakGun>) {

@@ -32,7 +32,7 @@ def test_dersi_olan_gun_kapatilamaz(yonetici: TestClient):
     assert r.status_code == 409
     assert "kapatılamaz" in r.text and "2 ders" in r.text
     # Hangi programda, kimin, hangi şubede: kullanıcı başka programa bakıyor olabilir.
-    assert "Elle programı" in r.text
+    assert "«Elle» programında 2 ders" in r.text
     assert "Ayşe Yılmaz — 9-A Matematik" in r.text
     assert _izgara(yonetici)[0]["is_active"] is True
 
