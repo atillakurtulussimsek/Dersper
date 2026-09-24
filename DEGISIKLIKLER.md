@@ -5,6 +5,10 @@ Dersper'in geliştirme günlüğü. Her değişiklik tek cümleyle, en yeni sür
 öncesinde ikinci hane özellik, üçüncü hane düzeltme demektir. Uygulamanın
 sürümü arayüzde yan menünün altında yazar.
 
+## 0.40.1 — 2026-09-24
+
+- "Gün kapatılamaz" hatası artık dersleri tek tek sayar: hangi program, hangi saat, hangi öğretmen ve şube (en çok 12 satır). Ekranda başka bir programa bakarken "ders yok" sanılan durumlar böyle anlaşılır.
+
 ## 0.40.0 — 2026-09-24
 
 - Zaman ızgarası program varken de düzenlenebilir: dersi olmayan bir gün kapatılabilir ya da silinebilir, dersi olmayan saat silinebilir, adlar ve saat aralıkları değiştirilebilir. Yalnız yerleşmiş dersi olan gün ve saatler korunur: kapatılamaz, silinemez, teneffüse çevrilemez; hata iletisi hangi günde kaç ders olduğunu söyler.

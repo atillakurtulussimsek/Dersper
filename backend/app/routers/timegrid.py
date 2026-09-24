@@ -9,8 +9,8 @@ from sqlalchemy.orm import Session, selectinload
 from app.db import get_db
 from app.deps import aktif_donem, current_user
 from app.models import (
-    Assignment, Day, Period, SectionAvailability, TeacherAvailability, Term,
-    Timetable,
+    Assignment, CurriculumEntry, Day, Period, SectionAvailability,
+    TeacherAvailability, Term, Timetable,
 )
 from app.schemas import DayIn, DayOut, PeriodIn
 
@@ -53,35 +53,61 @@ def _saatleri_sil(db: Session, saatler: list[Period]) -> None:
     db.flush()
 
 
-def _dolu_saatler(db: Session, donem: Term) -> dict[int, int]:
-    """period_id -> o saatte yerleşmiş ders sayısı (silinmemiş programlarda).
+def _dolu_saatler(db: Session, donem: Term) -> dict[int, list[Assignment]]:
+    """period_id -> o saatte yerleşmiş dersler (silinmemiş programlarda).
 
     Izgara değişikliğinin sınırı budur: dersi olan bir saat silinemez,
     teneffüse çevrilemez, günü kapatılamaz. Dersi olmayan gün ve saatler
     program varken de değiştirilebilir — "Cuma boş, kaldıralım" gibi.
     """
-    satirlar = db.execute(
-        select(Assignment.period_id, func.count(Assignment.id))
+    atamalar = db.scalars(
+        select(Assignment)
         .join(Timetable, Timetable.id == Assignment.timetable_id)
-        .where(Timetable.term_id == donem.id, Timetable.deleted_at.is_(None))
-        .group_by(Assignment.period_id)
-    ).all()
-    return {pid: n for pid, n in satirlar}
-
-
-def _dolu_engeli(gun_adi: str, ne: str, saatler: list[Period], dolu: dict[int, int]) -> None:
-    """Verilen saatlerden birinde ders varsa 409 ile durdurur."""
-    sayi = sum(dolu.get(p.id, 0) for p in saatler)
-    if sayi:
-        raise HTTPException(
-            status.HTTP_409_CONFLICT,
-            f"{gun_adi} {ne}: bu saatlerde yerleşmiş {sayi} ders var. Önce o "
-            f"dersleri başka saate taşıyın ya da programı silin.",
+        .options(
+            selectinload(Assignment.timetable),
+            selectinload(Assignment.entry).selectinload(CurriculumEntry.teacher),
+            selectinload(Assignment.entry).selectinload(CurriculumEntry.section),
+            selectinload(Assignment.entry).selectinload(CurriculumEntry.subject),
         )
+        .where(Timetable.term_id == donem.id, Timetable.deleted_at.is_(None))
+    )
+    dolu: dict[int, list[Assignment]] = {}
+    for a in atamalar:
+        dolu.setdefault(a.period_id, []).append(a)
+    return dolu
+
+
+def _dolu_engeli(
+    gun_adi: str, ne: str, saatler: list[Period], dolu: dict[int, list[Assignment]],
+) -> None:
+    """Verilen saatlerden birinde ders varsa 409 ile durdurur.
+
+    İleti dersleri tek tek sayar — program, öğretmen, şube, ders, saat —
+    çünkü kullanıcı ekranda başka bir programa bakıyor olabilir ve "ders yok"
+    sanır; hangi programın tuttuğunu görmesi gerekir.
+    """
+    saatler = sorted(saatler, key=lambda p: p.index)
+    dersler = [(p, a) for p in saatler for a in dolu.get(p.id, [])]
+    if not dersler:
+        return
+    satirlar = [
+        f"{a.timetable.name} programı, {p.name}: {a.entry.teacher.full_name} — "
+        f"{a.entry.section.name} {a.entry.subject.name}"
+        for p, a in dersler[:12]
+    ]
+    kalan = len(dersler) - len(satirlar)
+    raise HTTPException(
+        status.HTTP_409_CONFLICT,
+        f"{gun_adi} {ne}: bu saatlerde yerleşmiş {len(dersler)} ders var. Önce o "
+        f"dersleri başka saate taşıyın ya da programı silin. "
+        + "; ".join(satirlar)
+        + (f"; … ve {kalan} ders daha." if kalan > 0 else "."),
+    )
 
 
 def _saatleri_esitle(
-    db: Session, gun: Day, gelen: list[PeriodIn], dolu: dict[int, int] | None = None,
+    db: Session, gun: Day, gelen: list[PeriodIn],
+    dolu: dict[int, list[Assignment]] | None = None,
 ) -> None:
     """Günün ders saatlerini gelen listeye göre yerinde günceller.
 
