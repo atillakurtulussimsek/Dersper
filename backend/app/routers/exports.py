@@ -397,7 +397,7 @@ def _carsaf_html(db: Session, timetable_id: int, bakis: str, donem: Term,
         # sınırlar); alt satır bir ya da iki satır.
         # Başlıklar (9,4 mm), iki başlık satırı (8,7 mm) ve imza (4,8 mm)
         # tarayıcıda ölçüldü: 23 mm; 3 mm pay bırakılır.
-        satir_mm = (KAGIT_YUKSEKLIK_MM.get(kagit, 281.0) - 25.0) / max(1, len(gruplar))
+        satir_mm = (KAGIT_YUKSEKLIK_MM.get(kagit, 281.0) - 27.0) / max(1, len(gruplar))
         satir_px_tavan = satir_mm * 3.78 - 0.5      # kenarlık payı (dolgu yüksekliğin içinde)
         # Genişliği en uzun kısa kod belirler (kalın yazıda karakter ≈ 0.58em).
         en_uzun = max(
@@ -431,7 +431,11 @@ def _carsaf_html(db: Session, timetable_id: int, bakis: str, donem: Term,
         "background:#fff;margin:0}",
         "h1{font-size:13px;margin:0 0 1px}",
         "h2{font-size:10px;margin:0 0 6px;color:#475569;font-weight:500}",
-        "section{page-break-after:always}section:last-child{page-break-after:auto}",
+        "section{page-break-after:always}section:last-child{page-break-after:auto}"
+        # Tek sayfa ilkesi: hesap ne derse desin bölüm sayfa yüksekliğini
+        # aşamaz; taşan bir milimetre ikinci sayfa açmaz, kırpılır.
+        + (f"section{{height:{KAGIT_YUKSEKLIK_MM.get(kagit, 281.0):g}mm;overflow:hidden}}"
+           if tek_sayfa else ""),
         IMZA_CSS,
         f"table{{border-collapse:collapse;width:100%;table-layout:fixed;font-size:{punto:.1f}px}}",
         "td span{display:block;overflow:hidden}",

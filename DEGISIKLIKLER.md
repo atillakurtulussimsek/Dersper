@@ -5,6 +5,10 @@ Dersper'in geliştirme günlüğü. Her değişiklik tek cümleyle, en yeni sür
 öncesinde ikinci hane özellik, üçüncü hane düzeltme demektir. Uygulamanın
 sürümü arayüzde yan menünün altında yazar.
 
+## 0.39.2 — 2026-09-24
+
+- Tek sayfa çarşafta sayfa yüksekliği kesin tavan: hesap ne derse desin çıktı ikinci sayfaya taşmaz (2 mm ek pay bırakıldı).
+
 ## 0.39.1 — 2026-09-24
 
 - Tek sayfa çarşaf (A3/A4) artık sayfayı tamamen dolduruyor: satırlar boş kalan yüksekliğe yayılır, yazı boyu en uzun kısa koda ve satır yüksekliğine göre en büyük değeri alır (kod gerekirse iki satıra kırılır). Şube çarşafında kısa kodu olmayan öğretmen "A. K. TEKİN" biçiminde kısaltılır; hücreye sığmayan alt yazı yalnız o hücrede küçülür, sayfanın kalanı büyük kalır.
