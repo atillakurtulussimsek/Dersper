@@ -5,6 +5,10 @@ Dersper'in geliştirme günlüğü. Her değişiklik tek cümleyle, en yeni sür
 öncesinde ikinci hane özellik, üçüncü hane düzeltme demektir. Uygulamanın
 sürümü arayüzde yan menünün altında yazar.
 
+## 0.40.3 — 2026-09-24
+
+- Tek sayfa çarşaf: satırların toplam yüksekliği artık tablonun kendisine sabitlenir (A3'te 263 mm, A4'te 176 mm); hücre dolgusu ve kenarlığın PDF işleyicisinde farklı sayılması sayfayı taşıramaz. Yazı boyu bu paya göre seçilir, bölüm tavanı 280 mm.
+
 ## 0.40.2 — 2026-09-24
 
 - Zaman ızgarası kaydedilince açık olan öbür sekmelerdeki program sayfaları da anında güncellenir (sekme gizliyken bile); ayrıca sekmeye geri dönüldüğünde veriler tazelenir.

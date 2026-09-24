@@ -397,8 +397,13 @@ def _carsaf_html(db: Session, timetable_id: int, bakis: str, donem: Term,
         # sınırlar); alt satır bir ya da iki satır.
         # Başlıklar (9,4 mm), iki başlık satırı (8,7 mm) ve imza (4,8 mm)
         # tarayıcıda ölçüldü: 23 mm; 3 mm pay bırakılır.
+        # Satırların toplam yüksekliği tablonun `height`'ıyla SABİTLENİR; yazı
+        # boyu bu paya göre seçilir. Hücre yüksekliğine güvenilmez: dolgu ve
+        # kenarlığın hücre yüksekliğine dahil sayılıp sayılmaması işleyiciye
+        # göre değişir (tarayıcı dahil sayar, WeasyPrint saymayabilir) ve 25
+        # satırda 3 px'lik fark 20 mm eder — ikinci sayfa demek.
         satir_mm = (KAGIT_YUKSEKLIK_MM.get(kagit, 281.0) - 27.0) / max(1, len(gruplar))
-        satir_px_tavan = satir_mm * 3.78 - 0.5      # kenarlık payı (dolgu yüksekliğin içinde)
+        satir_px_tavan = satir_mm * 3.78 - 3.0      # kenarlık + dolgu payı
         # Genişliği en uzun kısa kod belirler (kalın yazıda karakter ≈ 0.58em).
         en_uzun = max(
             (len(h.subject_short or h.subject_name)
@@ -413,7 +418,8 @@ def _carsaf_html(db: Session, timetable_id: int, bakis: str, donem: Term,
             # Tek satırda kodun tamamı; iki satırda kod ortadan kırılır.
             karakter = en_uzun if d_em < 2 else -(-en_uzun // 2)
             genislik = (sutun_px - 3) / (0.58 * karakter)
-            yukseklik = (satir_px_tavan - 4) / (d_em + 0.8 * a_em)
+            # max-height'lara eklenen 0.1em'lik kırpma payı da hesaba katılır.
+            yukseklik = (satir_px_tavan - 4) / ((d_em + 0.1) + 0.8 * (a_em + 0.1))
             secenekler.append((min(11.0, genislik, yukseklik), d_em, a_em))
         punto, ders_satir, alt_satir = max(secenekler)
         punto = max(4.0, punto)
@@ -434,7 +440,9 @@ def _carsaf_html(db: Session, timetable_id: int, bakis: str, donem: Term,
         "section{page-break-after:always}section:last-child{page-break-after:auto}"
         # Tek sayfa ilkesi: hesap ne derse desin bölüm sayfa yüksekliğini
         # aşamaz; taşan bir milimetre ikinci sayfa açmaz, kırpılır.
-        + (f"section{{height:{KAGIT_YUKSEKLIK_MM.get(kagit, 281.0):g}mm;overflow:hidden}}"
+        # 1 mm eksik: bölüm sayfa alanına tam eşit olursa yuvarlama boş bir
+        # ikinci sayfa açabilir.
+        + (f"section{{height:{KAGIT_YUKSEKLIK_MM.get(kagit, 281.0) - 1:g}mm;overflow:hidden}}"
            if tek_sayfa else ""),
         IMZA_CSS,
         f"table{{border-collapse:collapse;width:100%;table-layout:fixed;font-size:{punto:.1f}px}}",
@@ -442,7 +450,10 @@ def _carsaf_html(db: Session, timetable_id: int, bakis: str, donem: Term,
         "thead{display:table-header-group}tr{page-break-inside:avoid}",
         "th,td{border:1px solid #cbd5e1;padding:1px;text-align:center;"
         "overflow:hidden;background:#fff}",
-        f"td{{height:{satir_px:.0f}px}}",
+        # Tek sayfada satır yüksekliği tabloya dağıtılır (thead kendi doğal
+        # yüksekliğini alır, kalan eşit bölünür); çok sayfada hücre başına.
+        (f"table{{height:{KAGIT_YUKSEKLIK_MM.get(kagit, 281.0) - 27.0 + 9.0:g}mm}}"
+         if tek_sayfa else f"td{{height:{satir_px:.0f}px}}"),
         "th{background:#f1f5f9;font-weight:600}",
         f"th.ad{{width:{ad_mm:.0f}mm;text-align:left;padding-left:4px}}",
         f"td.ad{{text-align:left;padding-left:4px;font-weight:600;background:#f8fafc;"
