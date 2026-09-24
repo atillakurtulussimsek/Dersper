@@ -5,6 +5,10 @@ Dersper'in geliştirme günlüğü. Her değişiklik tek cümleyle, en yeni sür
 öncesinde ikinci hane özellik, üçüncü hane düzeltme demektir. Uygulamanın
 sürümü arayüzde yan menünün altında yazar.
 
+## 0.40.0 — 2026-09-24
+
+- Zaman ızgarası program varken de düzenlenebilir: dersi olmayan bir gün kapatılabilir ya da silinebilir, dersi olmayan saat silinebilir, adlar ve saat aralıkları değiştirilebilir. Yalnız yerleşmiş dersi olan gün ve saatler korunur: kapatılamaz, silinemez, teneffüse çevrilemez; hata iletisi hangi günde kaç ders olduğunu söyler.
+
 ## 0.39.2 — 2026-09-24
 
 - Tek sayfa çarşafta sayfa yüksekliği kesin tavan: hesap ne derse desin çıktı ikinci sayfaya taşmaz (2 mm ek pay bırakıldı).

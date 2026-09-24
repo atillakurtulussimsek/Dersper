@@ -298,13 +298,15 @@ def test_silinen_program_izgara_degisimini_engellemez(yonetici: TestClient):
     assert yonetici.get(f"/api/timetables/{pid}/grid").json()["cells"]
 
     izgara = yonetici.get("/api/timegrid").json()
-    # Program dururken ızgara kilitli.
-    assert yonetici.put("/api/timegrid", json=izgara).status_code == 409
+    # Program dururken dersi olan gün silinemez.
+    dolu_gun = yonetici.get(f"/api/timetables/{pid}/grid").json()["cells"][0]["day_index"]
+    kisa = [g for g in izgara if g["index"] != dolu_gun]
+    assert yonetici.put("/api/timegrid", json=kisa).status_code == 409
 
     # Silindikten sonra açılmalı.
     yonetici.delete(f"/api/timetables/{pid}")
     assert yonetici.get("/api/timetables").json() == []
-    r = yonetici.put("/api/timegrid", json=izgara)
+    r = yonetici.put("/api/timegrid", json=kisa)
     assert r.status_code == 200, r.text
 
 

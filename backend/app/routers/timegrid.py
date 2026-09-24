@@ -3,7 +3,7 @@
 Izgara döneme aittir; her dönem kendi zil düzenini tanımlar.
 """
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.db import get_db
@@ -53,7 +53,36 @@ def _saatleri_sil(db: Session, saatler: list[Period]) -> None:
     db.flush()
 
 
-def _saatleri_esitle(db: Session, gun: Day, gelen: list[PeriodIn]) -> None:
+def _dolu_saatler(db: Session, donem: Term) -> dict[int, int]:
+    """period_id -> o saatte yerleşmiş ders sayısı (silinmemiş programlarda).
+
+    Izgara değişikliğinin sınırı budur: dersi olan bir saat silinemez,
+    teneffüse çevrilemez, günü kapatılamaz. Dersi olmayan gün ve saatler
+    program varken de değiştirilebilir — "Cuma boş, kaldıralım" gibi.
+    """
+    satirlar = db.execute(
+        select(Assignment.period_id, func.count(Assignment.id))
+        .join(Timetable, Timetable.id == Assignment.timetable_id)
+        .where(Timetable.term_id == donem.id, Timetable.deleted_at.is_(None))
+        .group_by(Assignment.period_id)
+    ).all()
+    return {pid: n for pid, n in satirlar}
+
+
+def _dolu_engeli(gun_adi: str, ne: str, saatler: list[Period], dolu: dict[int, int]) -> None:
+    """Verilen saatlerden birinde ders varsa 409 ile durdurur."""
+    sayi = sum(dolu.get(p.id, 0) for p in saatler)
+    if sayi:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"{gun_adi} {ne}: bu saatlerde yerleşmiş {sayi} ders var. Önce o "
+            f"dersleri başka saate taşıyın ya da programı silin.",
+        )
+
+
+def _saatleri_esitle(
+    db: Session, gun: Day, gelen: list[PeriodIn], dolu: dict[int, int] | None = None,
+) -> None:
     """Günün ders saatlerini gelen listeye göre yerinde günceller.
 
     Var olan kayıtlar korunur; bu sayede ders saati kimlikleri sabit kalır ve
@@ -96,7 +125,16 @@ def _saatleri_esitle(db: Session, gun: Day, gelen: list[PeriodIn]) -> None:
         kullanilan.add(var_olan.id)
         eslesme[i] = (gelen_saat, var_olan)
 
-    _saatleri_sil(db, [p for p in gun.periods if p.id not in kullanilan])
+    dolu = dolu or {}
+    silinecek = [p for p in gun.periods if p.id not in kullanilan]
+    _dolu_engeli(gun.name, "gününden ders saati silinemez", silinecek, dolu)
+    # Dersi olan saat teneffüse çevrilemez: teneffüse ders konmaz.
+    _dolu_engeli(
+        gun.name, "gününde dersi olan saat teneffüse çevrilemez",
+        [v for g, v in eslesme if v is not None and g.is_break and not v.is_break],
+        dolu,
+    )
+    _saatleri_sil(db, silinecek)
 
     # Sıralama değişmiş olabilir. (day_id, index) benzersiz olduğu için önce
     # geçici negatif sıralar yazılır; yoksa 3. satırı 1'e taşırken oradaki
@@ -156,14 +194,13 @@ def izgarayi_kaydet(
     db: Session = Depends(get_db),
     donem: Term = Depends(aktif_donem),
 ) -> list[Day]:
-    """Izgarayı bütünüyle değiştirir. Yerleşmiş program varsa reddedilir."""
-    if _yerlesim_var_mi(db, donem):
-        raise HTTPException(
-            status.HTTP_409_CONFLICT,
-            "Yerleşmiş bir ders programı varken zaman ızgarası değiştirilemez. "
-            "Önce programı silin.",
-        )
+    """Izgarayı bütünüyle değiştirir.
 
+    Yerleşmiş program varken de kaydedilir; sınır, dersi olan saatlerdir:
+    böyle bir saat silinemez, teneffüse çevrilemez, günü kapatılamaz ya da
+    silinemez. Ad, saat aralığı, sıra ve yeni satır serbesttir.
+    """
+    dolu = _dolu_saatler(db, donem)
     mevcut = {d.index: d for d in _gunleri_getir(db, donem)}
     gelen_indexler = {d.index for d in payload}
 
@@ -172,6 +209,7 @@ def izgarayi_kaydet(
     # gün yeniden açıldığında geri gelir.
     for gun in mevcut.values():
         if gun.index not in gelen_indexler:
+            _dolu_engeli(gun.name, "günü silinemez", list(gun.periods), dolu)
             _bagli_kayitlari_sil(db, list(gun.periods))
             db.delete(gun)      # ders saatlerini ORM art arda siler
     db.flush()
@@ -184,8 +222,10 @@ def izgarayi_kaydet(
             db.add(gun)
             db.flush()
         else:
+            if gun.is_active and not gelen.is_active:
+                _dolu_engeli(gun.name, "günü kapatılamaz", list(gun.periods), dolu)
             gun.name, gun.is_active = gelen.name, gelen.is_active
-        _saatleri_esitle(db, gun, gelen.periods)
+        _saatleri_esitle(db, gun, gelen.periods, dolu)
 
     db.commit()
     # Oturum commit'te nesneleri geçersiz kılmıyor (expire_on_commit=False);

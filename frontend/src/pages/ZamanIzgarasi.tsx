@@ -237,8 +237,9 @@ export default function ZamanIzgarasi() {
 
       <Uyari>
         Haftada toplam <b>{toplam}</b> ders saati tanımlı. Satırları tutamağından
-        sürükleyerek sıralayabilirsiniz. Yerleşmiş bir ders programı varken ızgara
-        değiştirilemez; önce programı silmeniz gerekir.
+        sürükleyerek sıralayabilirsiniz. Yerleşmiş dersi olan bir gün ya da ders
+        saati kapatılamaz, silinemez ve teneffüse çevrilemez; önce o dersleri
+        taşıyın ya da programı silin. Dersi olmayan gün ve saatler serbesttir.
       </Uyari>
 
       <Kutu
