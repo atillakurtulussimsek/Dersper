@@ -1305,8 +1305,11 @@ def test_carsaf_kagit_secimi(yonetici: TestClient):
     import re
     p3 = float(re.search(r"table\{[^}]*font-size:([\d.]+)px", a3).group(1))
     p4 = float(re.search(r"table\{[^}]*font-size:([\d.]+)px", a4).group(1))
-    # Tek sayfa: A3'te yazı daha büyük; ikisi de tek sayfa.
-    assert p3 > p4
+    h3 = float(re.search(r"td\{height:([\d.]+)px", a3).group(1))
+    h4 = float(re.search(r"td\{height:([\d.]+)px", a4).group(1))
+    # Tek sayfa: A3'te satırlar daha yüksek, yazı en az A4 kadar (küçük okulda
+    # ikisi de 11 px tavanına dayanır); ikisi de tek sayfa.
+    assert h3 > h4 and p3 >= p4
     assert a3.count("<section>") == 1 and a4.count("<section>") == 1
 
 

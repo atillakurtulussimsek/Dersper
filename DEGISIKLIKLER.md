@@ -5,6 +5,10 @@ Dersper'in geliştirme günlüğü. Her değişiklik tek cümleyle, en yeni sür
 öncesinde ikinci hane özellik, üçüncü hane düzeltme demektir. Uygulamanın
 sürümü arayüzde yan menünün altında yazar.
 
+## 0.39.1 — 2026-09-24
+
+- Tek sayfa çarşaf (A3/A4) artık sayfayı tamamen dolduruyor: satırlar boş kalan yüksekliğe yayılır, yazı boyu en uzun kısa koda ve satır yüksekliğine göre en büyük değeri alır (kod gerekirse iki satıra kırılır). Şube çarşafında kısa kodu olmayan öğretmen "A. K. TEKİN" biçiminde kısaltılır; hücreye sığmayan alt yazı yalnız o hücrede küçülür, sayfanın kalanı büyük kalır.
+
 ## 0.39.0 — 2026-09-23
 
 - Blok dersler elle bölünebilir: hücreye sağ tıkta "Yalnız bu saati taşı… (bloğu böl)" ya da Alt (Option) basılıyken sürükleme yalnız o saati taşır, kalan saatler yerinde kalır. Hedefler tek saat için değerlendirilir; sürüm geçmişinde "(blok bölündü)" yazar.

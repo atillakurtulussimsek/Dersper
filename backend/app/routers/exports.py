@@ -382,25 +382,43 @@ def _carsaf_html(db: Session, timetable_id: int, bakis: str, donem: Term,
     # Yazı boyu sütun genişliğinden türetilir. Üst satır (kısa kod, ~4
     # karakter) tek satırda sığmalı: yazı ≈ sütun/3.6. Alt satır (öğretmen/
     # şube) daha küçük ve iki satıra sarabilir; satır yüksekliği buna göre.
-    ad_mm = 30.0 if not tek_sayfa else 26.0
+    ad_mm = 30.0 if not tek_sayfa else 36.0
     sutun_mm = (KAGIT_GENISLIK_MM.get(kagit, KAGIT_GENISLIK_MM["a3"]) - ad_mm) / max(1, sutun_sayisi)
     sutun_px = sutun_mm * 3.78
     punto = max(4.5, min(10.0, sutun_px / 3.6))
+    ders_satir = 1.2         # üst satır (kısa kod) tek satır (em)
     alt_satir = 2.3          # alt satır en çok iki satır (em)
     if tek_sayfa:
-        # Yükseklik de sınırlar: başlıklar (~12 mm) ve iki başlık satırı (~8 mm)
-        # düşülünce kalan, kayıt sayısına bölünür. Sığmıyorsa önce alt satır
-        # tek satıra iner, sonra yazı küçülür.
-        satir_mm = (KAGIT_YUKSEKLIK_MM.get(kagit, 281.0) - 12.0 - 8.0 - 5.0) / max(1, len(gruplar))
-        satir_px_tavan = satir_mm * 3.78 - 1.5      # kenarlık payı
-        def gereken(pt: float, em: float) -> float:
-            return pt * 1.2 + max(4.0, pt * 0.8) * em + 4
-        if gereken(punto, alt_satir) > satir_px_tavan:
-            alt_satir = 1.15
-        if gereken(punto, alt_satir) > satir_px_tavan:
-            punto = max(4.0, (satir_px_tavan - 4) / (1.2 + 0.8 * alt_satir))
+        # Sayfa TAMAMEN doldurulur: başlıklar (~12 mm) ve iki başlık satırı
+        # (~8 mm) düşülünce kalan yükseklik kayıt sayısına bölünür ve her satır
+        # o kadar olur — az kayıtta satırlar uzar, yazı büyür (aSc çarşafı gibi).
+        # Yazı boyu üç düzen arasından en büyüğünü verenle seçilir: kısa kod
+        # tek satırda (genişlik sınırlar) ya da iki satıra kırılarak (yükseklik
+        # sınırlar); alt satır bir ya da iki satır.
+        # Başlıklar (9,4 mm), iki başlık satırı (8,7 mm) ve imza (4,8 mm)
+        # tarayıcıda ölçüldü: 23 mm; 3 mm pay bırakılır.
+        satir_mm = (KAGIT_YUKSEKLIK_MM.get(kagit, 281.0) - 25.0) / max(1, len(gruplar))
+        satir_px_tavan = satir_mm * 3.78 - 0.5      # kenarlık payı (dolgu yüksekliğin içinde)
+        # Genişliği en uzun kısa kod belirler (kalın yazıda karakter ≈ 0.58em).
+        en_uzun = max(
+            (len(h.subject_short or h.subject_name)
+             for hm in gruplar.values() for h in hm.values()),
+            default=4,
+        )
+        en_uzun = max(3, en_uzun)
+        secenekler = []
+        # Eşitlikte daha çok satır kazanır (max ilk büyük demeti seçer).
+        for d_em, a_em in ((2.3, 3.45), (2.3, 2.3), (2.3, 1.15),
+                           (1.2, 3.45), (1.2, 2.3), (1.2, 1.15)):
+            # Tek satırda kodun tamamı; iki satırda kod ortadan kırılır.
+            karakter = en_uzun if d_em < 2 else -(-en_uzun // 2)
+            genislik = (sutun_px - 3) / (0.58 * karakter)
+            yukseklik = (satir_px_tavan - 4) / (d_em + 0.8 * a_em)
+            secenekler.append((min(11.0, genislik, yukseklik), d_em, a_em))
+        punto, ders_satir, alt_satir = max(secenekler)
+        punto = max(4.0, punto)
         alt_punto = max(4.0, punto * 0.8)
-        satir_px = gereken(punto, alt_satir)
+        satir_px = satir_px_tavan
     else:
         alt_punto = max(5.5, punto * 0.8)
         satir_px = punto * 1.2 + alt_punto * 2.3 + 6
@@ -428,9 +446,11 @@ def _carsaf_html(db: Session, timetable_id: int, bakis: str, donem: Term,
         "td.kpl{background:#f1f5f9;color:#94a3b8}",
         "th.gun{border-left:2px solid #64748b}",
         "td.gunbas,th.gunbas{border-left:2px solid #64748b}",
-        ".ders{font-weight:600;line-height:1.2;white-space:nowrap;text-overflow:ellipsis}",
+        f".ders{{font-weight:600;line-height:1.15;max-height:{ders_satir + 0.1:.2f}em"
+        + (";white-space:nowrap;text-overflow:ellipsis" if ders_satir < 2
+           else ";word-break:break-all") + "}",
         f".alt{{color:#475569;font-size:{alt_punto:.1f}px;line-height:1.15;"
-        f"max-height:{alt_satir:.2f}em;word-break:break-word"
+        f"max-height:{alt_satir + 0.1:.2f}em;word-break:break-word"
         + (";white-space:nowrap;text-overflow:ellipsis" if alt_satir < 2 else "") + "}",
         "</style>",
     ]
@@ -472,21 +492,54 @@ def _carsaf_html(db: Session, timetable_id: int, bakis: str, donem: Term,
                     else:
                         ders = h.subject_short or h.subject_name
                         alt = (
-                            (h.teacher_short or h.teacher_name)
+                            (h.teacher_short or _kisa_ad(h.teacher_name))
                             if bakis == "sube"
                             else h.section_name
                         )
+                        # Uzun bir ad (öğretmen soyadı, şube kodu) hücreye
+                        # sığmıyorsa yalnız o hücrenin alt yazısı küçülür;
+                        # sayfanın geri kalanı büyük kalır.
+                        alt_pt = _alt_puntosu(alt, alt_punto, sutun_px * genislik,
+                                              alt_satir)
+                        alt_stil = (f' style="font-size:{alt_pt:.1f}px"'
+                                    if alt_pt < alt_punto - 0.05 else "")
                         p.append(
                             f'<td class="{sinif}"{genis} '
                             f'style="background:{h.subject_color}1f">'
                             f'<span class="ders">{_kacis(ders)}</span>'
-                            f'<span class="alt">{_kacis(alt)}</span></td>'
+                            f'<span class="alt"{alt_stil}>{_kacis(alt)}</span></td>'
                         )
             p.append("</tr>")
         p.append("</tbody></table>" + IMZA_HTML + "</section>")
     if not gruplar:
         p.append("<p>Bu programda yerleşmiş ders yok.</p>")
     return "".join(p)
+
+
+def _alt_puntosu(metin: str, taban: float, sutun_px: float, alt_satir: float) -> float:
+    """Alt yazının bu hücreye sığacağı yazı boyu (px), `taban`ı aşmaz.
+
+    Sözcük ortadan kırılmasın: en uzun sözcük bir satıra sığmalı; bütün metin
+    de izin verilen satır sayısına. Karakter genişliği ≈ 0.58em (Ö, M gibi
+    geniş harfler için pay).
+    """
+    ic = max(8.0, sutun_px - 3)
+    satir = max(1, round(alt_satir / 1.15))
+    kelime = max((len(k) for k in metin.split()), default=1) or 1
+    pt = min(taban, ic / (0.58 * kelime), ic * satir / (0.58 * max(1, len(metin))))
+    return max(4.5, pt)
+
+
+def _kisa_ad(ad: str) -> str:
+    """Çarşafın dar hücresi için "ARİFE KARAKUM TEKİN" -> "A. K. TEKİN".
+
+    Kısa kodu girilmemiş öğretmen için geri düşüş; tam ad ayrı sayfa
+    çıktılarında olduğu gibi kalır.
+    """
+    parcalar = ad.split()
+    if len(parcalar) < 2:
+        return ad
+    return " ".join(f"{p[0]}." for p in parcalar[:-1]) + " " + parcalar[-1]
 
 
 def _dosya_adi(ad: str) -> str:
