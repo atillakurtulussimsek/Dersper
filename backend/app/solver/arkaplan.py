@@ -18,11 +18,14 @@ import threading
 from datetime import datetime, timezone
 
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from app.db import SessionLocal
 from app import surumler
+from app.kilit import kayit_kilidi_uygula, kilitli_ogretmenler, kilitli_subeler
 from app.models import (
-    Assignment, SolveRun, SolveStatus, Term, Timetable, TimetableStatus, VersionKind,
+    Assignment, CurriculumEntry, SolveRun, SolveStatus, Term, Timetable,
+    TimetableStatus, VersionKind,
 )
 from app.solver.diagnose import rapor_olustur
 from app.solver import yerel
@@ -96,7 +99,27 @@ def _dongu(run_id: int, term_id: int, dur: threading.Event) -> None:
                                      ek_bulgular=kural_bulgulari)
             gun_sinirlari = gun_sinirlarini_yukle(db, donem)
             ders_gruplari = ders_gruplarini_yukle(db, donem)
-            gereken = sum(l.weekly_hours for l in lessons if not l.ortak)
+            # Kayıt kilidi: kilitli şube/öğretmenin dersleri modele girmez,
+            # yerleşimleri olduğu gibi korunur (bkz. app.kilit).
+            lessons, korunan = kayit_kilidi_uygula(
+                lessons,
+                list(db.scalars(
+                    select(Assignment)
+                    .options(
+                        selectinload(Assignment.entry)
+                        .selectinload(CurriculumEntry.extra_sections),
+                        selectinload(Assignment.merged_entry)
+                        .selectinload(CurriculumEntry.extra_sections),
+                    )
+                    .where(Assignment.timetable_id == run.timetable_id)
+                )),
+                kilitli_subeler(program), kilitli_ogretmenler(program),
+            )
+            korunan_ids = {a.id for a in korunan}
+            korunan_satirlar = [(a.curriculum_entry_id, a.period_id, a.merged_entry_id)
+                                for a in korunan]
+            korunan_saat = sum(2 if a.merged_entry_id is not None else 1 for a in korunan)
+            gereken = sum(l.weekly_hours for l in lessons if not l.ortak) + korunan_saat
             # Ortak dersler (birleştirme kuralı): sanal kimlik -> (a, b) ebeveynleri.
             ortak_map = {l.entry_id: l.ortak_ebeveynler for l in lessons if l.ortak}
             ortak_ters = {ab: e for e, ab in ortak_map.items()}
@@ -106,6 +129,7 @@ def _dongu(run_id: int, term_id: int, dur: threading.Event) -> None:
                 select(Assignment).where(
                     Assignment.timetable_id == run.timetable_id,
                     Assignment.is_locked.is_(True),
+                    Assignment.id.not_in(korunan_ids) if korunan_ids else True,
                 )
             ):
                 anahtar: int | None = a.curriculum_entry_id
@@ -200,14 +224,15 @@ def _dongu(run_id: int, term_id: int, dur: threading.Event) -> None:
                     if imza != son_deneme_yerlesimi:
                         son_deneme_yerlesimi = imza
                         _deneme_surumunu_yaz(
-                            run_id, _satirlar(sonuc.placements, ortak_map), kilitli,
+                            run_id, _satirlar(sonuc.placements, ortak_map) + korunan_satirlar, kilitli,
                             f"Deneme {deneme} · {STRATEJILER[strateji]} — "
                             f"{yerlesen}/{gereken} ders saati",
                         )
                 # Sonsuz modda iyileşen deneme hemen ızgaraya yazılır: kullanıcı
                 # beklerken en iyi hâli görsün.
                 if sonsuz and iyilesti and not sonuc.ok:
-                    _yerlesimleri_yaz(run_id, en_iyi, kilitli, gereken, ortak_map)
+                    _yerlesimleri_yaz(run_id, en_iyi, kilitli, gereken, ortak_map,
+                                      korunan_ids, korunan_saat)
 
                 son_rapor = rapor_olustur(slots, lessons, sonuc.unplaced,
                                           sonuc.status_name, sonuc.seconds,
@@ -249,7 +274,8 @@ def _dongu(run_id: int, term_id: int, dur: threading.Event) -> None:
                                         True, son_rapor, baslangic, gunluk)
 
                 if sonuc.ok:
-                    _yerlesimleri_yaz(run_id, sonuc.placements, kilitli, gereken, ortak_map)
+                    _yerlesimleri_yaz(run_id, sonuc.placements, kilitli, gereken, ortak_map,
+                                      korunan_ids, korunan_saat)
                     _bitir(db, run_id, SolveStatus.BASARILI, son_rapor, baslangic)
                     return
 
@@ -261,7 +287,8 @@ def _dongu(run_id: int, term_id: int, dur: threading.Event) -> None:
                 if (sonuc.proven_infeasible and sonuc.esnek_proven_infeasible
                         and not sonsuz):
                     if en_iyi:
-                        _yerlesimleri_yaz(run_id, en_iyi, kilitli, gereken, ortak_map)
+                        _yerlesimleri_yaz(run_id, en_iyi, kilitli, gereken, ortak_map,
+                                      korunan_ids, korunan_saat)
                     _bitir(db, run_id, SolveStatus.COZUMSUZ, son_rapor, baslangic)
                     return
 
@@ -278,7 +305,8 @@ def _dongu(run_id: int, term_id: int, dur: threading.Event) -> None:
 
             # Durduruldu: o ana kadarki en iyi yerleşimi kaydet.
             if en_iyi:
-                _yerlesimleri_yaz(run_id, en_iyi, kilitli, gereken, ortak_map)
+                _yerlesimleri_yaz(run_id, en_iyi, kilitli, gereken, ortak_map,
+                                      korunan_ids, korunan_saat)
             if son_rapor is None:
                 son_rapor = rapor_olustur(slots, lessons, en_iyi_eksik, "DURDURULDU",
                                           0.0, gun_sinirlari, celisenler,
@@ -356,7 +384,9 @@ def _deneme_surumunu_yaz(run_id: int, yerlesim: list[tuple[int, int, int | None]
 
 def _yerlesimleri_yaz(run_id: int, yerlesim: list[tuple[int, int]],
                       kilitli: dict[int, list[int]], gereken: int,
-                      ortak_map: dict[int, tuple[int, int]] | None = None) -> None:
+                      ortak_map: dict[int, tuple[int, int]] | None = None,
+                      korunan_ids: set[int] | None = None,
+                      korunan_saat: int = 0) -> None:
     """Sonucu programa yazar. Yeni sonuç hazır olana kadar eskisi durur.
 
     Üretim de geçmişe bir sürüm bırakır: elle düzenlemelerle aynı zincirde
@@ -370,10 +400,12 @@ def _yerlesimleri_yaz(run_id: int, yerlesim: list[tuple[int, int]],
         # Üretimden ÖNCEKİ hâl de bir geri dönüş noktası olmalı.
         surumler.baslangici_guvence_al(db, program)
 
+        # Kilitli kayıtların yerleşimleri (korunan) silinmez; gerisi yeniden yazılır.
         for a in db.scalars(
             select(Assignment).where(Assignment.timetable_id == run.timetable_id)
         ):
-            db.delete(a)
+            if a.id not in (korunan_ids or set()):
+                db.delete(a)
         db.flush()
         for entry_id, period_id in yerlesim:
             kilit = period_id in kilitli.get(entry_id, [])
@@ -391,7 +423,7 @@ def _yerlesimleri_yaz(run_id: int, yerlesim: list[tuple[int, int]],
         db.flush()
         surumler.surum_yaz(
             db, program, VersionKind.URETIM,
-            f"Üretim — {_yerlesen_saat(yerlesim)}/{gereken} ders saati yerleşti",
+            f"Üretim — {_yerlesen_saat(yerlesim) + korunan_saat}/{gereken} ders saati yerleşti",
         )
         db.commit()
 

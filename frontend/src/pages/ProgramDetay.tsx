@@ -212,6 +212,14 @@ export default function ProgramDetay() {
     onSuccess: duzenlemeSonucu,
   });
 
+  // Kayıt kilidi: seçili şube ya da öğretmenin bütün programı dondurulur.
+  const kayitKilidi = useMutation({
+    mutationFn: (v: { tur: "sube" | "ogretmen"; kimlik: number; kilitli: boolean }) =>
+      post<Izgara>(`/timetables/${id}/record-lock`, v),
+    onSuccess: duzenlemeSonucu,
+    onError: (e: Error) => setHata(e.message),
+  });
+
   const sonsuzDegistir = useMutation({
     mutationFn: (endless_mode: boolean) =>
       patch<Program>(`/timetables/${id}`, { endless_mode }),
@@ -272,6 +280,28 @@ export default function ProgramDetay() {
   }, [hucreler, bakis, izgaraSorgu.data?.section_names]);
 
   const seciliAnahtar = anahtar && anahtarlar.includes(anahtar) ? anahtar : anahtarlar[0];
+
+  /** Ad -> kimlik: şubeler listeden, öğretmenler hücrelerden. */
+  const kayitKimligi = useMemo(() => {
+    const harita = new Map<string, number>();
+    if (bakis === "sube") for (const s of subeler.data ?? []) harita.set(s.name, s.id);
+    else for (const h of hucreler) harita.set(h.teacher_name, h.teacher_id);
+    return harita;
+  }, [bakis, subeler.data, hucreler]);
+  /** Programı kilitli kayıtların adları (şeritte kilit simgesi). */
+  const kilitliler = useMemo(() => {
+    const p = izgaraSorgu.data?.timetable;
+    const kimlikler = new Set(
+      bakis === "sube" ? (p?.locked_section_ids ?? []) : (p?.locked_teacher_ids ?? []),
+    );
+    return new Set([...kayitKimligi].filter(([, id]) => kimlikler.has(id)).map(([ad]) => ad));
+  }, [bakis, izgaraSorgu.data?.timetable, kayitKimligi]);
+
+  function kayitKilidiDegistir(ad: string, kilitli: boolean) {
+    const kimlik = kayitKimligi.get(ad);
+    if (kimlik === undefined) return;
+    kayitKilidi.mutate({ tur: bakis, kimlik, kilitli });
+  }
   const seciliHucreler = useMemo(
     () =>
       hucreler.filter((h) =>
@@ -364,7 +394,8 @@ export default function ProgramDetay() {
         sec: () => setSecim(oge),
       }];
     }
-    const kilitli = oge.hucreler[0]?.is_locked ?? false;
+    const kayitKilitli = oge.hucreler[0]?.record_locked ?? false;
+    const kilitli = (oge.hucreler[0]?.is_locked ?? false) || kayitKilitli;
     // Blok bölme: yalnız tıklanan hücre taşınır, kalan saatler yerinde kalır.
     const tikladigi = oge.hucreler.find((h) => h.assignment_id === oge.assignmentId);
     const bolme: MenuOgesi[] =
@@ -385,9 +416,11 @@ export default function ProgramDetay() {
       },
       ...bolme,
       {
-        etiket: kilitli ? "Kilidi aç" : "Kilitle",
+        etiket: kayitKilitli
+          ? "Şubesi/öğretmeni kilitli"
+          : kilitli ? "Kilidi aç" : "Kilitle",
         simge: kilitli ? <LockOpen className="h-4 w-4" /> : <Lock className="h-4 w-4" />,
-        devre: duzenlemeSuruyor,
+        devre: duzenlemeSuruyor || kayitKilitli,
         sec: () => kilitle.mutate(oge.assignmentId),
       },
       {
@@ -676,6 +709,8 @@ export default function ProgramDetay() {
             anahtarlar={duzen === "ayri" ? anahtarlar : []}
             seciliAnahtar={seciliAnahtar}
             anahtarDegistir={setAnahtar}
+            kilitliler={kilitliler}
+            kayitKilidiDegistir={duzen === "ayri" ? kayitKilidiDegistir : undefined}
             baslik={`Tüm ${bakis === "sube" ? "şubeler" : "öğretmenler"}`}
             ozet={(duzen === "carsaf"
               ? [

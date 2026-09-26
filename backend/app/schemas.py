@@ -509,6 +509,16 @@ class TimetableOut(ORMModel):
     endless_mode: bool = False
     # Son üretimin durumu (listede "üretiliyor" / "başarısız" rozeti için).
     last_run_status: SolveStatus | None = None
+    # Kayıt kilidi: programı dondurulan şube / öğretmen kimlikleri.
+    locked_section_ids: list[int] | None = None
+    locked_teacher_ids: list[int] | None = None
+
+
+class RecordLockIn(BaseModel):
+    """Bir şubenin ya da öğretmenin programını kilitle / aç."""
+    tur: Literal["sube", "ogretmen"]
+    kimlik: int
+    kilitli: bool
 
 
 class AssignmentOut(ORMModel):
@@ -572,6 +582,8 @@ class GridCell(BaseModel):
     teacher_name: str
     teacher_short: str | None
     is_locked: bool
+    # Şubesi ya da öğretmeni kilitli: taşınamaz, çözücü dokunmaz.
+    record_locked: bool = False
     # Birleştirme kuralıyla ortak okutulan saat: öbür şubenin ders ataması.
     merged_entry_id: int | None = None
 

@@ -40,7 +40,9 @@ export function HucreIcerigi({ hucre, bakis }: { hucre: Hucre; bakis: Bakis }) {
       style={dersZemini(hucre.subject_color)}
     >
       <span className="flex items-center justify-center gap-1 truncate text-[12px] font-semibold leading-tight text-murekkep">
-        {hucre.is_locked && <Lock className="h-2.5 w-2.5 shrink-0 text-murekkep-silik" />}
+        {(hucre.is_locked || hucre.record_locked) && (
+          <Lock className="h-2.5 w-2.5 shrink-0 text-murekkep-silik" />
+        )}
         <span className="truncate">{hucre.subject_name}</span>
         {/* Ortak ders: başka şubelerle birlikte işleniyor. Simge yeter; hangi
           * şubeler olduğu hücrenin ipucunda ve alt satırda yazar. */}
@@ -75,8 +77,9 @@ function Surukle({
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `h:${hucre.assignment_id}`,
-    disabled: hucre.is_locked,
+    disabled: hucre.is_locked || !!hucre.record_locked,
   });
+  const kilitli = hucre.is_locked || !!hucre.record_locked;
 
   const kim = altSatir(hucre, bakis);
   const blokNotu = blokBoyu > 1
@@ -99,13 +102,15 @@ function Surukle({
         if (menuAc && dokunmatikMi()) menuAc(e, hucre);
       }}
       title={
-        hucre.is_locked
-          ? `${hucre.subject_name} · ${kim} — kilitli, çift tıklayarak açın`
-          : `${hucre.subject_name} · ${kim}${blokNotu} — sürükleyerek taşıyın, sağ tıkla menüyü açın`
+        hucre.record_locked
+          ? `${hucre.subject_name} · ${kim} — şubesi ya da öğretmeni kilitli; şeritteki kilit düğmesiyle açın`
+          : hucre.is_locked
+            ? `${hucre.subject_name} · ${kim} — kilitli, çift tıklayarak açın`
+            : `${hucre.subject_name} · ${kim}${blokNotu} — sürükleyerek taşıyın, sağ tıkla menüyü açın`
       }
       className={clsx(
         "h-full w-full transition-opacity",
-        hucre.is_locked
+        kilitli
           ? "cursor-default rounded-md ring-1 ring-inset ring-cizgi-guclu"
           : "cursor-grab active:cursor-grabbing",
         (isDragging || suruklenenMi) && "opacity-30",

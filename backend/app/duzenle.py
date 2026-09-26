@@ -38,6 +38,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app import cakisma
 from app import bloklar, surumler
+from app.kilit import kilit_nedeni
 from app.models import (
     Assignment, Availability, CurriculumEntry, CurriculumEntrySection, Day,
     Period, Section, SectionAvailability, Teacher, TeacherAvailability, Term,
@@ -272,6 +273,12 @@ class Duzenleyici:
                 return a
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Yerleşim bulunamadı.")
 
+    def _kayit_kilidi(self, atama: Assignment) -> None:
+        """Şubesi ya da öğretmeni kilitli yerleşime dokunulmaz."""
+        neden = kilit_nedeni(self.program, atama.entry, atama.merged_entry)
+        if neden:
+            raise HTTPException(status.HTTP_409_CONFLICT, neden)
+
     def ek_subeler(self, atama: Assignment) -> list:
         """Ortak okutulan saatin öbür şubesi; sıradan saatte boş."""
         return [atama.merged_entry.section] if atama.merged_entry is not None else []
@@ -406,6 +413,7 @@ class Duzenleyici:
         `tek_saat`: bloğun yalnız bu saati taşınır (blok bölünür).
         """
         atama = self._atama(assignment_id)
+        self._kayit_kilidi(atama)
         blok = [atama] if tek_saat else self.bloklar[atama.id]
         if any(a.is_locked for a in blok):
             raise HTTPException(
@@ -469,6 +477,7 @@ class Duzenleyici:
                     zorlanabilir,
                 )
             yer_degistiren = next(iter(karsi_bloklar.values()))
+            self._kayit_kilidi(yer_degistiren[0])
             sube_ile = any(sube_cakisir(a) for a in yer_degistiren)
             zorlanabilir = not zorla and not sube_ile
             on_ek = ogretmen_notu(yer_degistiren[0]) if zorlanabilir else ""
@@ -528,6 +537,7 @@ class Duzenleyici:
     def izgaradan_al(self, assignment_id: int) -> None:
         """Bloğu ızgaradan çıkarır; saatleri bekleyenler rafına düşer."""
         atama = self._atama(assignment_id)
+        self._kayit_kilidi(atama)
         blok = self.bloklar[atama.id]
         if any(a.is_locked for a in blok):
             raise HTTPException(status.HTTP_409_CONFLICT,
@@ -549,6 +559,9 @@ class Duzenleyici:
         `zorla` müsaitliği ve öğretmen çakışmasını aşar; şubenin o saatteki
         dersi yine engeldir (raftan gelen blok yer değiştirmez)."""
         entry = self._mufredat_satiri(entry_id)
+        neden = kilit_nedeni(self.program, entry)
+        if neden:
+            raise HTTPException(status.HTTP_409_CONFLICT, neden)
         bekleyen = self.bekleyenler().get(entry_id, [])
         if uzunluk not in bekleyen:
             raise HTTPException(

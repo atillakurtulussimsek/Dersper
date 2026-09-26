@@ -113,11 +113,11 @@ function gunuBol(
     const onceki = parcalar[parcalar.length - 1];
     if (onceki?.tur === "ders" && ayniDers(onceki.hucre, h)) {
       onceki.genislik += 1;
-      onceki.kilitli = onceki.kilitli || h.is_locked;
+      onceki.kilitli = onceki.kilitli || h.is_locked || !!h.record_locked;
       continue;
     }
     parcalar.push({
-      tur: "ders", hucre: h, kilitli: h.is_locked, genislik: 1, anahtar,
+      tur: "ders", hucre: h, kilitli: h.is_locked || !!h.record_locked, genislik: 1, anahtar,
     });
   }
   return parcalar;

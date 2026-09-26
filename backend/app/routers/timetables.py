@@ -12,17 +12,18 @@ from app.db import get_db
 from app.deps import aktif_donem, current_user
 from app.models import (
     Assignment, CurriculumEntry, CurriculumEntrySection, Day, Period, Section,
-    SolveRun, SolveStatus, Term, Timetable, TimetableStatus, TimetableVersion,
-    VersionKind,
+    SolveRun, SolveStatus, Teacher, Term, Timetable, TimetableStatus,
+    TimetableVersion, VersionKind,
 )
 from app import siralama, surumler
 from app.duzenle import Duzenleyici
 from app.schemas import (
-    AssignmentMove, GridCell, PendingOut, PlaceIn, SolveRunOut, TargetOut,
+    AssignmentMove, GridCell, PendingOut, PlaceIn, RecordLockIn, SolveRunOut, TargetOut,
     TimetableGrid, TimetableIn, TimetableOut, TimetableUpdate, VersionDiffOut,
     VersionOut,
     WarningIgnoreIn, WarningOut,
 )
+from app.kilit import kilitli_mi
 from app.uyarilar import uyarilari_hesapla
 from app.solver import arkaplan
 
@@ -58,6 +59,7 @@ def izgara_hucreleri(db: Session, timetable_id: int) -> list[GridCell]:
         )
         .where(Assignment.timetable_id == timetable_id)
     )
+    program = db.get(Timetable, timetable_id)
     hucreler: list[GridCell] = []
     for a in atamalar:
         konum = period_bilgi.get(a.period_id)
@@ -86,6 +88,8 @@ def izgara_hucreleri(db: Session, timetable_id: int) -> list[GridCell]:
             teacher_name=a.entry.teacher.full_name,
             teacher_short=a.entry.teacher.short_code,
             is_locked=a.is_locked,
+            record_locked=(program is not None
+                           and kilitli_mi(program, a.entry, a.merged_entry)),
             merged_entry_id=a.merged_entry_id,
         ))
     return hucreler
@@ -437,6 +441,37 @@ def surume_don(
     """Seçilen sürüme döner. Sonraki sürümler silinmez; geçmişte dururlar."""
     t = _programi_getir(db, timetable_id, donem)
     surumler.geri_yukle(db, t, number)
+    return _izgara(db, t)
+
+
+@router.post("/{timetable_id}/record-lock", response_model=TimetableGrid)
+def kayit_kilidi(
+    timetable_id: int,
+    payload: RecordLockIn,
+    db: Session = Depends(get_db),
+    donem: Term = Depends(aktif_donem),
+) -> TimetableGrid:
+    """Bir şubenin ya da öğretmenin programını kilitler / açar (bkz. app.kilit)."""
+    t = _programi_getir(db, timetable_id, donem)
+    if payload.tur == "sube":
+        kayit = db.get(Section, payload.kimlik)
+        alan, ad = "locked_section_ids", (kayit.name + " şubesi" if kayit else "")
+    else:
+        kayit = db.get(Teacher, payload.kimlik)
+        alan, ad = "locked_teacher_ids", (kayit.full_name if kayit else "")
+    if kayit is None or kayit.term_id != donem.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Kayıt bulunamadı.")
+    liste = [k for k in (getattr(t, alan) or []) if k != payload.kimlik]
+    if payload.kilitli:
+        liste.append(payload.kimlik)
+    surumler.baslangici_guvence_al(db, t)
+    setattr(t, alan, liste)
+    db.flush()
+    surumler.surum_yaz(
+        db, t, VersionKind.ELLE,
+        f"{ad} {'kilitlendi' if payload.kilitli else 'kilidi açıldı'}",
+    )
+    db.commit()
     return _izgara(db, t)
 
 

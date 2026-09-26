@@ -4,7 +4,7 @@
  *  Düzen seçimi hem ekranı hem çıktıyı belirler: ne görüyorsanız onu
  *  yazdırırsınız. Kayıt şeritleri yalnızca ayrı sayfa düzeninde anlamlıdır,
  *  çarşafta zaten hepsi görünür — o durumda çağıran boş liste geçirir. */
-import { ChevronDown, Download, FileSpreadsheet, Printer } from "lucide-react";
+import { ChevronDown, Download, FileSpreadsheet, Lock, LockOpen, Printer } from "lucide-react";
 import clsx from "clsx";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
@@ -194,6 +194,8 @@ export default function ProgramAracCubugu({
   anahtarlar,
   seciliAnahtar,
   anahtarDegistir,
+  kilitliler,
+  kayitKilidiDegistir,
   baslik,
   ozet,
   yazdir,
@@ -213,6 +215,10 @@ export default function ProgramAracCubugu({
   anahtarlar: string[];
   seciliAnahtar?: string;
   anahtarDegistir: (a: string) => void;
+  /** Programı kilitli kayıtlar (şeritte kilit simgesi). */
+  kilitliler?: Set<string>;
+  /** Seçili kaydın kilidini değiştirir; verilmezse düğme çıkmaz. */
+  kayitKilidiDegistir?: (ad: string, kilitli: boolean) => void;
   /** Kayıt şeritleri yokken (çarşaf) neye bakıldığını söyler. */
   baslik?: string;
   /** "23 saat dolu" gibi kısa sayımlar; şeritlerin sağına yaslanır. */
@@ -329,18 +335,44 @@ export default function ProgramAracCubugu({
                 <button
                   key={a}
                   onClick={() => anahtarDegistir(a)}
+                  title={kilitliler?.has(a) ? `${a} kilitli: çözücü ve elle düzenleme dokunmaz` : undefined}
                   className={clsx(
-                    "shrink-0 rounded-lg px-2.5 py-1 text-xs font-medium transition-colors",
+                    "inline-flex shrink-0 items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium transition-colors",
                     a === seciliAnahtar
                       ? "bg-murekkep text-uzeri"
                       : "border border-cizgi-guclu bg-yuzey text-murekkep-yumusak hover:bg-yuzey-alt",
                   )}
                 >
+                  {kilitliler?.has(a) && <Lock className="h-3 w-3 shrink-0 opacity-70" />}
                   {a}
                 </button>
               ))}
             </div>
-          ) : (
+          ) : null}
+          {anahtarlar.length > 0 && seciliAnahtar && kayitKilidiDegistir ? (
+            // Kayıt kilidi: seçili şube/öğretmenin programı dondurulur.
+            <Buton
+              tur={kilitliler?.has(seciliAnahtar) ? "birincil" : "ikincil"}
+              className="shrink-0 !px-2.5 !py-1 text-xs"
+              title={
+                kilitliler?.has(seciliAnahtar)
+                  ? "Kilidi aç: çözücü ve elle düzenleme yeniden dokunabilir"
+                  : "Kilitle: yeniden üretimde ve elle düzenlemede bu programa dokunulmaz"
+              }
+              onClick={() => kayitKilidiDegistir(seciliAnahtar, !kilitliler?.has(seciliAnahtar))}
+            >
+              {kilitliler?.has(seciliAnahtar) ? (
+                <>
+                  <LockOpen className="h-3.5 w-3.5" /> Kilidi aç
+                </>
+              ) : (
+                <>
+                  <Lock className="h-3.5 w-3.5" /> Kilitle
+                </>
+              )}
+            </Buton>
+          ) : null}
+          {anahtarlar.length === 0 && (
             <span className="min-w-0 flex-1 truncate text-sm font-medium text-murekkep">
               {baslik}
             </span>

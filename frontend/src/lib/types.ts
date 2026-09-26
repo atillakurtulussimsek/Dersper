@@ -156,6 +156,9 @@ export interface Program {
   endless_mode: boolean;
   /** Son üretimin durumu; hiç üretilmediyse null. */
   last_run_status?: "bekliyor" | "calisiyor" | "basarili" | "cozumsuz" | "durduruldu" | "hata" | null;
+  /** Kayıt kilidi: programı dondurulan şube / öğretmen kimlikleri. */
+  locked_section_ids?: number[] | null;
+  locked_teacher_ids?: number[] | null;
   created_at: string;
 }
 
@@ -182,6 +185,8 @@ export interface Hucre {
   teacher_name: string;
   teacher_short: string | null;
   is_locked: boolean;
+  /** Şubesi ya da öğretmeni kilitli: taşınamaz, çözücü dokunmaz. */
+  record_locked?: boolean;
   /** Birleştirme kuralıyla ortak okutulan saat: öbür şubenin ders ataması. */
   merged_entry_id?: number | null;
 }

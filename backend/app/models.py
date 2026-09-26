@@ -478,6 +478,10 @@ class Timetable(Base, SoftDelete):
     endless_mode: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     # Kullanıcının "görmezden gel" dediği uyarı anahtarları.
     ignored_warnings: Mapped[list | None] = mapped_column(JSON)
+    # Kayıt kilidi: programı dondurulan şube / öğretmen kimlikleri.
+    # Çözücü ve elle düzenleme bunlara dokunmaz (bkz. app.kilit).
+    locked_section_ids: Mapped[list | None] = mapped_column(JSON)
+    locked_teacher_ids: Mapped[list | None] = mapped_column(JSON)
     # Programın şu an hangi sürümde durduğu. Geri/ileri alma bu imleci
     # sürüm ağacında gezdirir; ayrı bir adım yığını yoktur.
     current_version_id: Mapped[int | None] = mapped_column(
