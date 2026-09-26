@@ -5,6 +5,10 @@ Dersper'in geliştirme günlüğü. Her değişiklik tek cümleyle, en yeni sür
 öncesinde ikinci hane özellik, üçüncü hane düzeltme demektir. Uygulamanın
 sürümü arayüzde yan menünün altında yazar.
 
+## 0.41.1 — 2026-09-26
+
+- Ders Atamaları'nda "şubeye/öğretmene N saat açık" hesabı düzeltildi: kapatılan günün (örn. Cuma), teneffüsün ya da silinen saatin eski "uygun değil" işaretleri artık kapalı saat sayılmıyor; yalnız ızgarada gerçekten olan ders saatleri hesaba girer.
+
 ## 0.41.0 — 2026-09-26
 
 - Şube ve öğretmen kilidi: program sayfasında seçili şube/öğretmenin yanındaki "Kilitle" düğmesi o kaydın programını dondurur. Yeniden üretimde çözücü kilitli kaydın derslerine hiç dokunmaz (yerleşmiş saatler yerinde kalır, yerleşmemişleri yerleştirilmez; dolu saatleri öbür dersler için meşgul sayılır), elle taşıma/rafa alma/yerleştirme reddedilir. Kilitli kayıt şeritte kilit simgesiyle, hücreleri kilitli görünür; kilit programa özeldir ve sürüm geçmişine yazılır. Yeni veritabanı göçü: 0024 (timetables.locked_section_ids / locked_teacher_ids).

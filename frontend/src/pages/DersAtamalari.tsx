@@ -90,8 +90,20 @@ export default function DersAtamalari() {
         .reduce((t, g) => t + g.periods.filter((p) => !p.is_break).length, 0),
     [izgara.data],
   );
+  // Yalnız ızgarada olan hücreler sayılır: kapatılan günün, teneffüsün ya da
+  // silinen saatin eski "uygun değil" işaretleri hayalet hücredir; sayılırsa
+  // şube gerçekte sığarken "N saat fazla" görünür (sunucu da böyle sayar).
+  const gecerliSaatler = useMemo(
+    () =>
+      new Set(
+        (izgara.data ?? [])
+          .filter((g) => g.is_active)
+          .flatMap((g) => g.periods.filter((p) => !p.is_break).map((p) => p.id)),
+      ),
+    [izgara.data],
+  );
   const kapaliSaat = (musaitlik.data ?? []).filter(
-    (h) => h.state === "uygun_degil",
+    (h) => h.state === "uygun_degil" && gecerliSaatler.has(h.period_id),
   ).length;
   const kullanilabilir = Math.max(0, haftalikSlot - kapaliSaat);
   const toplam = (mufredat.data ?? []).reduce((t, m) => t + m.weekly_hours, 0);
