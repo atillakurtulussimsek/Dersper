@@ -172,6 +172,11 @@ class Day(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     term_id: Mapped[int] = mapped_column(ForeignKey("terms.id", ondelete="CASCADE"))
+    # Programa özel ızgara. NULL = dönemin genel ızgarası; doluysa gün yalnızca
+    # o programa aittir ve genel ızgarada görünmez (bkz. app.izgara).
+    timetable_id: Mapped[int | None] = mapped_column(
+        ForeignKey("timetables.id", ondelete="CASCADE")
+    )
     index: Mapped[int] = mapped_column(Integer)                # 0 = Pazartesi
     name: Mapped[str] = mapped_column(String(20))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -482,6 +487,10 @@ class Timetable(Base, SoftDelete):
     # Çözücü ve elle düzenleme bunlara dokunmaz (bkz. app.kilit).
     locked_section_ids: Mapped[list | None] = mapped_column(JSON)
     locked_teacher_ids: Mapped[list | None] = mapped_column(JSON)
+    # Programın kendi zaman ızgarası var mı. Yalnızca oluşturulurken seçilir;
+    # günleri Day.timetable_id ile bu programa bağlıdır, müsaitlik işaretleri
+    # de o günlerin ders saatlerine yazılır — böylece programa özeldir.
+    own_grid: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     # Programın şu an hangi sürümde durduğu. Geri/ileri alma bu imleci
     # sürüm ağacında gezdirir; ayrı bir adım yığını yoktur.
     current_version_id: Mapped[int | None] = mapped_column(

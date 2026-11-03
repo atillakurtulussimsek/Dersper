@@ -50,9 +50,15 @@ type TaslakGun = {
   periods: TaslakSaat[];
 };
 
-export default function ZamanIzgarasi() {
+/** `programId` verilirse o programa özel ızgarayı düzenler (program ayarları
+ *  penceresinde, sayfa başlığı ve dönem aktarımı olmadan). */
+export default function ZamanIzgarasi({ programId }: { programId?: number } = {}) {
   const qc = useQueryClient();
-  const izgara = useQuery({ queryKey: ["timegrid"], queryFn: () => get<Gun[]>("/timegrid") });
+  const uc = programId ? `/timetables/${programId}/timegrid` : "/timegrid";
+  const izgara = useQuery({
+    queryKey: programId ? ["timegrid", programId] : ["timegrid"],
+    queryFn: () => get<Gun[]>(uc),
+  });
   const [taslak, setTaslak] = useState<TaslakGun[]>([]);
   const [aktarimAcik, setAktarimAcik] = useState(false);
   const [kaynakId, setKaynakId] = useState<number | null>(null);
@@ -99,7 +105,7 @@ export default function ZamanIzgarasi() {
   const kaydet = useMutation({
     mutationFn: () =>
       put<Gun[]>(
-        "/timegrid",
+        uc,
         // `anahtar` yalnızca arayüze ait. Sıra listedeki konumdan yazılır;
         // kimlik de gittiği için sunucu satırı sırasından değil kendisinden tanır.
         taslak.map((g) => ({
@@ -214,6 +220,16 @@ export default function ZamanIzgarasi() {
 
   return (
     <div className="space-y-5">
+      {programId ? (
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm text-murekkep-silik">
+            Bu programın kendi günleri ve ders saatleri; dönemin genel ızgarasından bağımsızdır.
+          </p>
+          <Buton onClick={() => kaydet.mutate()} yukleniyor={kaydet.isPending}>
+            Kaydet
+          </Buton>
+        </div>
+      ) : (
       <SayfaBasligi
         baslik="Zaman Izgarası"
         aciklama="Hangi günlerde kaç ders saati olduğu. Teneffüse ders yerleştirilmez; öğle arası ayrıca günü sabah ve öğleden sonra diye böler."
@@ -234,6 +250,7 @@ export default function ZamanIzgarasi() {
           </>
         }
       />
+      )}
 
       {kaydet.error && <Uyari tur="hata">{(kaydet.error as Error).message}</Uyari>}
       {kaydet.isSuccess && !kaydet.isPending && (

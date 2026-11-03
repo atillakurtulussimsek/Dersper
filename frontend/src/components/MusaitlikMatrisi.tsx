@@ -55,6 +55,7 @@ export default function MusaitlikMatrisi({
   kopyaHedefleri,
   kopyaAlani = "section_ids",
   kopyaSozleri = SUBE_SOZLERI,
+  sorgu = "",
 }: {
   /** Kutunun başlığı, örn. "Ayşe Yılmaz · müsaitlik" */
   baslik: string;
@@ -70,6 +71,9 @@ export default function MusaitlikMatrisi({
   /** Hedeflerin adı, gereken çekimleriyle — ek yapıştırmak Türkçede
    *  ünlü/ünsüz uyumunu bozar ("öğretmenye"). */
   kopyaSozleri?: KopyaSozleri;
+  /** Uçlara eklenen sorgu, örn. "?timetable_id=5" — programa özel ızgaranın
+   *  müsaitliği için. Boşsa dönemin genel müsaitliği. */
+  sorgu?: string;
 }) {
   const qc = useQueryClient();
   const [kopyaModu, setKopyaModu] = useState(false);
@@ -79,8 +83,9 @@ export default function MusaitlikMatrisi({
   const [suruklu, setSuruklu] = useState<Musaitlik | null>(null);
 
   const kayitli = useQuery({
-    queryKey: ["musaitlik", yol],
-    queryFn: () => get<{ period_id: number; state: Musaitlik }[]>(`${yol}/availability`),
+    queryKey: ["musaitlik", yol, sorgu],
+    queryFn: () =>
+      get<{ period_id: number; state: Musaitlik }[]>(`${yol}/availability${sorgu}`),
   });
 
   useEffect(() => {
@@ -91,7 +96,7 @@ export default function MusaitlikMatrisi({
   }, [kayitli.data]);
 
   const kaydetIstegi = () =>
-    put(`${yol}/availability`, {
+    put(`${yol}/availability${sorgu}`, {
       cells: Object.entries(hucreler).map(([period_id, state]) => ({
         period_id: Number(period_id),
         state,
@@ -101,7 +106,8 @@ export default function MusaitlikMatrisi({
   const kaydet = useMutation({
     mutationFn: kaydetIstegi,
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["musaitlik", yol] });
+      qc.invalidateQueries({ queryKey: ["musaitlik", yol, sorgu] });
+      qc.invalidateQueries({ queryKey: ["kapali-saatler"] });
       kapat();
     },
   });
@@ -111,7 +117,7 @@ export default function MusaitlikMatrisi({
     mutationFn: async () => {
       await kaydetIstegi();
       return post<{ copied_to: string[]; cells: number }>(
-        `${yol}/availability/copy`,
+        `${yol}/availability/copy${sorgu}`,
         { [kopyaAlani]: hedefler },
       );
     },

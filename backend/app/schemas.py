@@ -488,6 +488,9 @@ class TimetableIn(BaseModel):
     # None = dönemin tüm şubeleri.
     section_ids: list[int] | None = None
     gap_policy: GapPolicy = GapPolicy.IDEAL
+    # Zaman ızgarası: dönemin genel ızgarası, programa özel boş ızgara ya da
+    # genelin (müsaitlik işaretleriyle) kopyası. Yalnızca oluştururken seçilir.
+    grid_mode: Literal["genel", "bos", "kopya"] = "genel"
 
 
 class TimetableUpdate(BaseModel):
@@ -507,6 +510,7 @@ class TimetableOut(ORMModel):
     gap_policy: GapPolicy
     created_at: datetime
     endless_mode: bool = False
+    own_grid: bool = False
     # Son üretimin durumu (listede "üretiliyor" / "başarısız" rozeti için).
     last_run_status: SolveStatus | None = None
     # Kayıt kilidi: programı dondurulan şube / öğretmen kimlikleri.

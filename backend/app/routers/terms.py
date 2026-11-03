@@ -49,7 +49,8 @@ def _cikti(db: Session, donem: Term, inst: Institution) -> TermOut:
         for ad, model in SAYILACAKLAR.items()
     }
     sayilar["ders_saati"] = (
-        db.scalar(select(func.count()).select_from(Day).where(Day.term_id == donem.id))
+        db.scalar(select(func.count()).select_from(Day).where(
+            Day.term_id == donem.id, Day.timetable_id.is_(None)))
         or 0
     )
     # Müfredat döneme şube üzerinden bağlıdır.

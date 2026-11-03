@@ -93,7 +93,7 @@ def _dongu(run_id: int, term_id: int, dur: threading.Event) -> None:
             donem = db.get(Term, term_id)
             run = db.get(SolveRun, run_id)
             program = db.get(Timetable, run.timetable_id)
-            slots = slotlari_yukle(db, donem)
+            slots = slotlari_yukle(db, donem, program)
             kural_bulgulari: list[dict] = []
             lessons = dersleri_yukle(db, donem, program.section_ids, slots,
                                      ek_bulgular=kural_bulgulari)

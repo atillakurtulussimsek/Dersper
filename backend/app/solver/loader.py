@@ -7,12 +7,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app import bloklar
-from app import cakisma
+from app import cakisma, izgara
 from app.models import (
     SectionMergeRule, SubjectGroup, SubjectGroupMember,
-    Availability, CurriculumEntry, CurriculumEntrySection, Day, Section,
+    Availability, CurriculumEntry, CurriculumEntrySection, Section,
     SectionAvailability, Teacher,
-    TeacherAvailability, Term,
+    TeacherAvailability, Term, Timetable,
 )
 from app.solver.engine import Lesson, Slot, sube_ciftleri
 
@@ -40,14 +40,12 @@ def sabah_mi(saatler: list, ders_saati) -> bool:
     return sirasi < sinir
 
 
-def slotlari_yukle(db: Session, donem: Term) -> list[Slot]:
-    """Dönemin aktif günlerindeki, teneffüs olmayan ders saatleri."""
-    gunler = db.scalars(
-        select(Day)
-        .options(selectinload(Day.periods))
-        .where(Day.term_id == donem.id, Day.is_active.is_(True))
-        .order_by(Day.index)
-    )
+def slotlari_yukle(
+    db: Session, donem: Term, program: Timetable | None = None,
+) -> list[Slot]:
+    """Aktif günlerdeki, teneffüs olmayan ders saatleri. Program kendi
+    ızgarasını kullanıyorsa onunkiler, yoksa dönemin genel ızgarası."""
+    gunler = izgara.gunleri_getir(db, donem, program, yalniz_aktif=True)
     slots: list[Slot] = []
     for gun in gunler:
         saatler = sorted(gun.periods, key=lambda x: x.index)

@@ -15,11 +15,11 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.db import get_db
 from app.deps import aktif_donem, current_user
-from app import siralama
+from app import izgara, siralama
 from app.models import (
     Availability, Building, CurriculumEntry, CurriculumEntrySection, Period,
     Section, SectionAvailability, SectionOrder, Subject, Teacher,
-    TeacherAvailability, Term,
+    TeacherAvailability, Term, Timetable,
 )
 from app.schemas import (
     SectionOrderIn, TeacherAvailabilityCopyIn,
@@ -192,18 +192,27 @@ def ogretmen_aktar(
 
 # --- Müsaitlik (öğretmen ve şube ortak) ---
 
-def _musaitlik_oku(db: Session, model, alan, nesne_id: int) -> list[AvailabilityCell]:
+def _musaitlik_oku(
+    db: Session, model, alan, nesne_id: int, gecerli: set[int],
+) -> list[AvailabilityCell]:
+    """Yalnızca istenen ızgaranın saatleri: genel ya da programa özel."""
     rows = db.scalars(select(model).where(alan == nesne_id))
-    return [AvailabilityCell(period_id=r.period_id, state=r.state) for r in rows]
+    return [AvailabilityCell(period_id=r.period_id, state=r.state)
+            for r in rows if r.period_id in gecerli]
 
 
 def _musaitlik_yaz(
     db: Session, model, alan_adi: str, nesne_id: int, payload: AvailabilityUpdate,
     gecerli: set[int],
 ) -> None:
-    """Yalnızca 'uygun' dışındaki hücreler saklanır; kayıt yoksa uygun sayılır."""
+    """Yalnızca 'uygun' dışındaki hücreler saklanır; kayıt yoksa uygun sayılır.
+
+    Silme `gecerli` saatlerle sınırlıdır: genel tabloyu kaydetmek programa özel
+    ızgaranın işaretlerini, programınkini kaydetmek genelinkileri silmez.
+    """
     alan = getattr(model, alan_adi)
-    for row in db.scalars(select(model).where(alan == nesne_id)):
+    for row in db.scalars(select(model).where(alan == nesne_id,
+                                              model.period_id.in_(gecerli))):
         db.delete(row)
     db.flush()
 
@@ -214,22 +223,24 @@ def _musaitlik_yaz(
     db.commit()
 
 
-def _donem_saatleri(db: Session, donem: Term) -> set[int]:
-    """Aktif dönemin ders saati kimlikleri; başka dönemin saati yazılamaz."""
-    from app.models import Day
+def _donem_saatleri(db: Session, donem: Term, timetable_id: int | None = None) -> set[int]:
+    """Aktif dönemin ders saati kimlikleri; başka dönemin saati yazılamaz.
 
-    return set(
-        db.scalars(
-            select(Period.id).join(Day, Day.id == Period.day_id).where(
-                Day.term_id == donem.id
-            )
-        )
-    )
+    `timetable_id` verilirse o programın kullandığı ızgara: kendi ızgarası
+    varsa onunki, yoksa genel ızgara. Verilmezse genel ızgara.
+    """
+    if timetable_id is None:
+        return izgara.saat_kimlikleri(db, donem)
+    program = db.get(Timetable, timetable_id)
+    if program is None or program.is_deleted or program.term_id != donem.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Ders programı bulunamadı.")
+    return izgara.saat_kimlikleri(db, donem, program)
 
 
 @router.get("/availability/closed", response_model=ClosedAvailabilityOut)
 def kapali_saatler(
-    db: Session = Depends(get_db), donem: Term = Depends(aktif_donem)
+    timetable_id: int | None = None,
+    db: Session = Depends(get_db), donem: Term = Depends(aktif_donem),
 ) -> ClosedAvailabilityOut:
     """Dönemdeki bütün kapalı saatler, kayıt kimliğine göre gruplanmış.
 
@@ -238,7 +249,7 @@ def kapali_saatler(
     Tek uçta toplanır; satır başına ayrı istek atmak çarşafta onlarca çağrı
     demek olurdu.
     """
-    donem_saatleri = _donem_saatleri(db, donem)
+    donem_saatleri = _donem_saatleri(db, donem, timetable_id)
 
     def topla(model, alan, sahip) -> dict[int, list[int]]:
         sonuc: dict[int, list[int]] = {}
@@ -262,24 +273,26 @@ def kapali_saatler(
 
 @router.get("/teachers/{teacher_id}/availability", response_model=list[AvailabilityCell])
 def musaitlik(
-    teacher_id: int, db: Session = Depends(get_db), donem: Term = Depends(aktif_donem)
+    teacher_id: int, timetable_id: int | None = None,
+    db: Session = Depends(get_db), donem: Term = Depends(aktif_donem),
 ) -> list[AvailabilityCell]:
     _getir(db, Teacher, teacher_id, "Öğretmen", donem)
     return _musaitlik_oku(db, TeacherAvailability, TeacherAvailability.teacher_id,
-                          teacher_id)
+                          teacher_id, _donem_saatleri(db, donem, timetable_id))
 
 
 @router.put("/teachers/{teacher_id}/availability", response_model=list[AvailabilityCell])
 def musaitlik_kaydet(
     teacher_id: int,
     payload: AvailabilityUpdate,
+    timetable_id: int | None = None,
     db: Session = Depends(get_db),
     donem: Term = Depends(aktif_donem),
 ) -> list[AvailabilityCell]:
     _getir(db, Teacher, teacher_id, "Öğretmen", donem)
     _musaitlik_yaz(db, TeacherAvailability, "teacher_id", teacher_id, payload,
-                   _donem_saatleri(db, donem))
-    return musaitlik(teacher_id, db, donem)
+                   _donem_saatleri(db, donem, timetable_id))
+    return musaitlik(teacher_id, timetable_id, db, donem)
 
 
 @router.post("/teachers/{teacher_id}/availability/copy",
@@ -287,6 +300,7 @@ def musaitlik_kaydet(
 def ogretmen_musaitligini_kopyala(
     teacher_id: int,
     payload: TeacherAvailabilityCopyIn,
+    timetable_id: int | None = None,
     db: Session = Depends(get_db),
     donem: Term = Depends(aktif_donem),
 ) -> AvailabilityCopyOut:
@@ -297,8 +311,9 @@ def ogretmen_musaitligini_kopyala(
     işaretlemeleri tamamen silinir; birleştirme yapılmaz.
     """
     _getir(db, Teacher, teacher_id, "Öğretmen", donem)
+    gecerli = _donem_saatleri(db, donem, timetable_id)
     hucreler = _musaitlik_oku(db, TeacherAvailability, TeacherAvailability.teacher_id,
-                              teacher_id)
+                              teacher_id, gecerli)
 
     hedefler = [
         t for t in db.scalars(
@@ -311,7 +326,6 @@ def ogretmen_musaitligini_kopyala(
             status.HTTP_404_NOT_FOUND, "Kopyalanacak geçerli bir hedef öğretmen yok."
         )
 
-    gecerli = _donem_saatleri(db, donem)
     for hedef in hedefler:
         _musaitlik_yaz(db, TeacherAvailability, "teacher_id", hedef.id,
                        AvailabilityUpdate(cells=hucreler), gecerli)
@@ -619,25 +633,27 @@ def sube_sil(
 
 @router.get("/sections/{section_id}/availability", response_model=list[AvailabilityCell])
 def sube_musaitligi(
-    section_id: int, db: Session = Depends(get_db), donem: Term = Depends(aktif_donem)
+    section_id: int, timetable_id: int | None = None,
+    db: Session = Depends(get_db), donem: Term = Depends(aktif_donem),
 ) -> list[AvailabilityCell]:
     """Şubenin ders görebileceği saatler. Sabahçı/akşamcı şubeler böyle sınırlanır."""
     _getir(db, Section, section_id, "Şube", donem)
     return _musaitlik_oku(db, SectionAvailability, SectionAvailability.section_id,
-                          section_id)
+                          section_id, _donem_saatleri(db, donem, timetable_id))
 
 
 @router.put("/sections/{section_id}/availability", response_model=list[AvailabilityCell])
 def sube_musaitligi_kaydet(
     section_id: int,
     payload: AvailabilityUpdate,
+    timetable_id: int | None = None,
     db: Session = Depends(get_db),
     donem: Term = Depends(aktif_donem),
 ) -> list[AvailabilityCell]:
     _getir(db, Section, section_id, "Şube", donem)
     _musaitlik_yaz(db, SectionAvailability, "section_id", section_id, payload,
-                   _donem_saatleri(db, donem))
-    return sube_musaitligi(section_id, db, donem)
+                   _donem_saatleri(db, donem, timetable_id))
+    return sube_musaitligi(section_id, timetable_id, db, donem)
 
 
 @router.post("/sections/{section_id}/availability/copy",
@@ -645,6 +661,7 @@ def sube_musaitligi_kaydet(
 def sube_musaitligini_kopyala(
     section_id: int,
     payload: AvailabilityCopyIn,
+    timetable_id: int | None = None,
     db: Session = Depends(get_db),
     donem: Term = Depends(aktif_donem),
 ) -> AvailabilityCopyOut:
@@ -653,8 +670,9 @@ def sube_musaitligini_kopyala(
     Hedeflerin önceki işaretlemeleri tamamen silinir; birleştirme yapılmaz.
     """
     _getir(db, Section, section_id, "Şube", donem)
+    gecerli = _donem_saatleri(db, donem, timetable_id)
     hucreler = _musaitlik_oku(db, SectionAvailability, SectionAvailability.section_id,
-                              section_id)
+                              section_id, gecerli)
 
     hedefler = [
         s for s in db.scalars(
@@ -667,7 +685,6 @@ def sube_musaitligini_kopyala(
             status.HTTP_404_NOT_FOUND, "Kopyalanacak geçerli bir hedef şube yok."
         )
 
-    gecerli = _donem_saatleri(db, donem)
     for hedef in hedefler:
         _musaitlik_yaz(db, SectionAvailability, "section_id", hedef.id,
                        AvailabilityUpdate(cells=hucreler), gecerli)

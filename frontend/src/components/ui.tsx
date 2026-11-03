@@ -291,11 +291,14 @@ export function Kutu({
   kapat,
   baslik,
   children,
+  genis = false,
 }: {
   acik: boolean;
   kapat: () => void;
   baslik: string;
   children: ReactNode;
+  /** Izgara düzenleyici gibi geniş içerik için. */
+  genis?: boolean;
 }) {
   if (!acik) return null;
   return (
@@ -304,7 +307,10 @@ export function Kutu({
       onClick={kapat}
     >
       <div
-        className="w-full max-w-lg rounded-xl border border-cizgi bg-yuzey shadow-2xl shadow-murekkep/10"
+        className={clsx(
+          "w-full rounded-xl border border-cizgi bg-yuzey shadow-2xl shadow-murekkep/10",
+          genis ? "max-w-7xl" : "max-w-lg",
+        )}
         onClick={(e) => e.stopPropagation()}
       >
         <header className="flex items-center justify-between border-b border-cizgi px-5 py-3.5">

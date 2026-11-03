@@ -144,6 +144,9 @@ export interface MufredatSatiri {
 /** Öğretmenin dersleri arasındaki boşluğa nasıl davranılacağı. */
 export type BoslukPolitikasi = "bosluklu" | "ideal" | "siki";
 
+/** Yeni programın zaman ızgarası: genel, boş ya da genelin kopyası. */
+export type IzgaraModu = "genel" | "bos" | "kopya";
+
 export interface Program {
   id: number;
   name: string;
@@ -154,6 +157,9 @@ export interface Program {
   gap_policy: BoslukPolitikasi;
   /** Sonsuz mod: başarısız olsa da farklı stratejilerle durdurulana kadar dene. */
   endless_mode: boolean;
+  /** Programın kendi zaman ızgarası (ve müsaitliği) var mı; yoksa dönemin
+   *  genel ızgarasını kullanır. Yalnızca oluştururken seçilir. */
+  own_grid: boolean;
   /** Son üretimin durumu; hiç üretilmediyse null. */
   last_run_status?: "bekliyor" | "calisiyor" | "basarili" | "cozumsuz" | "durduruldu" | "hata" | null;
   /** Kayıt kilidi: programı dondurulan şube / öğretmen kimlikleri. */

@@ -16,15 +16,17 @@ from app.models import (
     TimetableVersion, VersionKind,
 )
 from app import siralama, surumler
+from app.izgara import bos_izgara_kur, genel_izgarayi_kopyala, gunleri_getir
 from app.duzenle import Duzenleyici
 from app.schemas import (
-    AssignmentMove, GridCell, PendingOut, PlaceIn, RecordLockIn, SolveRunOut, TargetOut,
+    AssignmentMove, DayIn, DayOut, GridCell, PendingOut, PlaceIn, RecordLockIn, SolveRunOut, TargetOut,
     TimetableGrid, TimetableIn, TimetableOut, TimetableUpdate, VersionDiffOut,
     VersionOut,
     WarningIgnoreIn, WarningOut,
 )
 from app.kilit import kilitli_mi
 from app.uyarilar import uyarilari_hesapla
+from app.routers.timegrid import izgarayi_yaz
 from app.solver import arkaplan
 
 router = APIRouter(prefix="/timetables", tags=["ders programı"],
@@ -148,8 +150,13 @@ def program_olustur(
         secilenler = None if len(istenen) == len(gecerli) else istenen
 
     t = Timetable(term_id=donem.id, name=payload.name, section_ids=secilenler,
-                  gap_policy=payload.gap_policy)
+                  gap_policy=payload.gap_policy, own_grid=payload.grid_mode != "genel")
     db.add(t)
+    db.flush()
+    if payload.grid_mode == "kopya":
+        genel_izgarayi_kopyala(db, donem, t)
+    elif payload.grid_mode == "bos":
+        bos_izgara_kur(db, donem, t)
     db.commit()
     db.refresh(t)
     return t
@@ -185,6 +192,35 @@ def program_sil(
     t.deleted_at = datetime.now(timezone.utc)
     t.public_token = None
     db.commit()
+
+
+def _ozel_izgarali(db: Session, timetable_id: int, donem: Term) -> Timetable:
+    t = _programi_getir(db, timetable_id, donem)
+    if not t.own_grid:
+        raise HTTPException(status.HTTP_404_NOT_FOUND,
+                            "Bu program dönemin genel zaman ızgarasını kullanıyor.")
+    return t
+
+
+@router.get("/{timetable_id}/timegrid", response_model=list[DayOut])
+def program_izgarasi(
+    timetable_id: int, db: Session = Depends(get_db), donem: Term = Depends(aktif_donem)
+) -> list[Day]:
+    """Programın kullandığı zaman ızgarası: kendisininki ya da genel ızgara."""
+    t = _programi_getir(db, timetable_id, donem)
+    return gunleri_getir(db, donem, t)
+
+
+@router.put("/{timetable_id}/timegrid", response_model=list[DayOut])
+def program_izgarasini_kaydet(
+    timetable_id: int,
+    payload: list[DayIn],
+    db: Session = Depends(get_db),
+    donem: Term = Depends(aktif_donem),
+) -> list[Day]:
+    """Programa özel ızgarayı kaydeder; kurallar genel ızgarayla aynıdır."""
+    t = _ozel_izgarali(db, timetable_id, donem)
+    return izgarayi_yaz(db, donem, t, payload)
 
 
 @router.get("/{timetable_id}/grid", response_model=TimetableGrid)

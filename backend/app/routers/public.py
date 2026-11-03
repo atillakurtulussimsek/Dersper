@@ -5,10 +5,11 @@
 """
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app import siralama
+from app import izgara
 from app.models import Day, Institution, Term, Timetable, TimetableStatus
 from app.routers.timetables import izgara_hucreleri
 from app.schemas import DayOut, TimetableGrid, TimetableOut
@@ -35,14 +36,10 @@ def yayindaki_program(token: str, db: Session = Depends(get_db)) -> TimetableGri
 
 @router.get("/timetables/{token}/timegrid", response_model=list[DayOut])
 def yayindaki_izgara(token: str, db: Session = Depends(get_db)) -> list[Day]:
-    """Yayınlanan programın dönemine ait zaman ızgarası — gün adları ve teneffüsler."""
+    """Yayınlanan programın zaman ızgarası — gün adları ve teneffüsler. Kendi
+    ızgarası olan programda onunki, yoksa dönemin genel ızgarası."""
     t = _yayin(db, token)
-    return list(db.scalars(
-        select(Day)
-        .options(selectinload(Day.periods))
-        .where(Day.term_id == t.term_id)
-        .order_by(Day.index)
-    ))
+    return izgara.gunleri_getir(db, t.term, t)
 
 
 @router.get("/timetables/{token}/institution")

@@ -5,6 +5,10 @@ Dersper'in geliştirme günlüğü. Her değişiklik tek cümleyle, en yeni sür
 öncesinde ikinci hane özellik, üçüncü hane düzeltme demektir. Uygulamanın
 sürümü arayüzde yan menünün altında yazar.
 
+## 0.42.0 — 2026-11-03
+
+- Programa özel zaman ızgarası: yeni program oluşturulurken "genel ızgara", "genelden kopyala" ya da "boş başla" seçilir. Özel ızgaralı programın günleri, ders saatleri ve öğretmen/şube müsaitliği genelden bağımsızdır; program sayfasındaki "Program ayarları" penceresinden düzenlenir. Çözücü, elle düzenleme, uyarılar, çıktılar ve yayın sayfası programın kendi ızgarasını kullanır. Seçim sonradan değiştirilemez; programlar arası öğretmen çakışması denetlenmez. Yeni veritabanı göçü: 0025 (timetables.own_grid, days.timetable_id).
+
 ## 0.41.1 — 2026-09-26
 
 - Ders Atamaları'nda "şubeye/öğretmene N saat açık" hesabı düzeltildi: kapatılan günün (örn. Cuma), teneffüsün ya da silinen saatin eski "uygun değil" işaretleri artık kapalı saat sayılmıyor; yalnız ızgarada gerçekten olan ders saatleri hesaba girer.

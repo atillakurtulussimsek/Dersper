@@ -64,7 +64,8 @@ def donemi_kopyala(
     saat_esi: dict[int, int] = {}
     gunler = db.scalars(
         select(Day).options(selectinload(Day.periods))
-        .where(Day.term_id == kaynak.id).order_by(Day.index)
+        .where(Day.term_id == kaynak.id, Day.timetable_id.is_(None))
+        .order_by(Day.index)
     ).all()
     for g in gunler:
         gun = Day(term_id=yeni.id, index=g.index, name=g.name, is_active=g.is_active)

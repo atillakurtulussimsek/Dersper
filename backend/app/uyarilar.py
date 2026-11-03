@@ -180,7 +180,7 @@ def _cakisma_uyarilari(
     görünür: taşınınca kendiliğinden kaybolur, istenirse gizlenir.
     """
     donem = program.term
-    saatler = saatleri_oku(db, donem)
+    saatler = saatleri_oku(db, donem, program)
     ogretmen_kapali, sube_kapali = _kapali_saatler(db, donem)
     kimlikler = list(saatler)
     es_zamanlilar = cakisma.ortusenler(

@@ -1,11 +1,13 @@
 """Zaman ızgarası: günler ve ders saatleri. Ders saati sayısı güne göre değişir.
 
-Izgara döneme aittir; her dönem kendi zil düzenini tanımlar.
+Izgara döneme aittir; her dönem kendi zil düzenini tanımlar. Kendi ızgarası
+olan programların günleri burada görünmez (bkz. app.izgara).
 """
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
+from app import izgara
 from app.db import get_db
 from app.deps import aktif_donem, current_user
 from app.models import (
@@ -18,15 +20,8 @@ router = APIRouter(prefix="/timegrid", tags=["zaman ızgarası"],
                    dependencies=[Depends(current_user)])
 
 
-def _gunleri_getir(db: Session, donem: Term) -> list[Day]:
-    return list(
-        db.scalars(
-            select(Day)
-            .options(selectinload(Day.periods))
-            .where(Day.term_id == donem.id)
-            .order_by(Day.index)
-        )
-    )
+def _gunleri_getir(db: Session, donem: Term, program: Timetable | None = None) -> list[Day]:
+    return izgara.gunleri_getir(db, donem, program)
 
 
 def _bagli_kayitlari_sil(db: Session, saatler: list[Period]) -> None:
@@ -210,7 +205,8 @@ def _yerlesim_var_mi(db: Session, donem: Term) -> bool:
     return db.scalar(
         select(Assignment.id)
         .join(Timetable, Timetable.id == Assignment.timetable_id)
-        .where(Timetable.term_id == donem.id, Timetable.deleted_at.is_(None))
+        .where(Timetable.term_id == donem.id, Timetable.deleted_at.is_(None),
+               Timetable.own_grid.is_(False))
         .limit(1)
     ) is not None
 
@@ -234,8 +230,15 @@ def izgarayi_kaydet(
     böyle bir saat silinemez, teneffüse çevrilemez, günü kapatılamaz ya da
     silinemez. Ad, saat aralığı, sıra ve yeni satır serbesttir.
     """
+    return izgarayi_yaz(db, donem, None, payload)
+
+
+def izgarayi_yaz(
+    db: Session, donem: Term, program: Timetable | None, payload: list[DayIn],
+) -> list[Day]:
+    """Genel ızgarayı ya da (program verilirse) programın kendi ızgarasını kaydeder."""
     dolu = _dolu_saatler(db, donem)
-    mevcut = {d.index: d for d in _gunleri_getir(db, donem)}
+    mevcut = {d.index: d for d in _gunleri_getir(db, donem, program)}
     gelen_indexler = {d.index for d in payload}
 
     # Listeden tamamen çıkarılan günler. Günü pasife almak silmek değildir:
@@ -252,7 +255,8 @@ def izgarayi_kaydet(
         gun = mevcut.get(gelen.index)
         if gun is None:
             gun = Day(term_id=donem.id, index=gelen.index, name=gelen.name,
-                      is_active=gelen.is_active)
+                      is_active=gelen.is_active,
+                      timetable_id=program.id if program is not None else None)
             db.add(gun)
             db.flush()
         else:
@@ -265,7 +269,7 @@ def izgarayi_kaydet(
     # Oturum commit'te nesneleri geçersiz kılmıyor (expire_on_commit=False);
     # yeniden okumadan önce elle geçersiz kılınmazsa eski ders saatleri döner.
     db.expire_all()
-    return _gunleri_getir(db, donem)
+    return _gunleri_getir(db, donem, program)
 
 
 @router.post("/days/{day_id}/periods", response_model=DayOut,
@@ -277,7 +281,7 @@ def ders_saati_ekle(
     donem: Term = Depends(aktif_donem),
 ) -> Day:
     gun = db.get(Day, day_id)
-    if gun is None or gun.term_id != donem.id:
+    if gun is None or gun.term_id != donem.id or gun.timetable_id is not None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Gün bulunamadı.")
     db.add(Period(day_id=day_id, **payload.model_dump(exclude={"id"})))
     db.commit()

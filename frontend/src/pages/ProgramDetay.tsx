@@ -11,10 +11,11 @@ import {
 } from "@dnd-kit/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "react-router-dom";
-import { Copy, Globe, Inbox, Infinity, Lock, LockOpen, MoveRight, Play, Redo2, Scissors, Undo2 } from "lucide-react";
+import { CalendarClock, Copy, Globe, Inbox, Infinity, Lock, LockOpen, MoveRight, Play, Redo2, Scissors, Undo2 } from "lucide-react";
 
 import { BaglamMenusu, HedefSecici, type MenuOgesi } from "../components/BaglamMenusu";
 import BekleyenDersler from "../components/BekleyenDersler";
+import ProgramAyarlari from "../components/ProgramAyarlari";
 import CarsafIzgarasi, { type Yogunluk } from "../components/CarsafIzgarasi";
 import GecmisCalistirmalar from "../components/GecmisCalistirmalar";
 import ProgramAracCubugu, { type Duzen, type PdfSecenek } from "../components/ProgramAracCubugu";
@@ -76,6 +77,7 @@ export default function ProgramDetay() {
   const qc = useQueryClient();
   const [bakis, setBakis] = useState<Bakis>("sube");
   const [duzen, setDuzen] = useState<Duzen>("ayri");
+  const [ayarlarAcik, setAyarlarAcik] = useState(false);
   // Çarşafta ad yanında saat sayısı; tercih tarayıcıda kalır.
   const [saatGoster, setSaatGoster] = useState<boolean>(() => {
     try { return localStorage.getItem("dersper_carsaf_saat") === "1"; } catch { return false; }
@@ -109,12 +111,16 @@ export default function ProgramDetay() {
     queryKey: ["izgara", id],
     queryFn: () => get<Izgara>(`/timetables/${id}/grid`),
   });
-  const gunler = useQuery({ queryKey: ["timegrid"], queryFn: () => get<Gun[]>("/timegrid") });
+  // Programın kullandığı ızgara: kendisininki ya da dönemin genel ızgarası.
+  const gunler = useQuery({
+    queryKey: ["timegrid", id],
+    queryFn: () => get<Gun[]>(`/timetables/${id}/timegrid`),
+  });
   const subeler = useQuery({ queryKey: ["subeler"], queryFn: () => get<Sube[]>("/sections") });
   // Çarşafta boş hücreyle kapalı saati ayırt etmek için; tek istekte gelir.
   const kapali = useQuery({
-    queryKey: ["kapali-saatler"],
-    queryFn: () => get<KapaliSaatler>("/availability/closed"),
+    queryKey: ["kapali-saatler", id],
+    queryFn: () => get<KapaliSaatler>(`/availability/closed?timetable_id=${id}`),
   });
   const bekleyenler = useQuery({
     queryKey: ["bekleyenler", id],
@@ -621,6 +627,16 @@ export default function ProgramDetay() {
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
+        {program.own_grid && (
+          <Buton
+            tur="ikincil"
+            title="Bu programa özel zaman ızgarası ve müsaitlik"
+            onClick={() => setAyarlarAcik(true)}
+          >
+            <CalendarClock className="h-4 w-4" />
+            <span className="hidden sm:inline">Program ayarları</span>
+          </Buton>
+        )}
         {hucreler.length > 0 && (
           <>
             <Buton
@@ -882,6 +898,10 @@ export default function ProgramDetay() {
         uzunluk={secim?.tur === "hucre" ? secim.hucreler.length : (secim?.uzunluk ?? 1)}
         sec={hedefSecildi}
       />
+
+      {ayarlarAcik && (
+        <ProgramAyarlari program={program} kapat={() => setAyarlarAcik(false)} />
+      )}
 
       <Kutu
         acik={zorlamaSorusu !== null}

@@ -6,7 +6,7 @@ from collections import defaultdict
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.deps import aktif_donem, current_user
@@ -16,7 +16,7 @@ from app.models import (
     Availability, Day, Institution, Section, SectionAvailability, Teacher,
     TeacherAvailability, Term, Timetable,
 )
-from app import siralama
+from app import izgara, siralama
 from app.routers.timetables import izgara_hucreleri
 
 router = APIRouter(prefix="/timetables/{timetable_id}/export", tags=["çıktı"],
@@ -32,15 +32,13 @@ def _ders_indexleri(gun: Day) -> list[int]:
     return sorted(p.index for p in gun.periods if not p.is_break)
 
 
-def _izgara_yapisi(db: Session, donem: Term) -> tuple[list[Day], list[int]]:
-    """Dönemin aktif günleri ve haftada en az bir günde ders olan dizinler."""
-    gunler = [
-        g for g in db.scalars(
-            select(Day).options(selectinload(Day.periods))
-            .where(Day.term_id == donem.id, Day.is_active.is_(True))
-            .order_by(Day.index)
-        )
-    ]
+def _izgara_yapisi(
+    db: Session, donem: Term, timetable_id: int,
+) -> tuple[list[Day], list[int]]:
+    """Programın ızgarasındaki aktif günler ve haftada en az bir günde ders
+    olan dizinler. Kendi ızgarası olan program onu, öbürleri geneli kullanır."""
+    gunler = izgara.gunleri_getir(db, donem, db.get(Timetable, timetable_id),
+                                  yalniz_aktif=True)
     return gunler, sorted({di for g in gunler for di in _ders_indexleri(g)})
 
 
@@ -133,7 +131,7 @@ A4_IC_MM = {"dikey": (190.0, 277.0), "yatay": (277.0, 190.0)}
 def _html(db: Session, timetable_id: int, bakis: str, donem: Term,
           kayit: str | None = None, yon: str = "dikey") -> str:
     t, kurum_adi = _baslik(db, timetable_id, donem)
-    gunler, ders_indexleri = _izgara_yapisi(db, donem)
+    gunler, ders_indexleri = _izgara_yapisi(db, donem, timetable_id)
     gruplar = _tablolar(db, timetable_id, bakis, kayit)
 
     # Her kayıt TEK sayfaya sığar: A4 DİKEY sayfanın içi 190×277 mm'dir. Altı
@@ -180,7 +178,7 @@ def _tebligat_html(db: Session, timetable_id: int, donem: Term,
     t, kurum_adi = _baslik(db, timetable_id, donem)
     kurum = db.get(Institution, donem.institution_id)
     mudur = (kurum.principal_name or "").strip() if kurum else ""
-    gunler, ders_indexleri = _izgara_yapisi(db, donem)
+    gunler, ders_indexleri = _izgara_yapisi(db, donem, timetable_id)
     gruplar = _tablolar(db, timetable_id, "ogretmen", kayit)
     ogretmenler = {
         o.full_name: o for o in db.scalars(
@@ -352,7 +350,7 @@ def _carsaf_html(db: Session, timetable_id: int, bakis: str, donem: Term,
     aynısıdır: ardışık saatler birleşir, kapalı saatler `×` ile işaretlenir.
     """
     t, kurum_adi = _baslik(db, timetable_id, donem)
-    gunler, _ = _izgara_yapisi(db, donem)
+    gunler, _ = _izgara_yapisi(db, donem, timetable_id)
     gruplar = _tablolar(db, timetable_id, bakis)
     # Kapalı saatler idarenin işine yarar; öğretmenlere/velilere dağıtılan
     # çarşafta gösterilmeyebilir (kapali=False): o hücreler boş kalır.
@@ -696,7 +694,7 @@ def excel_cikti(
     from openpyxl.styles import Alignment, Border, Font, Side
 
     _baslik(db, timetable_id, donem)      # kurum yalıtımı denetimi
-    gunler, ders_indexleri = _izgara_yapisi(db, donem)
+    gunler, ders_indexleri = _izgara_yapisi(db, donem, timetable_id)
     gruplar = _tablolar(db, timetable_id, bakis)
 
     wb = Workbook()

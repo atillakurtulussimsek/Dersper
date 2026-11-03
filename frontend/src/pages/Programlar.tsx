@@ -10,13 +10,19 @@ import {
 } from "../components/ui";
 import { hataMetni, useKaynak, useListe } from "../lib/hooks";
 import { BOSLUK_SECENEKLERI, boslukEtiketi } from "../lib/bosluk";
-import type { BoslukPolitikasi, Program, ProgramDurumu, Sube } from "../lib/types";
+import type { BoslukPolitikasi, IzgaraModu, Program, ProgramDurumu, Sube } from "../lib/types";
 
 const DURUM: Record<ProgramDurumu, { etiket: string; tur: "notr" | "iyi" | "uyari" }> = {
   taslak: { etiket: "Taslak", tur: "notr" },
   uretildi: { etiket: "Üretildi", tur: "iyi" },
   yayinda: { etiket: "Yayında", tur: "uyari" },
 };
+
+const IZGARA_SECENEKLERI: { id: IzgaraModu; etiket: string; aciklama: string }[] = [
+  { id: "genel", etiket: "Genel zaman ızgarası", aciklama: "Dönemin gün ve saatlerini kullanır." },
+  { id: "kopya", etiket: "Genelden kopyala", aciklama: "Genel ızgara ve müsaitlikler kopyalanır; sonra bu programa özel düzenlenir." },
+  { id: "bos", etiket: "Boş başla", aciklama: "Günler ve saatler bu program için sıfırdan tanımlanır." },
+];
 
 const URETILIYOR = new Set(["bekliyor", "calisiyor"]);
 const BASARISIZ = new Set(["cozumsuz", "hata"]);
@@ -48,13 +54,14 @@ export default function Programlar() {
   });
   const subeler = useListe<Sube>("subeler", "/sections");
   const kaynak = useKaynak<
-    { name: string; section_ids: number[] | null; gap_policy: BoslukPolitikasi },
+    { name: string; section_ids: number[] | null; gap_policy: BoslukPolitikasi; grid_mode: IzgaraModu },
     Program
   >("programlar", "/timetables");
   const [acik, setAcik] = useState(false);
   const [ad, setAd] = useState("");
   const [secili, setSecili] = useState<number[]>([]);
   const [politika, setPolitika] = useState<BoslukPolitikasi>("ideal");
+  const [izgaraModu, setIzgaraModu] = useState<IzgaraModu>("genel");
 
   const adaylar = subeler.data ?? [];
   const hepsiSecili = adaylar.length > 0 && secili.length === adaylar.length;
@@ -63,6 +70,7 @@ export default function Programlar() {
     // Olağan durum tüm şubelerdir; seçim yalnızca daraltmak içindir.
     setSecili(adaylar.map((s) => s.id));
     setPolitika("ideal");
+    setIzgaraModu("genel");
     setAcik(true);
   }
 
@@ -78,6 +86,7 @@ export default function Programlar() {
       // şubeler de programa girer.
       section_ids: hepsiSecili ? null : secili,
       gap_policy: politika,
+      grid_mode: izgaraModu,
     });
     setAcik(false);
     setAd("");
@@ -127,7 +136,12 @@ export default function Programlar() {
                 className="cursor-pointer hover:bg-yuzey-alt"
                 onClick={() => navigate(`/programlar/${p.id}`)}
               >
-                <td className="px-3 py-2.5 font-medium">{p.name}</td>
+                <td className="px-3 py-2.5 font-medium">
+                  {p.name}
+                  {p.own_grid && (
+                    <span className="ml-2"><Rozet tur="notr">Özel ızgara</Rozet></span>
+                  )}
+                </td>
                 <td className="max-w-64 truncate px-3 py-2.5 text-murekkep-silik">
                   {kapsamMetni(p)}
                 </td>
@@ -241,6 +255,38 @@ export default function Programlar() {
                   <span className="text-sm">
                     <span className="font-medium text-murekkep">{se.etiket}</span>
                     <span className="text-murekkep-silik"> · {se.ozet}</span>
+                    <span className="mt-0.5 block text-xs text-murekkep-silik">
+                      {se.aciklama}
+                    </span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </Alan>
+
+          <Alan
+            etiket="Zaman ızgarası"
+            ipucu="Özel ızgaralı programın günleri, saatleri ve müsaitlikleri genelden bağımsızdır; program ayarlarından düzenlenir. Sonradan değiştirilemez."
+          >
+            <div className="space-y-1.5">
+              {IZGARA_SECENEKLERI.map((se) => (
+                <label
+                  key={se.id}
+                  className={
+                    izgaraModu === se.id
+                      ? "flex cursor-pointer gap-2.5 rounded-lg border border-cizgi-guclu bg-yuzey-alt px-3 py-2"
+                      : "flex cursor-pointer gap-2.5 rounded-lg border border-cizgi px-3 py-2 hover:bg-yuzey-alt"
+                  }
+                >
+                  <input
+                    type="radio"
+                    name="izgara"
+                    checked={izgaraModu === se.id}
+                    onChange={() => setIzgaraModu(se.id)}
+                    className="mt-0.5 h-4 w-4 border-cizgi-guclu"
+                  />
+                  <span className="text-sm">
+                    <span className="font-medium text-murekkep">{se.etiket}</span>
                     <span className="mt-0.5 block text-xs text-murekkep-silik">
                       {se.aciklama}
                     </span>

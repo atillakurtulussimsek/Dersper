@@ -40,7 +40,7 @@ from app import cakisma
 from app import bloklar, surumler
 from app.kilit import kilit_nedeni
 from app.models import (
-    Assignment, Availability, CurriculumEntry, CurriculumEntrySection, Day,
+    Assignment, Availability, CurriculumEntry, CurriculumEntrySection,
     Period, Section, SectionAvailability, Teacher, TeacherAvailability, Term,
     Timetable, VersionKind,
 )
@@ -81,13 +81,16 @@ def _reddet(neden: str, zorlanabilir: bool = False) -> HTTPException:
     return HTTPException(status.HTTP_409_CONFLICT, detail)
 
 
-def saatleri_oku(db: Session, donem: Term) -> dict[int, Saat]:
-    """Dönemin ders saatleri. Kapalı günler ve teneffüsler de listede ama
-    `ders_mi=False` ile — hedef denetiminde nedeni söyleyebilmek için."""
+def saatleri_oku(
+    db: Session, donem: Term, program: Timetable | None = None,
+) -> dict[int, Saat]:
+    """Programın kullandığı ızgaranın ders saatleri (bkz. app.izgara). Kapalı
+    günler ve teneffüsler de listede ama `ders_mi=False` ile — hedef
+    denetiminde nedeni söyleyebilmek için."""
+    from app import izgara
+
     saatler: dict[int, Saat] = {}
-    for gun in db.scalars(
-        select(Day).options(selectinload(Day.periods)).where(Day.term_id == donem.id)
-    ):
+    for gun in izgara.gunleri_getir(db, donem, program):
         for p in gun.periods:
             saatler[p.id] = Saat(
                 id=p.id,
@@ -236,7 +239,7 @@ class Duzenleyici:
         self.db = db
         self.program = program
         self.donem = donem
-        self.saatler = saatleri_oku(db, donem)
+        self.saatler = saatleri_oku(db, donem, program)
         self.atamalar = _atamalari_oku(db, program.id)
         self.bloklar = bloklari_cikar(self.atamalar, self.saatler)
         self.ogretmen_kapali, self.sube_kapali = _kapali_saatler(db, donem)

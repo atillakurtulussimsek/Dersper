@@ -285,7 +285,7 @@ def fark(db: Session, program: Timetable, a_no: int, b_no: int) -> dict:
 
     a = _surum_numarasiyla(db, program, a_no)
     b = _surum_numarasiyla(db, program, b_no)
-    saatler = saatleri_oku(db, program.term)
+    saatler = saatleri_oku(db, program.term, program)
 
     def konum(period_id: int) -> dict:
         s = saatler.get(period_id)
