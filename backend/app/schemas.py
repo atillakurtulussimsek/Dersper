@@ -223,6 +223,7 @@ class DayIn(BaseModel):
 class DayOut(ORMModel):
     id: int
     index: int
+    sira: int = 0
     name: str
     is_active: bool
     periods: list[PeriodOut]

@@ -228,7 +228,8 @@ def izgarayi_kaydet(
 
     Yerleşmiş program varken de kaydedilir; sınır, dersi olan saatlerdir:
     böyle bir saat silinemez, teneffüse çevrilemez, günü kapatılamaz ya da
-    silinemez. Ad, saat aralığı, sıra ve yeni satır serbesttir.
+    silinemez. Ad, saat aralığı, sıra ve yeni satır serbesttir. Günlerin
+    gösterim sırası listedeki sıralarıdır.
     """
     return izgarayi_yaz(db, donem, None, payload)
 
@@ -251,10 +252,10 @@ def izgarayi_yaz(
             db.delete(gun)      # ders saatlerini ORM art arda siler
     db.flush()
 
-    for gelen in payload:
+    for sira, gelen in enumerate(payload):
         gun = mevcut.get(gelen.index)
         if gun is None:
-            gun = Day(term_id=donem.id, index=gelen.index, name=gelen.name,
+            gun = Day(term_id=donem.id, index=gelen.index, sira=sira, name=gelen.name,
                       is_active=gelen.is_active,
                       timetable_id=program.id if program is not None else None)
             db.add(gun)
@@ -262,7 +263,7 @@ def izgarayi_yaz(
         else:
             if gun.is_active and not gelen.is_active:
                 _dolu_engeli(gun.name, "günü kapatılamaz", list(gun.periods), dolu)
-            gun.name, gun.is_active = gelen.name, gelen.is_active
+            gun.name, gun.is_active, gun.sira = gelen.name, gelen.is_active, sira
         _saatleri_esitle(db, gun, gelen.periods, dolu)
 
     db.commit()
@@ -320,7 +321,8 @@ def izgarayi_aktar(
     db.flush()
 
     for kaynak_gun in _gunleri_getir(db, kaynak):
-        gun = Day(term_id=donem.id, index=kaynak_gun.index, name=kaynak_gun.name,
+        gun = Day(term_id=donem.id, index=kaynak_gun.index, sira=kaynak_gun.sira,
+                  name=kaynak_gun.name,
                   is_active=kaynak_gun.is_active)
         db.add(gun)
         db.flush()

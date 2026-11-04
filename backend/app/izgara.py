@@ -28,7 +28,7 @@ def gunleri_getir(
 ) -> list[Day]:
     sorgu = (
         select(Day).options(selectinload(Day.periods))
-        .where(gun_kosulu(donem, program)).order_by(Day.index)
+        .where(gun_kosulu(donem, program)).order_by(Day.sira, Day.index)
     )
     if yalniz_aktif:
         sorgu = sorgu.where(Day.is_active.is_(True))
@@ -51,7 +51,7 @@ def genel_izgarayi_kopyala(db: Session, donem: Term, program: Timetable) -> None
     saat_esi: dict[int, int] = {}
     for g in gunleri_getir(db, donem):
         gun = Day(term_id=donem.id, timetable_id=program.id, index=g.index,
-                  name=g.name, is_active=g.is_active)
+                  sira=g.sira, name=g.name, is_active=g.is_active)
         db.add(gun)
         db.flush()
         for p in sorted(g.periods, key=lambda x: x.index):
@@ -76,6 +76,6 @@ def bos_izgara_kur(db: Session, donem: Term, program: Timetable) -> None:
     from app.varsayilanlar import GUN_ADLARI
 
     for i, ad in enumerate(GUN_ADLARI):
-        db.add(Day(term_id=donem.id, timetable_id=program.id, index=i, name=ad,
-                   is_active=i < 5))
+        db.add(Day(term_id=donem.id, timetable_id=program.id, index=i, sira=i,
+                   name=ad, is_active=i < 5))
     db.flush()

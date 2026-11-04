@@ -178,6 +178,9 @@ class Day(Base):
         ForeignKey("timetables.id", ondelete="CASCADE")
     )
     index: Mapped[int] = mapped_column(Integer)                # 0 = Pazartesi
+    # Ekranda ve çıktıda gösterim sırası. `index` günün kimliğidir (birleştirme
+    # kuralları ona bağlı); sıra ise kurumun haftası: Pazar–Pazartesi–Salı gibi.
+    sira: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     name: Mapped[str] = mapped_column(String(20))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 

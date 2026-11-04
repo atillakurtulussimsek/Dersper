@@ -15,7 +15,7 @@ VARSAYILAN_DERS_SAATI = 8
 def varsayilan_izgara(db: Session, donem: Term) -> None:
     """Pazartesi–Cuma açık, günde 8 ders saati. Kullanıcı sonra düzenler."""
     for i, ad in enumerate(GUN_ADLARI):
-        gun = Day(term_id=donem.id, index=i, name=ad, is_active=i < 5)
+        gun = Day(term_id=donem.id, index=i, sira=i, name=ad, is_active=i < 5)
         db.add(gun)
         db.flush()
         if not gun.is_active:

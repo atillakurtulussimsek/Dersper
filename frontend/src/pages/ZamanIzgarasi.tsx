@@ -6,6 +6,10 @@
  *  müsaitlik işaretleri, kaydığı yeni sıraya değil taşınan satırın peşinden
  *  gider.
  *
+ *  Gün kartları da tutamağından sürüklenerek sıralanır: Pazar–Pazartesi–Salı
+ *  gibi bir hafta kurulabilir. Sıra yalnızca gösterimdir; günün kimliği
+ *  (`index`) değişmez, kayıtta listedeki konum sıra olarak yazılır.
+ *
  *  Otomatik adlar ("3. ders", "Teneffüs", "Öğle arası") her yapısal
  *  değişiklikten sonra yeniden numaralanır; kullanıcının kendi yazdığı adlara
  *  dokunulmaz.
@@ -200,6 +204,36 @@ export default function ZamanIzgarasi({ programId }: { programId?: number } = {}
     });
   }
 
+  /** Günü, hedef günün bulunduğu konuma taşır. */
+  function gunuTasi(kaynak: number, hedef: number) {
+    if (kaynak === hedef) return;
+    setTaslak((t) => {
+      const nereden = t.findIndex((g) => g.index === kaynak);
+      const nereye = t.findIndex((g) => g.index === hedef);
+      if (nereden < 0 || nereye < 0) return t;
+      const kopya = [...t];
+      const [tasinan] = kopya.splice(nereden, 1);
+      kopya.splice(nereye, 0, tasinan);
+      return kopya;
+    });
+  }
+
+  function gunuKaydir(index: number, yon: -1 | 1) {
+    setTaslak((t) => {
+      const i = t.findIndex((g) => g.index === index);
+      const j = i + yon;
+      if (i < 0 || j < 0 || j >= t.length) return t;
+      const kopya = [...t];
+      [kopya[i], kopya[j]] = [kopya[j], kopya[i]];
+      return kopya;
+    });
+  }
+
+  const [suruklenenGun, setSuruklenenGun] = useState<number | null>(null);
+  const gunSensorleri = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+  );
+
   /** Klavyeyle bir basamak yukarı/aşağı — sürüklemenin erişilebilir karşılığı. */
   function satiriKaydir(gunIndex: number, anahtar: string, yon: -1 | 1) {
     saatleriDegistir(gunIndex, (s) => {
@@ -312,10 +346,24 @@ export default function ZamanIzgarasi({ programId }: { programId?: number } = {}
         </div>
       </Kutu>
 
+      <DndContext
+        sensors={gunSensorleri}
+        collisionDetection={closestCenter}
+        onDragStart={(e: DragStartEvent) => setSuruklenenGun(Number(e.active.id))}
+        onDragEnd={(e: DragEndEvent) => {
+          setSuruklenenGun(null);
+          if (e.over) gunuTasi(Number(e.active.id), Number(e.over.id));
+        }}
+        onDragCancel={() => setSuruklenenGun(null)}
+      >
       <div className="grid gap-4 lg:grid-cols-2">
-        {taslak.map((g) => (
-          <Kart
+        {taslak.map((g, gi) => (
+          <GunKarti
             key={g.index}
+            index={g.index}
+            suruklenen={suruklenenGun}
+          >
+          <Kart
             baslik={g.name}
             aciklama={
               g.is_active
@@ -325,15 +373,23 @@ export default function ZamanIzgarasi({ programId }: { programId?: number } = {}
                 : "Bu gün kapalı"
             }
             sag={
-              <label className="flex items-center gap-2 text-sm text-murekkep-yumusak">
-                <input
-                  type="checkbox"
-                  checked={g.is_active}
-                  onChange={(e) => gunuDegistir(g.index, { is_active: e.target.checked })}
-                  className="h-4 w-4 rounded border-cizgi-guclu"
+              <span className="flex items-center gap-2">
+                <label className="flex items-center gap-2 text-sm text-murekkep-yumusak">
+                  <input
+                    type="checkbox"
+                    checked={g.is_active}
+                    onChange={(e) => gunuDegistir(g.index, { is_active: e.target.checked })}
+                    className="h-4 w-4 rounded border-cizgi-guclu"
+                  />
+                  Açık
+                </label>
+                <GunTutamagi
+                  index={g.index}
+                  ilk={gi === 0}
+                  son={gi === taslak.length - 1}
+                  kaydir={gunuKaydir}
                 />
-                Açık
-              </label>
+              </span>
             }
           >
             {!g.is_active ? (
@@ -353,9 +409,73 @@ export default function ZamanIzgarasi({ programId }: { programId?: number } = {}
               />
             )}
           </Kart>
+          </GunKarti>
         ))}
       </div>
+      </DndContext>
     </div>
+  );
+}
+
+/** Gün kartının bırakma alanı. Kimlik günün `index`idir. */
+function GunKarti({
+  index,
+  suruklenen,
+  children,
+}: {
+  index: number;
+  suruklenen: number | null;
+  children: React.ReactNode;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: index });
+  const kendisi = suruklenen === index;
+  return (
+    <div
+      ref={setNodeRef}
+      className={clsx(
+        "rounded-xl transition-opacity",
+        kendisi && "opacity-40",
+        isOver && !kendisi && "ring-2 ring-cizgi-guclu",
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+function GunTutamagi({
+  index,
+  ilk,
+  son,
+  kaydir,
+}: {
+  index: number;
+  ilk: boolean;
+  son: boolean;
+  kaydir: (index: number, yon: -1 | 1) => void;
+}) {
+  const { attributes, listeners, setNodeRef } = useDraggable({ id: index });
+  return (
+    <button
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      type="button"
+      aria-label="Günü taşı"
+      title="Günü sürükleyerek sıralayın — sol/sağ ok tuşları da çalışır"
+      onKeyDown={(e) => {
+        if (e.key === "ArrowLeft" && !ilk) {
+          e.preventDefault();
+          kaydir(index, -1);
+        } else if (e.key === "ArrowRight" && !son) {
+          e.preventDefault();
+          kaydir(index, 1);
+        }
+      }}
+      className="shrink-0 cursor-grab rounded-md p-1 text-murekkep-silik hover:bg-yuzey-alt hover:text-murekkep-yumusak active:cursor-grabbing"
+    >
+      <GripVertical className="h-4 w-4" />
+    </button>
   );
 }
 

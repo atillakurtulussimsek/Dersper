@@ -65,10 +65,11 @@ def donemi_kopyala(
     gunler = db.scalars(
         select(Day).options(selectinload(Day.periods))
         .where(Day.term_id == kaynak.id, Day.timetable_id.is_(None))
-        .order_by(Day.index)
+        .order_by(Day.sira, Day.index)
     ).all()
     for g in gunler:
-        gun = Day(term_id=yeni.id, index=g.index, name=g.name, is_active=g.is_active)
+        gun = Day(term_id=yeni.id, index=g.index, sira=g.sira, name=g.name,
+                  is_active=g.is_active)
         db.add(gun)
         db.flush()
         for p in sorted(g.periods, key=lambda x: x.index):

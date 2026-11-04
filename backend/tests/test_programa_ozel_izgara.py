@@ -77,3 +77,19 @@ def test_genel_programin_izgarasi_degistirilemez(yonetici: TestClient):
     # Genel ızgaralı programın müsaitliği genel müsaitliktir.
     assert yonetici.get("/api/availability/closed", params={"timetable_id": p["id"]}
                         ).json() == yonetici.get("/api/availability/closed").json()
+
+
+def test_gun_sirasi_listedeki_konumdur(yonetici: TestClient):
+    """Pazar–Pazartesi–Salı: sıra gösterimdir, günün kimliği (index) değişmez."""
+    gunler = yonetici.get("/api/timegrid").json()
+    pazar = next(g for g in gunler if g["index"] == 6)
+    yeni = [pazar] + [g for g in gunler if g["index"] != 6]
+    r = yonetici.put("/api/timegrid", json=yeni)
+    assert r.status_code == 200, r.text
+    assert [g["index"] for g in r.json()] == [6, 0, 1, 2, 3, 4, 5]
+    assert [g["index"] for g in yonetici.get("/api/timegrid").json()] == [6, 0, 1, 2, 3, 4, 5]
+
+    # Kopya ızgara sırayı da taşır.
+    p = _olustur(yonetici, "kopya")
+    ozel = yonetici.get(f"/api/timetables/{p['id']}/timegrid").json()
+    assert [g["index"] for g in ozel] == [6, 0, 1, 2, 3, 4, 5]
