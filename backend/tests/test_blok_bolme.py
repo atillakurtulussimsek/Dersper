@@ -111,3 +111,63 @@ def test_bolunen_ders_uyari_olarak_bildirilir(yonetici: TestClient):
     bolunme = [u for u in uyarilar if u["tur"] == "bolunme"]
     assert len(bolunme) == 1
     assert "2+2 yerine 2+1+1" in bolunme[0]["baslik"]
+
+
+def test_oto_bolme_isaretsiz_dersi_boler():
+    slots = izgara(gun_sayisi=2, ders_sayisi=4)
+    kapali = _kapali(slots, {0: {0, 1}, 1: {0, 2}})
+    d = ders(1, 1, 10, "Matematik", 4, desen="2+2", kapali=kapali)
+    sonuc = solve(SolveInput(slots=slots, lessons=[d], esnek_gunluk=True,
+                             oto_bolme=True, time_limit_seconds=10))
+    assert sonuc.ok, sonuc.status_name
+    assert sorted(_dizi_uzunluklari(slots, sonuc.placements)) == [1, 1, 2]
+
+
+def test_oto_bolme_en_az_dersi_boler():
+    """Tek dersi iki kez bölmek, iki dersi birer kez bölmekten iyidir."""
+    slots = izgara(gun_sayisi=3, ders_sayisi=3)
+    # Tek bitişik çift Pzt 0-1; Sal ve Çar yalnız 0 ve 2. Üç 2'lik bloktan
+    # ikisi bölünmeli: ikisi de Matematik'ten olursa yalnız bir ders bölünür.
+    kapali = _kapali(slots, {0: {0, 1}, 1: {0, 2}, 2: {0, 2}})
+    a = ders(1, 1, 10, "Matematik", 4, desen="2+2", kapali=kapali)
+    b = ders(2, 1, 11, "Fen", 2, desen="2", kapali=kapali)
+    sonuc = solve(SolveInput(slots=slots, lessons=[a, b], esnek_gunluk=True,
+                             oto_bolme=True, time_limit_seconds=10))
+    assert sonuc.ok, sonuc.status_name
+    fen = [p for p in sonuc.placements if p[0] == 2]
+    assert _dizi_uzunluklari(slots, fen) == [2]
+
+
+def test_oto_bolme_once_isaretliyi_boler():
+    slots = izgara(gun_sayisi=3, ders_sayisi=2)
+    # Tek bitişik çift Pzt 0-1; Sal ve Çar yalnız 0. Bir ders bölünmeli:
+    # işaretli olan bölünür, işaretsize dokunulmaz.
+    kapali = _kapali(slots, {0: {0, 1}, 1: {0}, 2: {0}})
+    a = _bolunebilir(ders(1, 1, 10, "Matematik", 2, desen="2", kapali=kapali))
+    b = ders(2, 1, 11, "Fen", 2, desen="2", kapali=kapali)
+    sonuc = solve(SolveInput(slots=slots, lessons=[b, a], esnek_gunluk=True,
+                             oto_bolme=True, time_limit_seconds=10))
+    assert sonuc.ok, sonuc.status_name
+    fen = [p for p in sonuc.placements if p[0] == 2]
+    assert _dizi_uzunluklari(slots, fen) == [2]
+
+
+def test_yerel_oto_bolme():
+    slots = izgara(gun_sayisi=2, ders_sayisi=4)
+    kapali = _kapali(slots, {0: {0, 1}, 1: {0, 2}})
+    d = ders(1, 1, 10, "Matematik", 4, desen="2+2", kapali=kapali)
+    sonuc = yerel.coz(SolveInput(slots=slots, lessons=[d], esnek_gunluk=True,
+                                 oto_bolme=True, time_limit_seconds=2))
+    assert sonuc.ok, sonuc.unplaced
+
+
+def test_donem_oto_bolme_ayari_saklanir(yonetici: TestClient):
+    c = yonetici
+    donem = next(d for d in c.get("/api/terms").json() if d["is_active"])
+    assert donem["auto_split"] is False
+    r = c.put(f"/api/terms/{donem['id']}", json={"name": donem["name"], "auto_split": True})
+    assert r.status_code == 200, r.text
+    assert r.json()["auto_split"] is True
+    # Yalnız adı değiştiren istek ayarı sıfırlamaz.
+    r = c.put(f"/api/terms/{donem['id']}", json={"name": "Yeni ad"})
+    assert r.json()["auto_split"] is True

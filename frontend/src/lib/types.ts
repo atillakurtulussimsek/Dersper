@@ -32,6 +32,8 @@ export interface Donem {
   section_order: "ad" | "elle";
   /** Açıkken aynı ders bir şubede, farklı öğretmenlerde de olsa, arka arkaya gelmez. */
   same_subject_apart: boolean;
+  /** Açıkken zorunlu kalınca bloklu her ders bölünebilir (en az sayıda ders). */
+  auto_split: boolean;
   created_at: string;
   is_active: boolean;
   counts: Record<string, number>;

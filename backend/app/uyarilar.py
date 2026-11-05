@@ -380,7 +380,8 @@ def uyarilari_hesapla(db: Session, program: Timetable) -> list[dict]:
                 "ignored": anahtar in gizlenen,
             })
 
-    uyarilar += _bolunme_uyarilari(gunluk, satirlar, gizlenen)
+    uyarilar += _bolunme_uyarilari(gunluk, satirlar, gizlenen,
+                                   program.term.auto_split)
 
     from app.solver.loader import ders_gruplarini_yukle
 
@@ -443,7 +444,8 @@ def _ayrilma_uyarilari(gunluk: dict, satirlar: dict, gun_adlari: dict,
     return uyarilar
 
 
-def _bolunme_uyarilari(gunluk: dict, satirlar: dict, gizlenen: set[str]) -> list[dict]:
+def _bolunme_uyarilari(gunluk: dict, satirlar: dict, gizlenen: set[str],
+                       otomatik: bool = False) -> list[dict]:
     """Bölünebilir derslerden blokları bölünerek yerleşenler.
 
     Gerçekleşen dağılım, her gündeki kesintisiz dizilerin uzunluklarıdır.
@@ -453,7 +455,7 @@ def _bolunme_uyarilari(gunluk: dict, satirlar: dict, gizlenen: set[str]) -> list
 
     diziler: dict[int, list[int]] = defaultdict(list)
     for (entry_id, _), saatler in gunluk.items():
-        if satirlar[entry_id].allow_split:
+        if otomatik or satirlar[entry_id].allow_split:
             diziler[entry_id] += _dizi_uzunluklari(sorted(saatler))
 
     uyarilar: list[dict] = []

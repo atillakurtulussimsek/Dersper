@@ -29,7 +29,8 @@ from collections import defaultdict
 
 from app import cakisma
 from app.solver.engine import (
-    CEZA_BINA_GECISI, CEZA_BINA_GIDIP_GELME, CEZA_BOLME, CEZA_GUN_SINIRI,
+    CEZA_BINA_GECISI, CEZA_BINA_GIDIP_GELME, CEZA_BOLME, CEZA_BOLUNEN_DERS, CEZA_GUN_SINIRI,
+    CEZA_OTO_BOLUNEN_DERS,
     CEZA_YERLESMEYEN, Lesson, Slot, SolveInput, SolveOutput, ayrilacak_gruplar, subeleri,
 )
 
@@ -128,6 +129,8 @@ class _Durum:
         self.yer: list[tuple[int, ...] | None] = [None] * len(self.bloklar)
         # Yapılan bölünme sayısı (ceza).
         self.bolunme = 0
+        # Bölünen dersler (li): bölünen ders sayısı ayrıca cezalandırılır.
+        self.bolunen_dersler: set[int] = set()
         self.ogretmen_dolu: dict[tuple[int, int], int] = defaultdict(int)
         self.sube_dolu: dict[tuple[int, int], int] = defaultdict(int)
         self.ders_gun: dict[tuple[int, int], int] = defaultdict(int)   # (li, gün) -> saat
@@ -195,7 +198,8 @@ class _Durum:
         """Dışarıdaki blok bölünebilir mi? Yalnız esnek kipte ve izinli derste."""
         li, L = self.bloklar[bi]
         return (self.data.esnek_gunluk and L > 1 and bi not in self.sabit
-                and self.yer[bi] is None and self.data.lessons[li].bolunebilir
+                and self.yer[bi] is None
+                and (self.data.lessons[li].bolunebilir or self.data.oto_bolme)
                 and not self.data.lessons[li].ortak)
 
     def bol(self, bi: int) -> int:
@@ -205,11 +209,14 @@ class _Durum:
         self.bloklar.append((li, 1))
         self.yer.append(None)
         self.bolunme += 1
+        self.bolunen_dersler.add(li)
         return len(self.bloklar) - 1
 
     def ceza(self) -> int:
         d = self.data
-        toplam = CEZA_BOLME * self.bolunme
+        toplam = CEZA_BOLME * self.bolunme + sum(
+            CEZA_BOLUNEN_DERS + (0 if d.lessons[li].bolunebilir else CEZA_OTO_BOLUNEN_DERS)
+            for li in self.bolunen_dersler)
         for bi, yer in enumerate(self.yer):
             if yer is None:
                 toplam += CEZA_YERLESMEYEN * self.bloklar[bi][1]

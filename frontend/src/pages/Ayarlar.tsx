@@ -1,13 +1,13 @@
 /** Kurum bilgileri ve yapay zeka sağlayıcı ayarları. */
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { KeyRound, ListRestart, Pencil, Sparkles } from "lucide-react";
+import { KeyRound, ListRestart, Pencil, Scissors, Sparkles } from "lucide-react";
 
 import {
   Alan, Buton, Girdi, Kart, SayfaBasligi, Secim, Uyari, Yukleniyor,
 } from "../components/ui";
 import { del, get, post, put } from "../lib/api";
-import type { Kurum, KurumTipi, ModelListesi, YapayZekaAyarlari } from "../lib/types";
+import type { Donem, Kurum, KurumTipi, ModelListesi, YapayZekaAyarlari } from "../lib/types";
 
 const HAZIR_UCLAR = [
   { ad: "OpenAI", url: "", model: "gpt-4o-mini" },
@@ -78,6 +78,15 @@ export default function Ayarlar() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["yz-ayarlar"] }),
   });
 
+  const donemler = useQuery({ queryKey: ["donemler"], queryFn: () => get<Donem[]>("/terms") });
+  const aktifDonem = (donemler.data ?? []).find((d) => d.is_active);
+  // Yalnız adı ve bu ayarı gönderir; gönderilmeyen kurallar korunur.
+  const otoBolme = useMutation({
+    mutationFn: (acik: boolean) =>
+      put<Donem>(`/terms/${aktifDonem!.id}`, { name: aktifDonem!.name, auto_split: acik }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["donemler"] }),
+  });
+
   const yzTest = useMutation({
     mutationFn: () => get<{ ok: boolean; message: string }>("/ai/test"),
   });
@@ -110,7 +119,7 @@ export default function Ayarlar() {
     <div className="space-y-5">
       <SayfaBasligi
         baslik="Ayarlar"
-        aciklama="Kurum bilgileri ve yapay zeka bağlantısı."
+        aciklama="Kurum bilgileri, program üretimi ve yapay zeka bağlantısı."
       />
 
       <Kart baslik="Kurum bilgileri">
@@ -160,6 +169,35 @@ export default function Ayarlar() {
           </Buton>
         </form>
       </Kart>
+
+      {aktifDonem && (
+        <Kart
+          baslik="Blok bölme"
+          aciklama="Bu dönem için geçerlidir."
+          sag={<Scissors className="h-4 w-4 text-murekkep-silik" />}
+        >
+          {otoBolme.error && <Uyari tur="hata">{(otoBolme.error as Error).message}</Uyari>}
+          <label className="flex cursor-pointer items-start gap-3">
+            <input
+              type="checkbox"
+              checked={aktifDonem.auto_split}
+              disabled={otoBolme.isPending}
+              onChange={(e) => otoBolme.mutate(e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-cizgi-guclu"
+            />
+            <span className="text-sm">
+              <span className="font-medium text-murekkep">
+                Bölünecek dersleri sistem belirlesin
+              </span>
+              <span className="mt-0.5 block text-murekkep-silik">
+                Program blok dağılımlarıyla kurulamıyorsa, ders atamalarında işaretlenmemiş
+                bloklu dersler de bölünebilir. Önce işaretli dersler bölünür; yetmezse en az
+                sayıda ders bölünür. Bölünen dersler uyarı olarak gösterilir.
+              </span>
+            </span>
+          </label>
+        </Kart>
+      )}
 
       <Kart
         baslik="Yapay zeka"

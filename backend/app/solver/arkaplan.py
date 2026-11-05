@@ -192,7 +192,7 @@ def _dongu(run_id: int, term_id: int, dur: threading.Event) -> None:
                     time_limit_seconds=sure, seed=deneme, esnek_gunluk=esnek,
                     strateji=strateji, ipucu=ipucu,
                     ayni_ders_ayri=donem.same_subject_apart,
-                    ders_gruplari=ders_gruplari,
+                    ders_gruplari=ders_gruplari, oto_bolme=donem.auto_split,
                 )
                 # Yerel arama CP-SAT değil: kanıt üretmez, en iyiden başlayıp
                 # eksik saati düşürmeye çalışır.

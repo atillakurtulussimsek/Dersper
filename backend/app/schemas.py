@@ -35,6 +35,8 @@ class TermIn(BaseModel):
     section_order: SectionOrder | None = None
     # Açıkken aynı ders bir şubede, farklı öğretmenlerde de olsa, arka arkaya gelmez.
     same_subject_apart: bool | None = None
+    # Açıkken zorunlu kalınca bloklu her ders bölünebilir (en az sayıda ders).
+    auto_split: bool | None = None
 
     def alanlar(self) -> dict:
         """Yalnızca gönderilen alanlar (None olanlar atlanır)."""
@@ -51,6 +53,7 @@ class TermOut(ORMModel):
     conflict_basis: ConflictBasis = ConflictBasis.DERS_SAATI
     section_order: SectionOrder = SectionOrder.AD
     same_subject_apart: bool = False
+    auto_split: bool = False
     created_at: datetime
     is_active: bool = False
     # Dönemde tanımlı kayıt sayıları — listede özet göstermek için.

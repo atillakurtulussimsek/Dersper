@@ -80,6 +80,11 @@ CEZA_GUN_SINIRI = 40
 # 3 → 1+1+1 iki). Günlük sınır ve gün sınırı aşımından pahalı: kullanıcı önce
 # esnetmeyi, ancak o da yetmezse bölmeyi istedi.
 CEZA_BOLME = 50
+# Bölünen her dersin ayrıca bedeli: önce az sayıda ders bölünür, bir ders
+# gerekirse birkaç kez. Otomatik bölmede (dönem ayarı) işaretsiz bir dersi
+# bölmek ek bedellidir; işaretli dersler önce harcanır.
+CEZA_BOLUNEN_DERS = 500
+CEZA_OTO_BOLUNEN_DERS = 1000
 VARSAYILAN_SURE_SN = 30.0
 # Arama stratejileri: model aynı, CP-SAT'in arama biçimi farklı. Sonsuz mod
 # bunları sırayla döndürür; hepsi aynı 8 iş parçacığını kullanır.
@@ -196,6 +201,9 @@ class SolveInput:
     # Günlük ders tekrar sınırı, öğretmen gün sınırı ve bina kuralı
     # aşılabilsin mi? Aşım cezalandırılır, yasak değildir.
     esnek_gunluk: bool = False
+    # Dönem ayarı: işaretli dersler bölünerek de kurulamıyorsa bloklu her
+    # ders bölünebilir (bölünen ders sayısı en aza indirilerek).
+    oto_bolme: bool = False
     # Arama stratejisi (bkz. STRATEJILER). Aynı model, farklı arama yolu:
     # bir strateji tıkandığında öbürü çoğu zaman başka bir köşeden girer.
     strateji: str = "otomatik"
@@ -437,9 +445,13 @@ def _gune_gore(slots: list[Slot]) -> dict[int, list[int]]:
     return gunler
 
 
-def _bolunebilir(lesson: Lesson) -> bool:
-    """Dersin bölünecek bir bloğu var mı? Ortak ders zaten tek saatliktir."""
-    return lesson.bolunebilir and not lesson.ortak and max(lesson.blocks, default=1) > 1
+def _bolunebilir(lesson: Lesson, oto: bool = False) -> bool:
+    """Dersin bölünecek bir bloğu var mı? Ortak ders zaten tek saatliktir.
+
+    `oto` iken (otomatik bölme kademesi) işaretsiz dersler de bölünebilir.
+    """
+    return ((lesson.bolunebilir or oto) and not lesson.ortak
+            and max(lesson.blocks, default=1) > 1)
 
 
 def _parcalar(lesson: Lesson, bolme: bool) -> list[tuple[int, int, bool]]:
@@ -479,6 +491,8 @@ def solve(data: SolveInput) -> SolveOutput:
     # Blok bölme esnetmeden SONRA gelir: önce esnek model bölmeden denenir,
     # o da kurulamazsa bölünebilir dersler parçalanarak yeniden denenir.
     bolme = data.esnek_gunluk and any(_bolunebilir(l) for l in data.lessons)
+    oto = (data.esnek_gunluk and data.oto_bolme
+           and any(_bolunebilir(l, True) and not l.bolunebilir for l in data.lessons))
     if data.esnek_gunluk:
         esnek = _calistir(data, gevsek=False, esnek_gunluk=True)
         if esnek.ok:
@@ -489,8 +503,16 @@ def solve(data: SolveInput) -> SolveOutput:
             if bolunmus.ok:
                 return bolunmus
             esnek_kanit = esnek_kanit and bolunmus.status_name == "INFEASIBLE"
+        # İşaretli dersleri bölmek de yetmezse, ayar açıksa bloklu her ders
+        # aday olur; amaç bölünen ders sayısını en aza indirir.
+        if oto:
+            otomatik = _calistir(data, gevsek=False, esnek_gunluk=True,
+                                 bolme=True, oto_bolme=True)
+            if otomatik.ok:
+                return otomatik
+            esnek_kanit = esnek_kanit and otomatik.status_name == "INFEASIBLE"
 
-    gevsek = _calistir(data, gevsek=True, bolme=bolme)
+    gevsek = _calistir(data, gevsek=True, bolme=bolme or oto, oto_bolme=oto)
     gevsek.proven_infeasible = sert.status_name == "INFEASIBLE"
     gevsek.esnek_proven_infeasible = esnek_kanit
     return gevsek
@@ -806,7 +828,7 @@ def celiskiyi_bul(
 def _calistir(
     data: SolveInput, *, gevsek: bool, esnek_gunluk: bool = False,
     tani: bool = False, atlanan: "Celisen | frozenset[Celisen] | None" = None,
-    bolme: bool = False,
+    bolme: bool = False, oto_bolme: bool = False,
 ) -> SolveOutput:
     """Modeli kurar ve çözer.
 
@@ -850,6 +872,8 @@ def _calistir(
 
     # Bölme kipinde blokların bölünme sayıları (amaçta cezalandırılır).
     bolmeler: list[cp_model.IntVar] = []
+    # (bedel, BoolVar): ders bölündü mü? Bölünen ders sayısını azaltmak için.
+    bolunen_dersler: list[tuple[int, cp_model.IntVar]] = []
     # y[(lesson_idx, parca_idx)] -> {baslangic_slot_idx: BoolVar}
     baslangic: dict[tuple[int, int], dict[int, cp_model.IntVar]] = {}
     # x[(lesson_idx, slot_idx)] -> BoolVar (o saatte ders var mı)
@@ -860,7 +884,8 @@ def _calistir(
 
     for li, lesson in enumerate(data.lessons):
         bloklar = list(lesson.blocks)
-        parcalar = _parcalar(lesson, bolme and _bolunebilir(lesson))
+        parcalar = _parcalar(lesson, bolme and _bolunebilir(lesson, oto_bolme))
+        ders_bolmeleri: list[cp_model.IntVar] = []
         engelli = lesson.engelli_period_ids
 
         musaitlik_etiketi = _musaitlik_etiketi(lesson)
@@ -898,7 +923,7 @@ def _calistir(
         for bi, boy in enumerate(bloklar):
             grup = [pi for pi, (_, asil, _) in enumerate(parcalar) if asil == bi]
             if len(grup) > 1:
-                bolmeler.append(_bolunen_blok(
+                ders_bolmeleri.append(_bolunen_blok(
                     model, kisit, li, bi, boy, grup, parcalar, baslangic,
                     serbest=gevsek or secimli or not gecerli(_yuk_etiketi(lesson)),
                     etiket=_yuk_etiketi(lesson)))
@@ -917,6 +942,14 @@ def _calistir(
                 # "Saati azaltsam kurulur mu?" sınaması: blok yerleşmek
                 # zorunda değil. Sıfıra indirmeyi değil, AZALTMAYI sınar.
                 model.Add(sum(secenekler.values()) <= 1)
+
+        if ders_bolmeleri:
+            bolmeler += ders_bolmeleri
+            bolundu = model.NewBoolVar(f"bolundu_{li}")
+            for v in ders_bolmeleri:
+                model.Add(v <= max(lesson.blocks) * bolundu)
+            bedel = CEZA_BOLUNEN_DERS + (0 if lesson.bolunebilir else CEZA_OTO_BOLUNEN_DERS)
+            bolunen_dersler.append((bedel, bolundu))
 
         yerlesen_ifade[li] = sum(
             boy * var
@@ -1066,7 +1099,8 @@ def _calistir(
 
     if gevsek:
         model.Minimize(sum(CEZA_YERLESMEYEN * v for v in yerlesmeyen.values())
-                       + CEZA_BOLME * sum(bolmeler))
+                       + CEZA_BOLME * sum(bolmeler)
+                       + sum(b * v for b, v in bolunen_dersler))
     elif asimlar or gun_asimlari or bina_asimlari or bosluklar or bolmeler:
         # Tek amaç işlevi: çözücü hangi kuralı bozacağını bedele göre seçer,
         # gerekmedikçe hiçbirini bozmaz. Boşluk terimi en hafif olan; işareti
@@ -1078,6 +1112,7 @@ def _calistir(
             + sum(agirlik * v for agirlik, v in bina_asimlari)
             + bosluk_yonu * AGIRLIK_BOSLUK * sum(bosluklar)
             + CEZA_BOLME * sum(bolmeler)
+            + sum(b * v for b, v in bolunen_dersler)
         )
 
     if tani and kisit.anahtarlar:
