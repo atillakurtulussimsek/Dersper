@@ -11,7 +11,11 @@ Kurallar CP-SAT modeliyle aynı ayrımda:
   sert   — çakışma (kurumun ölçütüyle), müsaitlik, blok gün içinde ardışık,
            günlük sınır (max_per_day), aynı dersin blokları bitişik olmaz,
            kilitli saatler.
-  cezalı — yerleşmeyen saat (1000), öğretmen gün sınırı (40), bina geçişi (40).
+  cezalı — yerleşmeyen saat (1000), öğretmen gün sınırı (40), bina geçişi (40),
+           blok bölme (50).
+Esnek kipte bölünebilir dersin hiçbir yere sığmayan bloğu bölünebilir: L
+uzunluklu blok (L-1) + 1 olur. Bölünme geri alınmaz ama cezası sürer; en iyi
+durum karşılaştırmasında gereksiz bölme kendiliğinden elenir.
 Boşluk tercihi bu motorda yoktur; CP-SAT turları onu gözetir.
 
 Hiçbir dış paket kullanmaz; yalnız standart kütüphane.
@@ -25,8 +29,8 @@ from collections import defaultdict
 
 from app import cakisma
 from app.solver.engine import (
-    CEZA_BINA_GECISI, CEZA_BINA_GIDIP_GELME, CEZA_GUN_SINIRI, CEZA_YERLESMEYEN,
-    Lesson, Slot, SolveInput, SolveOutput, ayrilacak_gruplar, subeleri,
+    CEZA_BINA_GECISI, CEZA_BINA_GIDIP_GELME, CEZA_BOLME, CEZA_GUN_SINIRI,
+    CEZA_YERLESMEYEN, Lesson, Slot, SolveInput, SolveOutput, ayrilacak_gruplar, subeleri,
 )
 
 STATUS = "YEREL"
@@ -122,6 +126,8 @@ class _Durum:
                 self.ayni_ders[a].update(u for u in uyeler if u != a)
 
         self.yer: list[tuple[int, ...] | None] = [None] * len(self.bloklar)
+        # Yapılan bölünme sayısı (ceza).
+        self.bolunme = 0
         self.ogretmen_dolu: dict[tuple[int, int], int] = defaultdict(int)
         self.sube_dolu: dict[tuple[int, int], int] = defaultdict(int)
         self.ders_gun: dict[tuple[int, int], int] = defaultdict(int)   # (li, gün) -> saat
@@ -185,9 +191,25 @@ class _Durum:
 
     # --- ceza ---
 
+    def bolunebilir_mi(self, bi: int) -> bool:
+        """Dışarıdaki blok bölünebilir mi? Yalnız esnek kipte ve izinli derste."""
+        li, L = self.bloklar[bi]
+        return (self.data.esnek_gunluk and L > 1 and bi not in self.sabit
+                and self.yer[bi] is None and self.data.lessons[li].bolunebilir
+                and not self.data.lessons[li].ortak)
+
+    def bol(self, bi: int) -> int:
+        """L uzunluklu bloğu (L-1) + 1 yapar; yeni tek saatin sırasını döner."""
+        li, L = self.bloklar[bi]
+        self.bloklar[bi] = (li, L - 1)
+        self.bloklar.append((li, 1))
+        self.yer.append(None)
+        self.bolunme += 1
+        return len(self.bloklar) - 1
+
     def ceza(self) -> int:
         d = self.data
-        toplam = 0
+        toplam = CEZA_BOLME * self.bolunme
         for bi, yer in enumerate(self.yer):
             if yer is None:
                 toplam += CEZA_YERLESMEYEN * self.bloklar[bi][1]
@@ -349,6 +371,12 @@ def coz(data: SolveInput) -> SolveOutput:
             if z != eski_yer and durum.uygun_mu(bi, z):
                 yeni_yer = z
                 break
+        if yeni_yer is None and eski_yer is None and durum.bolunebilir_mi(bi):
+            # Sığmayan bölünebilir blok: parçala, parçalar sonraki adımlarda
+            # yerleşmeyi dener. Bölünme cezalı; gerekmedikçe en iyi olmaz.
+            serbest.append(durum.bol(bi))
+            ceza = durum.ceza()
+            continue
         if yeni_yer is None:
             # Nadiren: bloğu dışarıda bırakmayı dene (yer açar).
             if eski_yer is not None and rng.random() < 0.02:

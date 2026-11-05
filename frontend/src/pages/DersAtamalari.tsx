@@ -35,6 +35,8 @@ const BOS = {
   weekly_hours: 4,
   block_pattern: "",
   max_per_day: 2,
+  /** Program başka türlü kurulamıyorsa bloklar bölünebilir (2 → 1+1). */
+  allow_split: false,
 };
 
 type Bakis = "sube" | "ogretmen";
@@ -121,6 +123,7 @@ export default function DersAtamalari() {
             weekly_hours: m.weekly_hours,
             block_pattern: m.block_pattern,
             max_per_day: m.max_per_day,
+            allow_split: m.allow_split,
           }
         : {
             ...BOS,
@@ -334,6 +337,14 @@ export default function DersAtamalari() {
                     <td className="px-3 py-2.5 text-murekkep-yumusak">{m.weekly_hours} saat</td>
                     <td className="px-3 py-2.5 font-mono text-xs text-murekkep-yumusak">
                       {desenEtiketi(m.block_pattern, m.weekly_hours)}
+                      {m.allow_split && (
+                        <span
+                          className="ml-1.5 font-sans text-murekkep-silik"
+                          title="Zorunlu kalınca bölünebilir"
+                        >
+                          · bölünebilir
+                        </span>
+                      )}
                     </td>
                     <td className="px-3 py-2.5 text-murekkep-yumusak">{m.max_per_day}</td>
                     <td className="px-3 py-2.5 text-right">
@@ -556,6 +567,22 @@ export default function DersAtamalari() {
             saat. Blokların toplamı haftalık saate eşit olmalı; günlük sınır da bu
             dağılımı karşılamalıdır.
           </p>
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={form.allow_split}
+              onChange={(e) => setForm({ ...form, allow_split: e.target.checked })}
+              className="mt-0.5 h-4 w-4 rounded border-cizgi-guclu"
+            />
+            <span>
+              Zorunlu kalınca blokları böl
+              <span className="block text-xs text-murekkep-silik">
+                Program bu dağılımla kurulamazsa bloklar bölünebilir: 2+2 yerine 2+1+1
+                gibi. Önce günlük sınır esnetilir, o da yetmezse bölünür; bölünen
+                dersler uyarılarda görünür.
+              </span>
+            </span>
+          </label>
           <div className="flex justify-end gap-2 pt-2">
             <Buton tur="ikincil" type="button" onClick={() => setAcik(false)}>
               Vazgeç

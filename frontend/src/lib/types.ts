@@ -134,6 +134,8 @@ export interface MufredatSatiri {
   /** Haftalık saatin gün içindeki parçalanışı, örn. "2+2+1". */
   block_pattern: string;
   max_per_day: number;
+  /** Zorunlu kalınca bloklar bölünebilir mi (2 → 1+1). */
+  allow_split: boolean;
   subject: Ders;
   teacher: Ogretmen;
   section: Sube;
@@ -229,7 +231,7 @@ export interface BirlestirmeKurali {
 
 export interface ProgramUyarisi {
   key: string;
-  tur: "gunluk_asim" | "bitisik" | "gun_siniri" | "bina_gecisi" | "cakisma";
+  tur: "gunluk_asim" | "bitisik" | "gun_siniri" | "bina_gecisi" | "cakisma" | "bolunme";
   baslik: string;
   detay: string;
   sube: string;

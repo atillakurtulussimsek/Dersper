@@ -5,6 +5,10 @@ Dersper'in geliştirme günlüğü. Her değişiklik tek cümleyle, en yeni sür
 öncesinde ikinci hane özellik, üçüncü hane düzeltme demektir. Uygulamanın
 sürümü arayüzde yan menünün altında yazar.
 
+## 0.44.0 — 2026-11-05
+
+- Zorunlu kalınca blok bölme: ders atamasında "Zorunlu kalınca blokları böl" açılırsa, program dağılımla (örn. 2+2) ve günlük sınır esnetilerek de kurulamadığında bloklar bölünür (2+1+1, 3 → 2+1 ya da 1+1+1); bölünen dersler program uyarılarında gösterilir. Yeni veritabanı göçü: 0027 (curriculum_entries.allow_split).
+
 ## 0.43.0 — 2026-11-04
 
 - Gün sırası değiştirilebilir: Zaman Izgarası'nda (genel ve programa özel) gün kartları tutamağından sürüklenerek sıralanır (sol/sağ ok tuşları da çalışır); program ekranı, çıktılar ve yayın sayfası bu sırayı izler (örn. Pazar – Pazartesi – Salı). Yeni veritabanı göçü: 0026 (days.sira).

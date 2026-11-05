@@ -380,6 +380,11 @@ class CurriculumEntry(Base, SoftDelete):
     # Haftalık saatin gün içindeki parçalanışı, örn. "2+2+1". Toplamı weekly_hours eder.
     block_pattern: Mapped[str] = mapped_column(String(60), default="")
     max_per_day: Mapped[int] = mapped_column(Integer, default=2)
+    # Program başka türlü kurulamıyorsa blok bölünebilir mi? Açıksa çözücü,
+    # günlük sınırı esnetmek de yetmediğinde bloğu parçalar: 2 → 1+1,
+    # 3 → 2+1 ya da 1+1+1. Bölme cezalıdır; gerekmedikçe yapılmaz.
+    allow_split: Mapped[bool] = mapped_column(Boolean, default=False,
+                                              server_default="0")
 
     section: Mapped[Section] = relationship(back_populates="curriculum")
     subject: Mapped[Subject] = relationship()

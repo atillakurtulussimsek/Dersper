@@ -916,6 +916,7 @@ def mufredat_kopyala(
                 weekly_hours=kaynak.weekly_hours,
                 block_pattern=kaynak.block_pattern,
                 max_per_day=kaynak.max_per_day,
+                allow_split=kaynak.allow_split,
             )
             db.add(kopya)
             yeniler.append(kopya)
@@ -991,7 +992,7 @@ def mufredat_aktar(
         db.add(CurriculumEntry(
             section_id=sube_id, subject_id=ders_id, teacher_id=ogretmen_id,
             weekly_hours=k.weekly_hours, block_pattern=k.block_pattern,
-            max_per_day=k.max_per_day,
+            max_per_day=k.max_per_day, allow_split=k.allow_split,
         ))
         mevcut.add((sube_id, ders_id, ogretmen_id))
         sayi += 1

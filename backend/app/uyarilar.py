@@ -12,6 +12,8 @@ elle sürükle-bırak yapıldığında da doğru kalırlar.
     başka türlü tamamlanamadığında oluşur.
   * `bina_gecisi` — öğretmen bir günde birden fazla binada. Yalnızca dönem
     ayarı açıkken hesaplanır; kural esnetilebilir olduğu için oluşabilir.
+  * `bolunme` — "zorunlu kalınca bölünebilir" açık bir dersin blokları
+    bölünerek yerleşti (örn. 2+2 yerine 2+1+1).
   * `cakisma` — öğretmen müsait olmadığı saatte, şube kapalı saatinde ya da
     öğretmen/şube aynı anda iki yerde. Çözücü bunu asla yapmaz; yalnızca
     elle "zorla yerleştir" ile oluşur. Kural metni `app.duzenle` ile aynı
@@ -378,6 +380,8 @@ def uyarilari_hesapla(db: Session, program: Timetable) -> list[dict]:
                 "ignored": anahtar in gizlenen,
             })
 
+    uyarilar += _bolunme_uyarilari(gunluk, satirlar, gizlenen)
+
     from app.solver.loader import ders_gruplarini_yukle
 
     gruplar = ders_gruplarini_yukle(db, program.term)
@@ -437,6 +441,69 @@ def _ayrilma_uyarilari(gunluk: dict, satirlar: dict, gun_adlari: dict,
             "ignored": anahtar in gizlenen,
         })
     return uyarilar
+
+
+def _bolunme_uyarilari(gunluk: dict, satirlar: dict, gizlenen: set[str]) -> list[dict]:
+    """Bölünebilir derslerden blokları bölünerek yerleşenler.
+
+    Gerçekleşen dağılım, her gündeki kesintisiz dizilerin uzunluklarıdır.
+    Desendeki bloklardan biri bile bütün olarak yoksa ders bölünmüştür.
+    """
+    from app import bloklar
+
+    diziler: dict[int, list[int]] = defaultdict(list)
+    for (entry_id, _), saatler in gunluk.items():
+        if satirlar[entry_id].allow_split:
+            diziler[entry_id] += _dizi_uzunluklari(sorted(saatler))
+
+    uyarilar: list[dict] = []
+    for entry_id, uzunluklar in sorted(diziler.items()):
+        e = satirlar[entry_id]
+        desen = sorted(bloklar.coz(e.block_pattern, e.weekly_hours), reverse=True)
+        kalan = sorted(uzunluklar, reverse=True)
+        bolunen = False
+        for b in desen:
+            # En küçük yeterli diziyi bu bloğa say; yoksa blok bölünmüştür.
+            uyan = [u for u in kalan if u >= b]
+            if not uyan:
+                bolunen = True
+                break
+            kalan.remove(min(uyan))
+        if not bolunen:
+            continue
+        sube_adi = " + ".join(sb.name for sb in e.sections)
+        gercek = bloklar.yaz(sorted(uzunluklar, reverse=True))
+        istenen = bloklar.yaz(desen)
+        anahtar = f"bolunme:{entry_id}"
+        uyarilar.append({
+            "key": anahtar,
+            "tur": "bolunme",
+            "baslik": f"{sube_adi} · {e.subject.name}: {istenen} yerine {gercek}",
+            "detay": (f"Program {istenen} dağılımıyla kurulamadığı için bloklar "
+                      f"bölündü; ders {gercek} olarak yerleşti."),
+            "sube": sube_adi,
+            "ders": e.subject.name,
+            "ogretmen": e.teacher.full_name,
+            "gun": "",
+            "konan": len(uzunluklar),
+            "sinir": len(desen),
+            "ignored": anahtar in gizlenen,
+        })
+    return uyarilar
+
+
+def _dizi_uzunluklari(saatler: list[int]) -> list[int]:
+    """Sıralı ders saatlerindeki kesintisiz dizilerin uzunlukları."""
+    if not saatler:
+        return []
+    uzunluklar, uzunluk = [], 1
+    for a, b in zip(saatler, saatler[1:]):
+        if b - a == 1:
+            uzunluk += 1
+        else:
+            uzunluklar.append(uzunluk)
+            uzunluk = 1
+    return uzunluklar + [uzunluk]
 
 
 def _en_uzun_blok(e: CurriculumEntry) -> int:

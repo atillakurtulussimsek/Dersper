@@ -374,6 +374,8 @@ class CurriculumIn(BaseModel):
     # Boş bırakılırsa saatler tek tek dağıtılır.
     block_pattern: str = Field(default="", max_length=60)
     max_per_day: int = Field(default=2, ge=1, le=10)
+    # Zorunlu kalınca blok tek saatlere bölünebilir mi (bkz. models).
+    allow_split: bool = False
 
     @model_validator(mode="after")
     def _deseni_dogrula(self) -> "CurriculumIn":
@@ -402,6 +404,7 @@ class CurriculumOut(ORMModel):
     weekly_hours: int
     block_pattern: str
     max_per_day: int
+    allow_split: bool = False
     subject: SubjectOut
     teacher: TeacherOut
     section: SectionOut

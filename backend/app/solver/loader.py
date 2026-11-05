@@ -169,6 +169,7 @@ def dersleri_yukle(
             weekly_hours=e.weekly_hours,
             blocks=tuple(bloklar.coz(e.block_pattern, e.weekly_hours)),
             max_per_day=e.max_per_day,
+            bolunebilir=e.allow_split,
             subject_id=e.subject_id,
             building_id=binalar.pop() if len(binalar) == 1 else None,
             blocked_period_ids=frozenset(ogretmen_kapali.get(e.teacher_id, set())),

@@ -151,6 +151,7 @@ def donemi_kopyala(
                 section_id=sube_esi[e.section_id], subject_id=ders_esi[e.subject_id],
                 teacher_id=ogretmen_esi[e.teacher_id], weekly_hours=e.weekly_hours,
                 block_pattern=e.block_pattern, max_per_day=e.max_per_day,
+                allow_split=e.allow_split,
             )
             kopya.extra_sections = [
                 CurriculumEntrySection(section_id=sube_esi[x.section_id])

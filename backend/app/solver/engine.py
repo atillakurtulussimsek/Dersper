@@ -76,6 +76,10 @@ CEZA_BINA_GIDIP_GELME = 200
 # Günlük tekrar sınırından ağır: o pedagojik bir tercih, bu ise öğretmenle
 # yapılmış bir anlaşma. Çözücü zorunlu kalmadıkça bu sınırı bozmamalı.
 CEZA_GUN_SINIRI = 40
+# Bölme kipinde bir bloğun her bir bölünmesinin bedeli (2 → 1+1 bir bölünme,
+# 3 → 1+1+1 iki). Günlük sınır ve gün sınırı aşımından pahalı: kullanıcı önce
+# esnetmeyi, ancak o da yetmezse bölmeyi istedi.
+CEZA_BOLME = 50
 VARSAYILAN_SURE_SN = 30.0
 # Arama stratejileri: model aynı, CP-SAT'in arama biçimi farklı. Sonsuz mod
 # bunları sırayla döndürür; hepsi aynı 8 iş parçacığını kullanır.
@@ -127,6 +131,8 @@ class Lesson:
     # Blok uzunlukları, örn. (2, 2, 1). Toplamı weekly_hours eder.
     blocks: tuple[int, ...]
     max_per_day: int
+    # Zorunlu kalınca blokları bölünebilir mi? (bkz. CurriculumEntry.allow_split)
+    bolunebilir: bool = False
     # Şubenin dersliğinin bulunduğu bina. None = binasız (kural uygulanmaz).
     building_id: int | None = None
     # Dersi birlikte gören şubeler: (kimlik, ad) çiftleri, tanım sırasında.
@@ -431,6 +437,28 @@ def _gune_gore(slots: list[Slot]) -> dict[int, list[int]]:
     return gunler
 
 
+def _bolunebilir(lesson: Lesson) -> bool:
+    """Dersin bölünecek bir bloğu var mı? Ortak ders zaten tek saatliktir."""
+    return lesson.bolunebilir and not lesson.ortak and max(lesson.blocks, default=1) > 1
+
+
+def _parcalar(lesson: Lesson, bolme: bool) -> list[tuple[int, int, bool]]:
+    """Dersin modele giren parçaları: (uzunluk, asıl blok sırası, tek saat mi).
+
+    Bölme kapalıysa parçalar bloklardır. Açıksa L uzunluklu her blok için,
+    bloğun kendisine ek olarak 2..L-1 uzunlukta birer isteğe bağlı parça ve
+    L isteğe bağlı tek saat kurulur; blok ya bütün yerleşir ya da "en çok bir
+    büyük parça + tek saatler" olarak (3 → 2+1 ya da 1+1+1).
+    """
+    parcalar: list[tuple[int, int, bool]] = []
+    for bi, boy in enumerate(lesson.blocks):
+        parcalar.append((boy, bi, boy == 1))
+        if bolme and boy > 1:
+            parcalar += [(k, bi, False) for k in range(2, boy)]
+            parcalar += [(1, bi, True)] * boy
+    return parcalar
+
+
 def _ardisik_mi(slots: list[Slot], indices: list[int]) -> bool:
     """Verilen slotlar gün içinde kesintisiz ardışık mı?"""
     nums = [slots[i].period_index for i in indices]
@@ -448,13 +476,21 @@ def solve(data: SolveInput) -> SolveOutput:
         return sert
 
     esnek_kanit = False
+    # Blok bölme esnetmeden SONRA gelir: önce esnek model bölmeden denenir,
+    # o da kurulamazsa bölünebilir dersler parçalanarak yeniden denenir.
+    bolme = data.esnek_gunluk and any(_bolunebilir(l) for l in data.lessons)
     if data.esnek_gunluk:
         esnek = _calistir(data, gevsek=False, esnek_gunluk=True)
         if esnek.ok:
             return esnek
         esnek_kanit = esnek.status_name == "INFEASIBLE"
+        if bolme:
+            bolunmus = _calistir(data, gevsek=False, esnek_gunluk=True, bolme=True)
+            if bolunmus.ok:
+                return bolunmus
+            esnek_kanit = esnek_kanit and bolunmus.status_name == "INFEASIBLE"
 
-    gevsek = _calistir(data, gevsek=True)
+    gevsek = _calistir(data, gevsek=True, bolme=bolme)
     gevsek.proven_infeasible = sert.status_name == "INFEASIBLE"
     gevsek.esnek_proven_infeasible = esnek_kanit
     return gevsek
@@ -770,8 +806,12 @@ def celiskiyi_bul(
 def _calistir(
     data: SolveInput, *, gevsek: bool, esnek_gunluk: bool = False,
     tani: bool = False, atlanan: "Celisen | frozenset[Celisen] | None" = None,
+    bolme: bool = False,
 ) -> SolveOutput:
     """Modeli kurar ve çözer.
+
+    `bolme=True` iken bölünebilir derslerin blokları parçalanabilir; her
+    bölünme CEZA_BOLME ile cezalandırılır (bkz. _parcalar).
 
     `tani=True` iken kullanıcının değiştirebileceği kısıtlar varsayım
     anahtarlarının arkasına alınır; çözümsüzlükte hangilerinin çeliştiği
@@ -808,7 +848,9 @@ def _calistir(
     # Haftalık saat muhasebesi döngüden sonra kurulur: li -> yerleşen saat ifadesi
     yerlesen_ifade: dict[int, object] = {}
 
-    # y[(lesson_idx, blok_idx)] -> {baslangic_slot_idx: BoolVar}
+    # Bölme kipinde blokların bölünme sayıları (amaçta cezalandırılır).
+    bolmeler: list[cp_model.IntVar] = []
+    # y[(lesson_idx, parca_idx)] -> {baslangic_slot_idx: BoolVar}
     baslangic: dict[tuple[int, int], dict[int, cp_model.IntVar]] = {}
     # x[(lesson_idx, slot_idx)] -> BoolVar (o saatte ders var mı)
     dolu: dict[tuple[int, int], cp_model.IntVar] = {}
@@ -818,12 +860,13 @@ def _calistir(
 
     for li, lesson in enumerate(data.lessons):
         bloklar = list(lesson.blocks)
+        parcalar = _parcalar(lesson, bolme and _bolunebilir(lesson))
         engelli = lesson.engelli_period_ids
 
         musaitlik_etiketi = _musaitlik_etiketi(lesson)
         musaitlik_kurulacak = gecerli(musaitlik_etiketi)
 
-        for bi, boy in enumerate(bloklar):
+        for bi, (boy, _, _) in enumerate(parcalar):
             secenekler: dict[int, cp_model.IntVar] = {}
             for gi, gun_slotlari in gunler.items():
                 if lesson.izinli_gunler is not None and gi not in lesson.izinli_gunler:
@@ -853,7 +896,14 @@ def _calistir(
             eksik = model.NewIntVar(0, lesson.weekly_hours, f"eksik_{li}")
             yerlesmeyen[li] = eksik
         for bi, boy in enumerate(bloklar):
-            secenekler = baslangic[(li, bi)]
+            grup = [pi for pi, (_, asil, _) in enumerate(parcalar) if asil == bi]
+            if len(grup) > 1:
+                bolmeler.append(_bolunen_blok(
+                    model, kisit, li, bi, boy, grup, parcalar, baslangic,
+                    serbest=gevsek or secimli or not gecerli(_yuk_etiketi(lesson)),
+                    etiket=_yuk_etiketi(lesson)))
+                continue
+            secenekler = baslangic[(li, grup[0])]
             if not secenekler:
                 # Bu blok hiçbir yere sığmıyor.
                 if not gevsek and not secimli and gecerli(_yuk_etiketi(lesson)):
@@ -870,14 +920,14 @@ def _calistir(
 
         yerlesen_ifade[li] = sum(
             boy * var
-            for bi, boy in enumerate(bloklar)
+            for bi, (boy, _, _) in enumerate(parcalar)
             for var in baslangic[(li, bi)].values()
         )
 
         # x değişkenleri: blok başlangıçlarından türetilir.
         for si in range(len(slots)):
             kapsayan = []
-            for bi, boy in enumerate(bloklar):
+            for bi, (boy, _, _) in enumerate(parcalar):
                 for bas, var in baslangic[(li, bi)].items():
                     if bas <= si < bas + boy:
                         kapsayan.append(var)
@@ -1015,8 +1065,9 @@ def _calistir(
                 model.Add(dolu[(li, si)] == 1)
 
     if gevsek:
-        model.Minimize(sum(CEZA_YERLESMEYEN * v for v in yerlesmeyen.values()))
-    elif asimlar or gun_asimlari or bina_asimlari or bosluklar:
+        model.Minimize(sum(CEZA_YERLESMEYEN * v for v in yerlesmeyen.values())
+                       + CEZA_BOLME * sum(bolmeler))
+    elif asimlar or gun_asimlari or bina_asimlari or bosluklar or bolmeler:
         # Tek amaç işlevi: çözücü hangi kuralı bozacağını bedele göre seçer,
         # gerekmedikçe hiçbirini bozmaz. Boşluk terimi en hafif olan; işareti
         # tercihe göre değişir (sıkı: azalt, boşluklu: artır).
@@ -1026,6 +1077,7 @@ def _calistir(
             + sum(CEZA_GUN_SINIRI * v for v in gun_asimlari.values())
             + sum(agirlik * v for agirlik, v in bina_asimlari)
             + bosluk_yonu * AGIRLIK_BOSLUK * sum(bosluklar)
+            + CEZA_BOLME * sum(bolmeler)
         )
 
     if tani and kisit.anahtarlar:
@@ -1080,6 +1132,42 @@ def _calistir(
         status_name=solver.StatusName(status),
         relaxations=sorted(esnetmeler),
     )
+
+
+def _bolunen_blok(model, kisit, li: int, bi: int, boy: int, grup: list[int],
+                  parcalar: list[tuple[int, int, bool]], baslangic: dict, *,
+                  serbest: bool, etiket: Celisen) -> cp_model.IntVar:
+    """Bölünebilir bir bloğun parçalarını bağlar; bölünme sayısını döner.
+
+    Blok ya bütün ya da en çok bir büyük parça + tek saatler olarak yerleşir;
+    yerleşen parçaların uzunlukları toplamı bloğun uzunluğudur. `serbest`
+    iken (gevşek model, birleştirme ebeveyni) blok eksik de kalabilir.
+    """
+    adetler = {}
+    for pi in grup:
+        secenekler = list(baslangic[(li, pi)].values())
+        if secenekler:
+            model.Add(sum(secenekler) <= 1)
+            adetler[pi] = sum(secenekler)
+    buyukler = [adetler[pi] for pi in grup if pi in adetler and not parcalar[pi][2]]
+    if len(buyukler) > 1:
+        model.Add(sum(buyukler) <= 1)
+    # Tek saatler birbirinin eşi: simetriyi kır, önce baştakiler kullanılsın.
+    tekler = [adetler[pi] for pi in grup if pi in adetler and parcalar[pi][2]]
+    for a, b in zip(tekler, tekler[1:]):
+        model.Add(a >= b)
+    saat = sum(parcalar[pi][0] * adet for pi, adet in adetler.items())
+    if not adetler:
+        if not serbest:
+            kisit.ekle(sum([]) == 1, etiket)
+    elif serbest:
+        model.Add(saat <= boy)
+    else:
+        kisit.ekle(saat == boy, etiket)
+    bolunme = model.NewIntVar(0, boy - 1, f"bol_{li}_{bi}")
+    if adetler:
+        model.Add(bolunme >= sum(adetler.values()) - 1)
+    return bolunme
 
 
 def _stratejiyi_uygula(model, solver, data: SolveInput, baslangic: dict,
